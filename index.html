@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.2 · 汽车销售运营中心</title>
+    <title>业务数据看板 V3.3 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -170,36 +170,40 @@
         /* 漏斗 */
         .funnel-row {
             position: relative; display: flex; align-items: center; gap: 10px;
-            padding: 9px 12px; border-radius: 10px; margin-bottom: 5px;
-            background: rgba(15,23,42,0.42); overflow: hidden;
-            cursor: pointer; transition: background .15s;
+            padding: 8px 0; cursor: pointer;
         }
-        .funnel-row:hover { background: rgba(15,23,42,0.7); }
-        .funnel-row .fr-fill {
-            position: absolute; left: 0; top: 0; bottom: 0;
-            width: var(--w, 100%);
-            background: linear-gradient(90deg, var(--fc, #3b82f6), transparent 130%);
-            opacity: .26; pointer-events: none;
+        .funnel-row:hover .fr-track { background: rgba(15,23,42,0.55); }
+        .fr-track {
+            position: relative; flex: 1; height: 44px; border-radius: 12px;
+            background: rgba(15,23,42,0.35); overflow: hidden; display: flex; align-items: center;
+            transition: background .15s;
         }
-        .funnel-row .fr-idx {
-            position: relative; width: 20px; height: 20px; flex: none;
-            border-radius: 6px; font-size: 11px; font-weight: 700;
-            display: flex; align-items: center; justify-content: center;
-            background: rgba(148,163,184,0.15); color: #cbd5e1;
+        .fr-bar {
+            position: absolute; left: 0; top: 0; bottom: 0; width: var(--w, 100%);
+            background: linear-gradient(90deg, var(--fc, #3b82f6), rgba(59,130,246,0.55) 120%);
+            border-radius: inherit; min-width: max-content; display: flex; align-items: center;
+            box-shadow: 0 0 18px rgba(59,130,246,0.12);
         }
-        .funnel-row .fr-name { position: relative; font-size: 13px; font-weight: 600; color: #e2e8f0; white-space: nowrap; }
-        .funnel-row .fr-sub { position: relative; font-size: 11px; color: #94a3b8; white-space: nowrap; }
-        .funnel-row .fr-spacer { position: relative; flex: 1; }
-        .funnel-row .fr-value { position: relative; font-size: 16px; font-weight: 800; color: #fff; letter-spacing: -.3px; white-space: nowrap; }
-        .funnel-row .fr-ratio {
-            position: relative; font-size: 11px; font-weight: 600;
-            padding: 1px 7px; border-radius: 999px;
-            background: rgba(16,185,129,0.14); color: #34d399; white-space: nowrap;
+        .fr-inner {
+            position: relative; width: 100%; display: flex; align-items: center; justify-content: space-between;
+            gap: 12px; padding: 0 16px; white-space: nowrap;
         }
-        .funnel-row .fr-ratio.ghost { background: rgba(148,163,184,0.1); color: #64748b; }
-        .funnel-row.mini { padding: 7px 10px; }
-        .funnel-row.mini .fr-value { font-size: 14px; }
-        .pk-funnel-row { padding: 12px; }
+        .fr-name { position: relative; font-size: 14px; font-weight: 700; color: #fff; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+        .fr-sub { position: relative; font-size: 11px; color: #94a3b8; white-space: nowrap; }
+        .fr-value { position: relative; font-size: 20px; font-weight: 800; color: #fff; letter-spacing: -.5px; white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.25); }
+        .fr-rate {
+            position: relative; flex: none; min-width: 70px; text-align: center;
+            font-size: 13px; font-weight: 700; padding: 6px 10px; border-radius: 999px;
+            background: rgba(16,185,129,0.16); color: #34d399; border: 1px solid rgba(16,185,129,0.22);
+            white-space: nowrap;
+        }
+        .fr-rate.warn { background: rgba(239,68,68,0.14); color: #f87171; border-color: rgba(239,68,68,0.22); }
+        .fr-rate.ghost { background: rgba(148,163,184,0.1); color: #64748b; border-color: rgba(148,163,184,0.15); }
+        .funnel-row.mini { padding: 6px 0; }
+        .funnel-row.mini .fr-track { height: 34px; }
+        .funnel-row.mini .fr-name { font-size: 12px; }
+        .funnel-row.mini .fr-value { font-size: 15px; }
+        .pk-funnel-row { padding: 10px 0; flex-direction: column; align-items: stretch; gap: 6px; }
         /* 对比表 */
         .cmp-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .cmp-table th, .cmp-table td { padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.08); }
@@ -228,7 +232,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.2</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.3</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 组织维度总览</p>
                 </div>
             </div>
@@ -313,22 +317,23 @@
     <main class="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
 
         <!-- 主体：左侧指标区 + 右侧全链路漏斗 -->
-        <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
+        <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_540px] gap-6 items-start">
             <div class="space-y-6 min-w-0">
                 <div id="singleView"></div>
                 <div id="pkView" class="hidden"></div>
             </div>
 
-            <aside class="panel p-5 xl:sticky xl:top-[188px]">
-                <div class="flex items-start justify-between mb-3 gap-2">
+            <aside class="panel p-6 xl:sticky xl:top-[188px]">
+                <div class="flex items-start justify-between mb-4 gap-2">
                     <div>
+                        <div class="text-[11px] text-blue-300 font-semibold tracking-wider mb-1">CONVERSION</div>
                         <div class="panel-title"><span class="dot"></span>全链路经营转化漏斗</div>
                         <div class="panel-subtitle" id="funnelSub">7 阶段 · 区间合计</div>
                     </div>
-                    <div id="funnelDrillLink" class="text-[11.5px] text-cyan-300 pt-1 cursor-pointer whitespace-nowrap">经营下钻 →</div>
+                    <div id="funnelDrillLink" class="text-[12px] text-cyan-300 pt-1 cursor-pointer whitespace-nowrap">经营下钻 →</div>
                 </div>
                 <div id="funnelBody"></div>
-                <div id="funnelFooter" class="mt-4 pt-4 border-t border-slate-700/40 space-y-2 text-[12px]"></div>
+                <div id="funnelFooter" class="mt-5 pt-4 border-t border-slate-700/40 space-y-2 text-[12px]"></div>
             </aside>
         </section>
 
@@ -423,7 +428,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.2 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算
+            业务数据看板 V3.3 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算
         </footer>
     </main>
 
@@ -1202,17 +1207,17 @@
                     const stepRate = prevV ? (v / prevV) * 100 : 100;
                     const cumRate = first ? (v / first) * 100 : 100;
                     if (i > 0 && (worst === null || stepRate < worst.rate)) worst = { rate: stepRate, from: FUNNEL_STAGES[i - 1].name, to: st.name };
-                    const w = Math.max(4, Math.min(100, cumRate));
-                    return '<div class="funnel-row" data-key="' + st.key + '" style="--w:' + w + '%;--fc:' + st.color + '">' +
-                        '<div class="fr-fill"></div>' +
-                        '<div class="fr-idx" style="background:' + scaleColor(st.color, 0.25) + ';color:' + st.color + '">' + (i + 1) + '</div>' +
-                        '<div><div class="fr-name">' + st.name + '</div>' +
-                        '<div class="fr-sub">占首层 ' + cumRate.toFixed(1) + '%</div></div>' +
-                        '<div class="fr-spacer"></div>' +
-                        '<div class="fr-value">' + fmt(v) + '</div>' +
-                        (i === 0
-                            ? '<span class="fr-ratio ghost">起点</span>'
-                            : '<span class="fr-ratio"' + (stepRate < 50 ? ' style="background:rgba(239,68,68,0.16);color:#f87171"' : '') + '>' + stepRate.toFixed(1) + '%</span>') +
+                    const w = Math.max(10, Math.min(100, cumRate));
+                    const rateClass = i === 0 ? 'ghost' : (stepRate < 50 ? 'warn' : '');
+                    const rateText = i === 0 ? '基准' : stepRate.toFixed(1) + '%';
+                    return '<div class="funnel-row" data-key="' + st.key + '" style="--w:' + w + '%;--fc:' + st.color + '" title="' + st.name + '：' + fmt(v) + '（占首层 ' + cumRate.toFixed(1) + '%，环比 ' + rateText + '）">' +
+                        '<div class="fr-track">' +
+                        '<div class="fr-bar">' +
+                        '<div class="fr-inner">' +
+                        '<span class="fr-name">' + st.name + '</span>' +
+                        '<span class="fr-value">' + fmt(v) + '</span>' +
+                        '</div></div></div>' +
+                        '<div class="fr-rate ' + rateClass + '">' + rateText + '</div>' +
                         '</div>';
                 }).join('');
                 const conv = first ? (m.delivered / first) * 100 : 0;

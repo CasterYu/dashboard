@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v3.2-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v3.3-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,7 +20,7 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v3.2 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | 六级组织树筛选（全国→大区→小区→门店→岗位→人员）+ 单选 / PK 双模式 + 全链路 7 阶段漏斗 + 多维下钻 + 趋势分析 + 积分榜 + 明细表 |
+| **🟢 v3.3 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | 六级组织树筛选（全国→大区→小区→门店→岗位→人员）+ 单选 / PK 双模式 + **全链路 7 阶段漏斗（更大、带转化率徽章）** + 多维下钻 + 趋势分析 + 积分榜 + 明细表 |
 | **🟡 v1 · 历史归档** | **👉 [https://casteryu.github.io/dashboard/legacy/v1/](https://casteryu.github.io/dashboard/legacy/v1/)** | 📦 归档 | 白板草图完整模块版：漏斗/积分/下钻/排行榜/雷达 |
 
 > 💡 直接 Ctrl + 点击可在新标签页打开，与当前页同时浏览。
@@ -29,13 +29,14 @@
 
 | 版本 | 文件路径 |
 |:---:|:---|
-| **v3.2 最新版** | `D:\projects\dashboard\index.html` |
+| **v3.3 最新版** | `D:\projects\dashboard\index.html` |
 | **v1 历史版** | `D:\projects\dashboard\legacy\v1\index.html` |
 
 ### 📦 Git 历史源码（tag）
 
 | 标签 | 说明 |
 |:---:|:---|
+| [`v3.3`](https://github.com/CasterYu/dashboard/tree/v3.3) | 全链路 7 阶段漏斗视觉重构：更大横向条 + 每阶段转化率徽章 |
 | [`v3.2`](https://github.com/CasterYu/dashboard/tree/v3.2) | 六级组织树筛选 + PK 横向对比模式 + 补回全链路 7 阶段漏斗 |
 | [`v3.1`](https://github.com/CasterYu/dashboard/tree/v3.1) | 首页补齐模块：积分看板 / 趋势分析 / 雷达 / 渠道分布 / 多维下钻 / 明细表 |
 | [`v3.0`](https://github.com/CasterYu/dashboard/tree/v3.0) | 首页重构：左右分栏 + 全链路 7 阶段漏斗 + 门店/顾问两级下钻 |
@@ -52,7 +53,8 @@
 
 汽车销售运营场景下的数据看板，单文件 HTML 部署，零构建、零依赖。
 
-- **v3.2（当前）**：顶部新增**六级组织树筛选**（全国 → 大区 → 小区 → 门店 → 岗位 → 人员），默认单选、可切 PK 模式做同级横向对比；补回**全链路七阶段转化漏斗**；岗位支持「一岗一人 / 一岗多人」，空缺岗位在筛选器内置灰标注「本店暂无」、在对比中显示 `—` 且不参与排名。
+- **v3.3（当前）**：在 v3.2 基础上把右侧**全链路七阶段转化漏斗**放大，改为更醒目的横向渐变条，每阶段名称与数值置于条内，右侧以独立徽章展示「环比上一阶段转化率」，整体转化率/最大流失/线索→交付等摘要保留在漏斗底部。
+- **v3.2（历史）**：顶部新增**六级组织树筛选**（全国 → 大区 → 小区 → 门店 → 岗位 → 人员），默认单选、可切 PK 模式做同级横向对比；补回**全链路七阶段转化漏斗**；岗位支持「一岗一人 / 一岗多人」，空缺岗位在筛选器内置灰标注「本店暂无」、在对比中显示 `—` 且不参与排名。
 - **v3.0 / v3.1（历史）**：左右分栏布局、积分看板、趋势分析、多维下钻、明细数据表等模块。
 - **v1（已归档）**：基于原始白板草图的「大而全」实现。
 
@@ -89,7 +91,7 @@
 ```
 dashboard/
 ├── README.md               ← 本文件（顶部即可一键访问不同版本）
-├── index.html              ← v3.2 当前最新版（打开默认）
+├── index.html              ← v3.3 当前最新版（打开默认）
 ├── .gitignore
 ├── .gitattributes          ← GitHub 文件识别优化
 ├── push-to-github.ps1     ← 一键推送到 GitHub（需填入 token）
@@ -105,6 +107,7 @@ dashboard/
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
+| **v3.3** | 2026-09-14 | 全链路 7 阶段漏斗视觉重构：面板加宽、横向渐变条放大、每阶段名称与数值内置、右侧独立转化率徽章；整体转化率/最大流失摘要保留底部 |
 | **v3.2** | 2026-09-14 | 新增六级组织树筛选（全国/大区/小区/门店/岗位/人员）与单选、PK 双模式；补回全链路七阶段转化漏斗；岗位支持一岗一人 / 一岗多人并处理空缺岗位；移除雷达图、线索渠道分布、积分来源占比 |
 | **v3.1** | 2026-09-14 | 首页补齐模块：积分看板、趋势分析、产品体验雷达、线索渠道分布、多维下钻、明细数据表 |
 | **v3.0** | 2026-09-14 | 首页重构：左右分栏 + 全链路 7 阶段漏斗 + 门店/顾问两级下钻 |
@@ -173,6 +176,6 @@ git push origin --tags
 
 ✨ **推荐使用 GitHub Pages 在线版访问，无需启动本地服务** ✨
 
-[👉 v3.2 最新版](https://casteryu.github.io/dashboard/) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
+[👉 v3.3 最新版](https://casteryu.github.io/dashboard/) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
 
 </div>
