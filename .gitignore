@@ -1,0 +1,32 @@
+# 依赖
+node_modules/
+package-lock.json
+yarn.lock
+
+# 系统文件
+.DS/
+Thumbs.db
+desktop.ini
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+*.log
+logs/
+
+# 环境变量
+.env
+.env.local
+.env.*.local
+
+# 临时文件
+*.tmp
+.cache/
+dist/
+
+# 数据看板（单文件静态页面，无需构建）
+# 此项目仅包含 index.html，无需忽略

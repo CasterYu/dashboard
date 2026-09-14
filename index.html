@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>业务数据看板 · 首页</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+            --pink: #ec4899;
+            --bg-dark: #0b1220;
+            --panel: #111c2f;
+            --panel-light: #1b2940;
+            --border: rgba(148,163,184,0.08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background:
+                radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,0.18), transparent 60%),
+                radial-gradient(900px 500px at 110% 0%, rgba(6,182,212,0.15), transparent 55%),
+                var(--bg-dark);
+            color: #e2e8f0;
+            margin: 0;
+            min-height: 100vh;
+        }
+        .topbar {
+            background: linear-gradient(180deg, rgba(17,28,47,0.92), rgba(11,18,32,0.92));
+            border-bottom: 1px solid rgba(59,130,246,0.18);
+            backdrop-filter: blur(10px);
+            position: sticky; top: 0; z-index: 50;
+        }
+        .panel {
+            background: linear-gradient(180deg, rgba(27,41,64,0.7), rgba(17,28,47,0.7));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 8px 24px -12px rgba(0,0,0,0.6);
+        }
+        .panel-title {
+            font-size: 18px; font-weight: 700; color: #f8fafc;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .panel-title .dot {
+            width: 6px; height: 22px; border-radius: 3px;
+            background: linear-gradient(180deg, var(--primary), var(--accent));
+        }
+        .panel-subtitle { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .metric-card {
+            position: relative;
+            background: linear-gradient(135deg, rgba(27,41,64,0.95) 0%, rgba(15,25,45,0.95) 100%);
+            border: 1px solid rgba(148,163,184,0.1);
+            border-radius: 16px;
+            padding: 22px 22px 18px;
+            overflow: hidden;
+            transition: transform .25s ease, border-color .25s ease;
+        }
+        .metric-card::before {
+            content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+            background: var(--accent-color, var(--primary));
+            opacity: .85;
+        }
+        .metric-card::after {
+            content: ''; position: absolute; right: -40px; top: -40px;
+            width: 140px; height: 140px; border-radius: 50%;
+            background: var(--accent-color, var(--primary));
+            opacity: .06; filter: blur(2px);
+        }
+        .metric-card:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.4); }
+        .metric-label { font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
+        .metric-icon {
+            width: 30px; height: 30px; border-radius: 8px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(59,130,246,0.15); color: var(--accent-color, var(--primary));
+        }
+        .metric-value { font-size: 38px; font-weight: 700; color: #fff; line-height: 1.2; margin-top: 14px; letter-spacing: -.5px; }
+        .metric-unit { font-size: 14px; color: #94a3b8; margin-left: 6px; font-weight: 500; }
+        .metric-meta { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 12px; color: #94a3b8; flex-wrap: wrap; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 11px;
+        }
+        .chip.up { background: rgba(16,185,129,0.15); color: #34d399; }
+        .chip.down { background: rgba(239,68,68,0.15); color: #f87171; }
+        .chip.flat { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+        .mini-chart { position: absolute; right: 12px; bottom: 10px; width: 130px; height: 60px; opacity: .85; }
+        .date-input {
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(148,163,184,0.15);
+            color: #e2e8f0;
+            padding: 7px 10px; border-radius: 8px; font-size: 13px;
+            outline: none;
+            color-scheme: dark;
+        }
+        .date-input:focus { border-color: var(--primary); }
+        .quick-btn {
+            padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(148,163,184,0.15);
+            color: #cbd5e1;
+            transition: all .15s;
+        }
+        .quick-btn:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #fff; }
+        .quick-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .apply-btn {
+            padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white; cursor: pointer; border: none;
+            transition: transform .15s;
+        }
+        .apply-btn:hover { transform: translateY(-1px); }
+        .overview-bar {
+            display: flex; gap: 24px; padding: 16px 22px; flex-wrap: wrap;
+            background: linear-gradient(90deg, rgba(59,130,246,0.08), rgba(6,182,212,0.04));
+            border: 1px solid rgba(59,130,246,0.15);
+            border-radius: 12px;
+        }
+        .overview-item .label { font-size: 12px; color: #94a3b8; }
+        .overview-item .value { font-size: 20px; font-weight: 700; color: #fff; margin-top: 4px; }
+        .overview-item .delta { font-size: 11px; margin-top: 2px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+    </style>
+</head>
+<body>
+    <!-- 顶部导航 -->
+    <header class="topbar">
+        <div class="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
+                <div>
+                    <h1 class="text-xl font-bold text-white">业务数据看板</h1>
+                    <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 首页总览</p>
+                </div>
+            </div>
+
+            <!-- 时间筛选 -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400">起始</span>
+                    <input type="date" id="startDate" class="date-input">
+                </div>
+                <span class="text-slate-500">→</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400">终止</span>
+                    <input type="date" id="endDate" class="date-input">
+                </div>
+                <div class="flex items-center gap-1 ml-2">
+                    <button class="quick-btn active" data-range="7">近7天</button>
+                    <button class="quick-btn" data-range="30">近30天</button>
+                    <button class="quick-btn" data-range="90">近90天</button>
+                </div>
+                <button id="applyBtn" class="apply-btn">应用筛选</button>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div class="text-xs text-slate-400 text-right">
+                    <div>当前数据范围</div>
+                    <div class="text-slate-200 font-medium" id="rangeText">-- 至 --</div>
+                </div>
+                <div class="text-xs text-slate-300 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="current-time">--:--:--</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+
+        <!-- 总览条 -->
+        <section class="overview-bar">
+            <div class="overview-item">
+                <div class="label">总线索</div>
+                <div class="value" id="ovLeads">--</div>
+                <div class="delta text-emerald-400" id="ovLeadsDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">总到店</div>
+                <div class="value" id="ovArrivals">--</div>
+                <div class="delta text-emerald-400" id="ovArrivalsDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">总锁单</div>
+                <div class="value" id="ovLocked">--</div>
+                <div class="delta text-emerald-400" id="ovLockedDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">总交车</div>
+                <div class="value" id="ovDelivered">--</div>
+                <div class="delta text-rose-400" id="ovDeliveredDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">线索到店率</div>
+                <div class="value" id="ovL2A">--</div>
+                <div class="delta text-emerald-400" id="ovL2ADelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">整体转化率</div>
+                <div class="value" id="ovConv">--</div>
+                <div class="delta text-emerald-400" id="ovConvDelta">--</div>
+            </div>
+            <div class="ml-auto text-xs text-slate-400 self-center">
+                区间合计 · 自动汇总<br>
+                <span class="text-slate-500">数据每 5 分钟刷新</span>
+            </div>
+        </section>
+
+        <!-- 第一页：线索入口 -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>线索入口</div>
+                    <div class="panel-subtitle">从线索进入到邀约的全链路数据 · 区间合计</div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-blue-400"></span>线索
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 ml-2"></span>有效
+                    <span class="w-2 h-2 rounded-full bg-amber-400 ml-2"></span>意向
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-2"></span>邀约
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
+                <div class="metric-card" style="--accent-color:#3b82f6">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </span>
+                        线索数量
+                    </div>
+                    <div class="metric-value"><span id="m_leadTotal">--</span><span class="metric-unit">条</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_leadTotal_d">--</span>
+                        <span>较上周期</span>
+                    </div>
+                    <div class="mini-chart" id="m_leadTotal_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#06b6d4">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </span>
+                        有效线索
+                    </div>
+                    <div class="metric-value"><span id="m_validLeads">--</span><span class="metric-unit">条</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_validLeads_d">--</span>
+                        <span id="m_validLeads_r">有效率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_validLeads_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#f59e0b">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        </span>
+                        意向线索
+                    </div>
+                    <div class="metric-value"><span id="m_intentLeads">--</span><span class="metric-unit">条</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_intentLeads_d">--</span>
+                        <span id="m_intentLeads_r">意向度 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_intentLeads_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#10b981">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        </span>
+                        邀约数量
+                    </div>
+                    <div class="metric-value"><span id="m_invites">--</span><span class="metric-unit">次</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_invites_d">--</span>
+                        <span id="m_invites_r">邀约率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_invites_c"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 第二页：到店接待 -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>到店接待</div>
+                    <div class="panel-subtitle">从到店到商机建立的全流程数据 · 区间合计</div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-blue-400"></span>到店
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 ml-2"></span>试驾
+                    <span class="w-2 h-2 rounded-full bg-purple-400 ml-2"></span>回访
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-2"></span>商机
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
+                <div class="metric-card" style="--accent-color:#3b82f6">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        </span>
+                        到店人数
+                    </div>
+                    <div class="metric-value"><span id="m_arrivals">--</span><span class="metric-unit">人</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_arrivals_d">--</span>
+                        <span id="m_arrivals_r">到店率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_arrivals_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#06b6d4">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </span>
+                        试驾人数
+                    </div>
+                    <div class="metric-value"><span id="m_testDrives">--</span><span class="metric-unit">人</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_testDrives_d">--</span>
+                        <span id="m_testDrives_r">试驾率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_testDrives_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#8b5cf6">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </span>
+                        回访人数
+                    </div>
+                    <div class="metric-value"><span id="m_returnVisits">--</span><span class="metric-unit">人</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_returnVisits_d">--</span>
+                        <span id="m_returnVisits_r">回访率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_returnVisits_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#10b981">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        </span>
+                        商机数量
+                    </div>
+                    <div class="metric-value"><span id="m_opportunities">--</span><span class="metric-unit">个</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_opportunities_d">--</span>
+                        <span id="m_opportunities_r">商机率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_opportunities_c"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 第三页：结果面板 -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>结果面板</div>
+                    <div class="panel-subtitle">最终成交与交付数据 · 区间合计</div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>锁单
+                    <span class="w-2 h-2 rounded-full bg-pink-400 ml-2"></span>交车
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                <div class="metric-card" style="--accent-color:#10b981">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </span>
+                        锁单数量
+                    </div>
+                    <div class="metric-value"><span id="m_locked">--</span><span class="metric-unit">单</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_locked_d">--</span>
+                        <span id="m_locked_r">锁单率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_locked_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#ec4899">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M7 17v3M17 17v3"/><circle cx="7" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg>
+                        </span>
+                        交车数量
+                    </div>
+                    <div class="metric-value"><span id="m_delivered">--</span><span class="metric-unit">辆</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_delivered_d">--</span>
+                        <span id="m_delivered_r">交付率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_delivered_c"></div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="text-center text-xs text-slate-500 py-4">
+            数据看板 v1.0 · 当前展示为模拟数据 · 区间合计基于所选时间筛选动态计算
+        </footer>
+    </main>
+
+    <script>
+    // ---------- 模拟数据：过去 365 天逐日生成 ----------
+    function seededRandom(seed) {
+        let s = seed % 2147483647;
+        if (s <= 0) s += 2147483646;
+        return function() {
+            s = (s * 16807) % 2147483647;
+            return (s - 1) / 2147483646;
+        };
+    }
+    const TODAY = new Date();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    function dateStr(d) { return d.toISOString().slice(0, 10); }
+    function addDays(d, n) { return new Date(d.getTime() + n * ONE_DAY); }
+    function parseDate(s) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
+
+    function generateDailySeries(seed, base, weeklyFactor = 0.55, trend = 0.0008) {
+        const rnd = seededRandom(seed);
+        const series = {};
+        for (let i = 364; i >= 0; i--) {
+            const d = addDays(TODAY, -i);
+            const day = d.getDay();
+            const isWeekend = (day === 0 || day === 6);
+            const noise = 0.7 + rnd() * 0.6;
+            const factor = isWeekend ? weeklyFactor : 1;
+            const t = (364 - i) / 364;
+            const value = Math.max(0, Math.round(base * factor * noise * (1 + trend * (t - 0.5) * 2)));
+            series[dateStr(d)] = value;
+        }
+        return series;
+    }
+    function deriveSeries(src, ratio, seed) {
+        const rnd = seededRandom(seed);
+        const out = {};
+        for (const k in src) {
+            const r = Math.max(0, Math.min(1, ratio * (0.85 + rnd() * 0.3)));
+            out[k] = Math.max(0, Math.round(src[k] * r));
+        }
+        return out;
+    }
+
+    const daily = {
+        leads: generateDailySeries(11, 120),
+        validLeads: null,
+        intentLeads: null,
+        invites: null,
+        arrivals: null,
+        testDrives: null,
+        returnVisits: null,
+        opportunities: null,
+        locked: null,
+        delivered: null
+    };
+    daily.validLeads = deriveSeries(daily.leads, 0.62, 21);
+    daily.intentLeads = deriveSeries(daily.validLeads, 0.55, 31);
+    daily.invites = deriveSeries(daily.intentLeads, 0.78, 41);
+    daily.arrivals = deriveSeries(daily.invites, 0.72, 51);
+    daily.testDrives = deriveSeries(daily.arrivals, 0.68, 61);
+    daily.returnVisits = deriveSeries(daily.testDrives, 0.74, 71);
+    daily.opportunities = deriveSeries(daily.returnVisits, 0.82, 81);
+    daily.locked = deriveSeries(daily.opportunities, 0.46, 91);
+    daily.delivered = deriveSeries(daily.locked, 0.88, 101);
+
+    // ---------- 工具 ----------
+    function sumRange(series, start, end) {
+        let sum = 0;
+        for (const k in series) {
+            if (k >= start && k <= end) sum += series[k];
+        }
+        return sum;
+    }
+    function rangeSeries(series, start, end) {
+        const out = [];
+        const s = parseDate(start), e = parseDate(end);
+        for (let d = new Date(s); d <= e; d = addDays(d, 1)) {
+            out.push(series[dateStr(d)] || 0);
+        }
+        return out;
+    }
+    function fmt(n) { return Math.round(n).toLocaleString('zh-CN'); }
+    function pct(curr, prev) {
+        if (prev === 0) return curr === 0 ? 0 : 100;
+        return ((curr - prev) / prev) * 100;
+    }
+
+    // ---------- DOM ----------
+    const $start = document.getElementById('startDate');
+    const $end = document.getElementById('endDate');
+    const $apply = document.getElementById('applyBtn');
+    const $rangeText = document.getElementById('rangeText');
+    const $quickBtns = document.querySelectorAll('.quick-btn');
+    const miniCharts = {};
+
+    function setRange(days) {
+        const end = new Date(TODAY);
+        const start = addDays(end, -(days - 1));
+        $start.value = dateStr(start);
+        $end.value = dateStr(end);
+        $quickBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.range) === days));
+        render();
+    }
+    $quickBtns.forEach(b => b.addEventListener('click', () => setRange(parseInt(b.dataset.range))));
+    $apply.addEventListener('click', render);
+
+    function renderMini(elId, data, color) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        if (miniCharts[elId]) miniCharts[elId].dispose();
+        const chart = echarts.init(el);
+        miniCharts[elId] = chart;
+        chart.setOption({
+            grid: { left: 0, right: 0, top: 4, bottom: 4 },
+            xAxis: { type: 'category', show: false, boundaryGap: false },
+            yAxis: { type: 'value', show: false },
+            tooltip: { show: false },
+            series: [{
+                type: 'line',
+                smooth: true,
+                data,
+                symbol: 'none',
+                lineStyle: { color, width: 2 },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: color + 'AA' },
+                        { offset: 1, color: color + '00' }
+                    ])
+                }
+            }]
+        });
+    }
+
+    function setChip(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('up', 'down', 'flat');
+        if (value > 0.5) { el.classList.add('up'); el.textContent = '↑ ' + value.toFixed(1) + '%'; }
+        else if (value < -0.5) { el.classList.add('down'); el.textContent = '↓ ' + Math.abs(value).toFixed(1) + '%'; }
+        else { el.classList.add('flat'); el.textContent = '→ ' + value.toFixed(1) + '%'; }
+    }
+    function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+    function setDelta(id, text, kind = 'up') {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.className = 'delta ' + (kind === 'up' ? 'text-emerald-400' : kind === 'down' ? 'text-rose-400' : 'text-slate-400');
+        el.textContent = text;
+    }
+
+    function render() {
+        const start = $start.value;
+        const end = $end.value;
+        if (!start || !end || start > end) return;
+        $rangeText.textContent = `${start} 至 ${end}`;
+
+        const lenDays = Math.round((parseDate(end) - parseDate(start)) / ONE_DAY) + 1;
+        const prevEnd = dateStr(addDays(parseDate(start), -1));
+        const prevStart = dateStr(addDays(parseDate(prevEnd), -(lenDays - 1)));
+
+        const items = [
+            { key: 'leads',         valEl: 'm_leadTotal',      chipEl: 'm_leadTotal_d',     chartEl: 'm_leadTotal_c',     color: '#3b82f6', unit: '条' },
+            { key: 'validLeads',    valEl: 'm_validLeads',     chipEl: 'm_validLeads_d',    chartEl: 'm_validLeads_c',    color: '#06b6d4', unit: '条', ratioEl: 'm_validLeads_r',    ratioBase: 'leads',         ratioLabel: '有效率' },
+            { key: 'intentLeads',   valEl: 'm_intentLeads',    chipEl: 'm_intentLeads_d',   chartEl: 'm_intentLeads_c',   color: '#f59e0b', unit: '条', ratioEl: 'm_intentLeads_r',   ratioBase: 'validLeads',    ratioLabel: '意向度' },
+            { key: 'invites',       valEl: 'm_invites',        chipEl: 'm_invites_d',       chartEl: 'm_invites_c',       color: '#10b981', unit: '次', ratioEl: 'm_invites_r',       ratioBase: 'intentLeads',   ratioLabel: '邀约率' },
+            { key: 'arrivals',      valEl: 'm_arrivals',       chipEl: 'm_arrivals_d',      chartEl: 'm_arrivals_c',      color: '#3b82f6', unit: '人', ratioEl: 'm_arrivals_r',      ratioBase: 'invites',       ratioLabel: '到店率' },
+            { key: 'testDrives',    valEl: 'm_testDrives',     chipEl: 'm_testDrives_d',    chartEl: 'm_testDrives_c',    color: '#06b6d4', unit: '人', ratioEl: 'm_testDrives_r',    ratioBase: 'arrivals',      ratioLabel: '试驾率' },
+            { key: 'returnVisits',  valEl: 'm_returnVisits',   chipEl: 'm_returnVisits_d',  chartEl: 'm_returnVisits_c',  color: '#8b5cf6', unit: '人', ratioEl: 'm_returnVisits_r',  ratioBase: 'testDrives',    ratioLabel: '回访率' },
+            { key: 'opportunities', valEl: 'm_opportunities',  chipEl: 'm_opportunities_d', chartEl: 'm_opportunities_c', color: '#10b981', unit: '个', ratioEl: 'm_opportunities_r', ratioBase: 'returnVisits',  ratioLabel: '商机率' },
+            { key: 'locked',        valEl: 'm_locked',         chipEl: 'm_locked_d',        chartEl: 'm_locked_c',        color: '#10b981', unit: '单', ratioEl: 'm_locked_r',        ratioBase: 'opportunities', ratioLabel: '锁单率' },
+            { key: 'delivered',     valEl: 'm_delivered',      chipEl: 'm_delivered_d',     chartEl: 'm_delivered_c',     color: '#ec4899', unit: '辆', ratioEl: 'm_delivered_r',     ratioBase: 'locked',        ratioLabel: '交付率' }
+        ];
+
+        items.forEach(it => {
+            const series = daily[it.key];
+            const curr = sumRange(series, start, end);
+            const prev = sumRange(series, prevStart, prevEnd);
+            setText(it.valEl, fmt(curr));
+            setChip(it.chipEl, pct(curr, prev));
+            renderMini(it.chartEl, rangeSeries(series, start, end), it.color);
+            if (it.ratioEl && it.ratioBase) {
+                const baseCurr = sumRange(daily[it.ratioBase], start, end);
+                const r = baseCurr === 0 ? 0 : (curr / baseCurr) * 100;
+                setText(it.ratioEl, it.ratioLabel + ' ' + r.toFixed(1) + '%');
+            }
+        });
+
+        // 总览
+        const ovLeads = sumRange(daily.leads, start, end);
+        const ovLeadsPrev = sumRange(daily.leads, prevStart, prevEnd);
+        setText('ovLeads', fmt(ovLeads));
+        setDelta('ovLeadsDelta', (pct(ovLeads, ovLeadsPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovLeads, ovLeadsPrev)).toFixed(1) + '%', pct(ovLeads, ovLeadsPrev) >= 0 ? 'up' : 'down');
+
+        const ovArrivals = sumRange(daily.arrivals, start, end);
+        const ovArrivalsPrev = sumRange(daily.arrivals, prevStart, prevEnd);
+        setText('ovArrivals', fmt(ovArrivals));
+        setDelta('ovArrivalsDelta', (pct(ovArrivals, ovArrivalsPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovArrivals, ovArrivalsPrev)).toFixed(1) + '%', pct(ovArrivals, ovArrivalsPrev) >= 0 ? 'up' : 'down');
+
+        const ovLocked = sumRange(daily.locked, start, end);
+        const ovLockedPrev = sumRange(daily.locked, prevStart, prevEnd);
+        setText('ovLocked', fmt(ovLocked));
+        setDelta('ovLockedDelta', (pct(ovLocked, ovLockedPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovLocked, ovLockedPrev)).toFixed(1) + '%', pct(ovLocked, ovLockedPrev) >= 0 ? 'up' : 'down');
+
+        const ovDelivered = sumRange(daily.delivered, start, end);
+        const ovDeliveredPrev = sumRange(daily.delivered, prevStart, prevEnd);
+        setText('ovDelivered', fmt(ovDelivered));
+        setDelta('ovDeliveredDelta', (pct(ovDelivered, ovDeliveredPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovDelivered, ovDeliveredPrev)).toFixed(1) + '%', pct(ovDelivered, ovDeliveredPrev) >= 0 ? 'up' : 'down');
+
+        const l2a = ovLeads === 0 ? 0 : (ovArrivals / ovLeads) * 100;
+        const l2aPrev = ovLeadsPrev === 0 ? 0 : (ovArrivalsPrev / ovLeadsPrev) * 100;
+        setText('ovL2A', l2a.toFixed(1) + '%');
+        setDelta('ovL2ADelta', (l2a - l2aPrev >= 0 ? '+' : '') + (l2a - l2aPrev).toFixed(1) + 'pt', l2a - l2aPrev >= 0 ? 'up' : 'down');
+
+        const conv = ovLeads === 0 ? 0 : (ovDelivered / ovLeads) * 100;
+        const convPrev = ovLeadsPrev === 0 ? 0 : (ovDeliveredPrev / ovLeadsPrev) * 100;
+        setText('ovConv', conv.toFixed(1) + '%');
+        setDelta('ovConvDelta', (conv - convPrev >= 0 ? '+' : '') + (conv - convPrev).toFixed(1) + 'pt', conv - convPrev >= 0 ? 'up' : 'down');
+    }
+
+    // 时钟
+    function updateTime() {
+        document.getElementById('current-time').textContent = new Date().toLocaleTimeString('zh-CN');
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // 自适应
+    window.addEventListener('resize', () => Object.values(miniCharts).forEach(c => c.resize()));
+
+    // 初始
+    setRange(7);
+    </script>
+</body>
+</html>
