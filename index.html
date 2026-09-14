@@ -1,1037 +1,1322 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>业务数据看板 · 汽车销售运营中心</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
-<style>
-:root{
-  --bg:#080d18;
-  --panel:rgba(19,28,45,.72);
-  --panel-2:rgba(26,37,58,.6);
-  --line:rgba(56,74,104,.55);
-  --line-soft:rgba(56,74,104,.32);
-  --txt:#e6edf7;
-  --txt-dim:#8fa2bf;
-  --txt-mute:#5f7391;
-  --blue:#3b82f6;
-  --cyan:#06b6d4;
-  --green:#10b981;
-  --amber:#f59e0b;
-  --violet:#8b5cf6;
-  --pink:#ec4899;
-}
-*{box-sizing:border-box}
-body{
-  margin:0;background:
-    radial-gradient(1200px 600px at 12% -8%,rgba(37,99,235,.16),transparent 60%),
-    radial-gradient(900px 500px at 92% 6%,rgba(6,182,212,.10),transparent 60%),
-    var(--bg);
-  color:var(--txt);
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
-  min-height:100vh;
-  -webkit-font-smoothing:antialiased;
-}
-::-webkit-scrollbar{width:9px;height:9px}
-::-webkit-scrollbar-thumb{background:rgba(71,92,128,.55);border-radius:6px}
-::-webkit-scrollbar-thumb:hover{background:rgba(90,116,160,.75)}
-::-webkit-scrollbar-track{background:transparent}
-
-/* ---------- 顶栏 ---------- */
-.topbar{
-  position:sticky;top:0;z-index:50;
-  background:rgba(9,14,26,.86);
-  backdrop-filter:blur(14px);
-  border-bottom:1px solid var(--line-soft);
-}
-.brand-logo{
-  width:38px;height:38px;border-radius:10px;
-  background:linear-gradient(135deg,#2563eb,#22d3ee);
-  display:flex;align-items:center;justify-content:center;
-  font-weight:800;font-size:19px;color:#fff;
-  box-shadow:0 4px 16px rgba(37,99,235,.45);
-}
-.date-input{
-  background:rgba(15,23,42,.9);border:1px solid var(--line);
-  color:var(--txt);border-radius:8px;padding:6px 10px;font-size:13px;
-  outline:none;font-family:inherit;
-}
-.date-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(59,130,246,.16)}
-.date-input::-webkit-calendar-picker-indicator{filter:invert(.7)}
-.quick-btn{
-  padding:6px 13px;border-radius:8px;font-size:13px;
-  border:1px solid var(--line);color:var(--txt-dim);
-  background:rgba(15,23,42,.6);cursor:pointer;transition:all .16s;font-family:inherit;
-}
-.quick-btn:hover{color:var(--txt);border-color:rgba(96,165,250,.6);background:rgba(30,58,95,.6)}
-.quick-btn.active{
-  color:#fff;border-color:transparent;
-  background:linear-gradient(135deg,#2563eb,#3b82f6);
-  box-shadow:0 4px 14px rgba(37,99,235,.4);
-}
-.apply-btn{
-  padding:6px 18px;border-radius:8px;font-size:13px;font-weight:600;
-  border:none;color:#fff;cursor:pointer;font-family:inherit;
-  background:linear-gradient(135deg,#2563eb,#3b82f6);
-  box-shadow:0 4px 14px rgba(37,99,235,.4);transition:all .16s;
-}
-.apply-btn:hover{filter:brightness(1.12);transform:translateY(-1px)}
-
-/* ---------- 通用面板 ---------- */
-.panel{
-  background:var(--panel);
-  border:1px solid var(--line);
-  border-radius:14px;
-  position:relative;
-  overflow:hidden;
-}
-.panel::before{
-  content:'';position:absolute;inset:0;border-radius:14px;pointer-events:none;
-  background:linear-gradient(180deg,rgba(255,255,255,.035),transparent 32%);
-}
-.sec-title{font-size:16px;font-weight:700;display:flex;align-items:center;gap:9px}
-.sec-title::before{
-  content:'';width:4px;height:17px;border-radius:2px;
-  background:linear-gradient(180deg,#60a5fa,#2563eb);
-}
-.sec-sub{font-size:12px;color:var(--txt-mute);margin-top:4px;margin-left:13px}
-.legend-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px}
-
-/* ---------- 总览条 ---------- */
-.overview-bar{
-  background:linear-gradient(135deg,rgba(23,37,64,.92),rgba(15,25,45,.92));
-  border:1px solid var(--line);border-radius:14px;
-  display:grid;grid-template-columns:repeat(5,1fr);gap:1px;
-  overflow:hidden;position:relative;
-}
-.overview-bar::before{
-  content:'';position:absolute;left:0;top:0;bottom:0;width:3px;
-  background:linear-gradient(180deg,#22d3ee,#2563eb);
-}
-.ov-item{padding:15px 20px;position:relative}
-.ov-item+.ov-item{border-left:1px solid var(--line-soft)}
-.ov-label{font-size:12px;color:var(--txt-mute);margin-bottom:7px}
-.ov-value{font-size:26px;font-weight:800;letter-spacing:-.5px;line-height:1.1}
-.ov-delta{font-size:12px;margin-top:5px}
-
-/* ---------- 指标卡 ---------- */
-.metric-card{
-  background:var(--panel-2);
-  border:1px solid var(--line);
-  border-radius:12px;padding:15px 16px 12px;
-  cursor:pointer;transition:all .18s;position:relative;overflow:hidden;
-}
-.metric-card:hover{
-  border-color:rgba(96,165,250,.75);
-  transform:translateY(-3px);
-  box-shadow:0 10px 30px rgba(37,99,235,.22);
-  background:rgba(31,45,70,.75);
-}
-.metric-card::after{
-  content:'';position:absolute;left:0;top:0;height:2.5px;width:0;
-  background:linear-gradient(90deg,#60a5fa,#22d3ee);transition:width .28s;
-}
-.metric-card:hover::after{width:100%}
-.mc-head{display:flex;align-items:center;gap:8px;margin-bottom:10px}
-.mc-ico{
-  width:26px;height:26px;border-radius:7px;display:flex;align-items:center;
-  justify-content:center;font-size:13px;flex-shrink:0;
-}
-.mc-label{font-size:13px;color:#b9c8de;font-weight:500}
-.mc-value{font-size:31px;font-weight:800;letter-spacing:-1px;line-height:1;display:flex;align-items:baseline;gap:5px}
-.mc-unit{font-size:12px;font-weight:500;color:var(--txt-mute)}
-.mc-meta{display:flex;align-items:center;gap:10px;margin-top:9px;font-size:12px;flex-wrap:wrap}
-.mc-ratio{color:var(--txt-mute)}
-.chip{padding:2px 8px;border-radius:20px;font-size:11.5px;font-weight:600}
-.chip.up{background:rgba(16,185,129,.14);color:#34d399}
-.chip.down{background:rgba(244,63,94,.14);color:#fb7185}
-.chip.flat{background:rgba(148,163,184,.14);color:#cbd5e1}
-.mc-chart{height:52px;margin-top:8px;margin-left:-4px;margin-right:-4px}
-.mc-hint{
-  position:absolute;right:12px;top:12px;font-size:11px;color:var(--txt-mute);
-  opacity:0;transition:opacity .18s;
-}
-.metric-card:hover .mc-hint{opacity:1;color:#93c5fd}
-
-/* ---------- 漏斗 ---------- */
-.funnel-row{
-  position:relative;margin:0 auto 9px;border-radius:9px;cursor:pointer;
-  background:linear-gradient(90deg,#1d4ed8,#2563eb 55%,#3b82f6);
-  display:flex;align-items:center;padding:11px 15px;gap:10px;
-  transition:all .18s;box-shadow:0 3px 12px rgba(37,99,235,.22);
-  width:var(--w);
-}
-.funnel-row:hover{
-  filter:brightness(1.16);transform:scale(1.022);
-  box-shadow:0 6px 22px rgba(59,130,246,.42);
-}
-.funnel-row .fr-idx{
-  width:19px;height:19px;border-radius:50%;flex-shrink:0;
-  background:rgba(255,255,255,.16);font-size:11px;font-weight:700;
-  display:flex;align-items:center;justify-content:center;
-}
-.funnel-row .fr-name{font-size:13.5px;font-weight:600;white-space:nowrap}
-.funnel-row .fr-spacer{flex:1}
-.funnel-row .fr-value{font-size:17px;font-weight:800;letter-spacing:-.3px;white-space:nowrap}
-.funnel-row .fr-ratio{
-  background:rgba(255,255,255,.18);border-radius:20px;
-  font-size:11px;font-weight:600;padding:2px 8px;white-space:nowrap;min-width:52px;text-align:center;
-}
-.funnel-row .fr-ratio.ghost{background:transparent;color:rgba(255,255,255,.45)}
-
-/* 迷你漏斗 */
-.mini-funnel{padding:10px 0 4px}
-.mf-row{
-  width:var(--w);margin:0 auto 5px;border-radius:6px;padding:5px 11px;
-  background:linear-gradient(90deg,rgba(37,99,235,.85),rgba(59,130,246,.7));
-  display:flex;align-items:center;gap:8px;font-size:12px;
-}
-.mf-row .mf-name{font-weight:600;white-space:nowrap}
-.mf-row .mf-sp{flex:1}
-.mf-row .mf-val{font-weight:700}
-.mf-row .mf-ratio{font-size:10.5px;background:rgba(255,255,255,.16);border-radius:14px;padding:1px 6px}
-
-/* ---------- 门店 / 顾问 列表 ---------- */
-.store-card{
-  background:var(--panel-2);border:1px solid var(--line);
-  border-radius:12px;padding:15px 17px;transition:all .18s;
-}
-.store-card:hover{border-color:rgba(96,165,250,.6);background:rgba(31,45,70,.7)}
-.rank-badge{
-  width:26px;height:26px;border-radius:8px;flex-shrink:0;
-  display:flex;align-items:center;justify-content:center;
-  font-size:12.5px;font-weight:800;color:#fff;
-}
-.rank-1{background:linear-gradient(135deg,#f59e0b,#fbbf24)}
-.rank-2{background:linear-gradient(135deg,#64748b,#94a3b8)}
-.rank-3{background:linear-gradient(135deg,#b45309,#d97706)}
-.rank-n{background:rgba(71,92,128,.5)}
-.store-name{font-size:15px;font-weight:700}
-.store-sub{font-size:11.5px;color:var(--txt-mute)}
-.stage-value{font-size:23px;font-weight:800;letter-spacing:-.5px}
-.link-btn{
-  padding:5px 13px;border-radius:8px;font-size:12.5px;font-weight:600;
-  border:1px solid rgba(96,165,250,.45);color:#93c5fd;
-  background:rgba(37,99,235,.12);cursor:pointer;transition:all .16s;font-family:inherit;
-  white-space:nowrap;
-}
-.link-btn:hover{background:rgba(37,99,235,.3);color:#fff;border-color:#60a5fa}
-.chain-grid{
-  display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-top:12px;
-}
-.chain-cell{
-  background:rgba(15,23,42,.62);border:1px solid var(--line-soft);
-  border-radius:8px;padding:7px 9px;
-}
-.chain-cell .cc-label{font-size:10.5px;color:var(--txt-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.chain-cell .cc-value{font-size:14.5px;font-weight:700;margin-top:3px}
-.chain-cell.active{border-color:rgba(96,165,250,.75);background:rgba(37,99,235,.18)}
-
-details.sf{margin-top:11px}
-details.sf>summary{
-  list-style:none;cursor:pointer;font-size:12px;color:#93c5fd;
-  display:inline-flex;align-items:center;gap:5px;user-select:none;
-  padding:4px 11px;border-radius:7px;background:rgba(37,99,235,.1);
-  border:1px solid rgba(96,165,250,.28);transition:all .15s;
-}
-details.sf>summary::-webkit-details-marker{display:none}
-details.sf>summary:hover{background:rgba(37,99,235,.24);color:#fff}
-details.sf>summary::after{content:'▾';transition:transform .2s;display:inline-block}
-details.sf[open]>summary::after{transform:rotate(180deg)}
-
-/* ---------- 面包屑 ---------- */
-.crumb{
-  display:flex;align-items:center;gap:8px;font-size:13px;
-  color:var(--txt-dim);flex-wrap:wrap;
-}
-.crumb a,.crumb span.ck{cursor:pointer;transition:color .15s}
-.crumb a:hover,.crumb span.ck:hover{color:#93c5fd}
-.crumb .sep{color:var(--txt-mute)}
-.crumb .cur{color:var(--txt);font-weight:600}
-.back-btn{
-  padding:6px 15px;border-radius:8px;font-size:13px;font-weight:600;
-  border:1px solid var(--line);background:rgba(15,23,42,.7);
-  color:var(--txt-dim);cursor:pointer;transition:all .16s;font-family:inherit;
-  display:inline-flex;align-items:center;gap:6px;
-}
-.back-btn:hover{color:#fff;border-color:rgba(96,165,250,.65);background:rgba(30,58,95,.7)}
-
-/* ---------- 布局 ---------- */
-.home-layout{display:grid;grid-template-columns:minmax(0,1fr) 400px;gap:18px;align-items:start}
-.home-right{position:sticky;top:86px}
-.metric-grid-4{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-.metric-grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
-@media(max-width:1280px){
-  .home-layout{grid-template-columns:minmax(0,1fr) 340px}
-  .metric-grid-4{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media(max-width:1080px){
-  .home-layout{grid-template-columns:1fr}
-  .home-right{position:static}
-  .chain-grid{grid-template-columns:repeat(4,1fr)}
-}
-@media(max-width:720px){
-  .overview-bar{grid-template-columns:repeat(2,1fr)}
-  .metric-grid-4,.metric-grid-2{grid-template-columns:1fr}
-  .chain-grid{grid-template-columns:repeat(2,1fr)}
-}
-.empty-tip{padding:60px 20px;text-align:center;color:var(--txt-mute);font-size:14px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>业务数据看板 V3.1 · 汽车销售运营中心</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --purple: #8b5cf6;
+            --pink: #ec4899;
+            --bg-dark: #0b1220;
+            --panel: #111c2f;
+            --panel-light: #1b2940;
+            --border: rgba(148,163,184,0.08);
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background:
+                radial-gradient(1200px 600px at 10% -10%, rgba(59,130,246,0.18), transparent 60%),
+                radial-gradient(900px 500px at 110% 0%, rgba(6,182,212,0.15), transparent 55%),
+                var(--bg-dark);
+            color: #e2e8f0;
+            margin: 0;
+            min-height: 100vh;
+        }
+        .topbar {
+            background: linear-gradient(180deg, rgba(17,28,47,0.92), rgba(11,18,32,0.92));
+            border-bottom: 1px solid rgba(59,130,246,0.18);
+            backdrop-filter: blur(10px);
+            position: sticky; top: 0; z-index: 50;
+        }
+        .panel {
+            background: linear-gradient(180deg, rgba(27,41,64,0.7), rgba(17,28,47,0.7));
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            box-shadow: 0 8px 24px -12px rgba(0,0,0,0.6);
+        }
+        .panel-title {
+            font-size: 18px; font-weight: 700; color: #f8fafc;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .panel-title .dot {
+            width: 6px; height: 22px; border-radius: 3px;
+            background: linear-gradient(180deg, var(--primary), var(--accent));
+        }
+        .panel-subtitle { font-size: 12px; color: #94a3b8; margin-top: 2px; }
+        .metric-card {
+            position: relative;
+            background: linear-gradient(135deg, rgba(27,41,64,0.95) 0%, rgba(15,25,45,0.95) 100%);
+            border: 1px solid rgba(148,163,184,0.1);
+            border-radius: 16px;
+            padding: 22px 22px 18px;
+            overflow: hidden;
+            transition: transform .25s ease, border-color .25s ease;
+        }
+        .metric-card::before {
+            content: ''; position: absolute; inset: 0 0 auto 0; height: 3px;
+            background: var(--accent-color, var(--primary));
+            opacity: .85;
+        }
+        .metric-card::after {
+            content: ''; position: absolute; right: -40px; top: -40px;
+            width: 140px; height: 140px; border-radius: 50%;
+            background: var(--accent-color, var(--primary));
+            opacity: .06; filter: blur(2px);
+        }
+        .metric-card:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.4); }
+        .metric-label { font-size: 13px; color: #94a3b8; display: flex; align-items: center; gap: 8px; }
+        .metric-icon {
+            width: 30px; height: 30px; border-radius: 8px;
+            display: inline-flex; align-items: center; justify-content: center;
+            background: rgba(59,130,246,0.15); color: var(--accent-color, var(--primary));
+        }
+        .metric-value { font-size: 38px; font-weight: 700; color: #fff; line-height: 1.2; margin-top: 14px; letter-spacing: -.5px; }
+        .metric-unit { font-size: 14px; color: #94a3b8; margin-left: 6px; font-weight: 500; }
+        .metric-meta { display: flex; align-items: center; gap: 14px; margin-top: 14px; font-size: 12px; color: #94a3b8; flex-wrap: wrap; }
+        .chip {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 8px; border-radius: 999px; font-weight: 600; font-size: 11px;
+        }
+        .chip.up { background: rgba(16,185,129,0.15); color: #34d399; }
+        .chip.down { background: rgba(239,68,68,0.15); color: #f87171; }
+        .chip.flat { background: rgba(148,163,184,0.15); color: #cbd5e1; }
+        .mini-chart { position: absolute; right: 12px; bottom: 10px; width: 130px; height: 60px; opacity: .85; }
+        .date-input {
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(148,163,184,0.15);
+            color: #e2e8f0;
+            padding: 7px 10px; border-radius: 8px; font-size: 13px;
+            outline: none;
+            color-scheme: dark;
+        }
+        .date-input:focus { border-color: var(--primary); }
+        .quick-btn {
+            padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(148,163,184,0.15);
+            color: #cbd5e1;
+            transition: all .15s;
+        }
+        .quick-btn:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); color: #fff; }
+        .quick-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .apply-btn {
+            padding: 7px 16px; border-radius: 8px; font-size: 13px; font-weight: 500;
+            background: linear-gradient(135deg, var(--primary), var(--accent));
+            color: white; cursor: pointer; border: none;
+            transition: transform .15s;
+        }
+        .apply-btn:hover { transform: translateY(-1px); }
+        .overview-bar {
+            display: flex; gap: 24px; padding: 16px 22px; flex-wrap: wrap;
+            background: linear-gradient(90deg, rgba(59,130,246,0.08), rgba(6,182,212,0.04));
+            border: 1px solid rgba(59,130,246,0.15);
+            border-radius: 12px;
+        }
+        .overview-item .label { font-size: 12px; color: #94a3b8; }
+        .overview-item .value { font-size: 20px; font-weight: 700; color: #fff; margin-top: 4px; }
+        .overview-item .delta { font-size: 11px; margin-top: 2px; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 4px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+    </style>
 </head>
 <body>
+    <!-- 顶部导航 -->
+    <header class="topbar">
+        <div class="max-w-[1600px] mx-auto px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+            <div class="flex items-center gap-3">
+                <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
+                <div>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.1</span></h1>
+                    <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 首页总览</p>
+                </div>
+            </div>
 
-<!-- ============ 顶栏 ============ -->
-<header class="topbar">
-  <div class="max-w-[1800px] mx-auto px-5 py-3 flex items-center gap-4 flex-wrap">
-    <div class="flex items-center gap-3">
-      <div class="brand-logo">D</div>
-      <div>
-        <div class="text-[15px] font-bold leading-tight">业务数据看板</div>
-        <div class="text-[11px] text-slate-500 leading-tight">汽车销售运营中心 · 全链路下钻</div>
-      </div>
-    </div>
+            <!-- 时间筛选 -->
+            <div class="flex items-center gap-3 flex-wrap">
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400">起始</span>
+                    <input type="date" id="startDate" class="date-input">
+                </div>
+                <span class="text-slate-500">→</span>
+                <div class="flex items-center gap-2">
+                    <span class="text-xs text-slate-400">终止</span>
+                    <input type="date" id="endDate" class="date-input">
+                </div>
+                <div class="flex items-center gap-1 ml-2">
+                    <button class="quick-btn active" data-range="7">近7天</button>
+                    <button class="quick-btn" data-range="30">近30天</button>
+                    <button class="quick-btn" data-range="90">近90天</button>
+                </div>
+                <button id="applyBtn" class="apply-btn">应用筛选</button>
+            </div>
 
-    <div class="flex items-center gap-2 ml-2 flex-wrap">
-      <span class="text-[12px] text-slate-500">起始</span>
-      <input type="date" id="startDate" class="date-input">
-      <span class="text-slate-600">—</span>
-      <span class="text-[12px] text-slate-500">终止</span>
-      <input type="date" id="endDate" class="date-input">
-      <div class="flex gap-1.5 ml-1">
-        <button class="quick-btn" data-range="7">近7天</button>
-        <button class="quick-btn" data-range="30">近30天</button>
-        <button class="quick-btn" data-range="90">近90天</button>
-      </div>
-      <button id="applyBtn" class="apply-btn">应用筛选</button>
-    </div>
+            <div class="flex items-center gap-3">
+                <div class="text-xs text-slate-400 text-right">
+                    <div>当前数据范围</div>
+                    <div class="text-slate-200 font-medium" id="rangeText">-- 至 --</div>
+                </div>
+                <div class="text-xs text-slate-300 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="current-time">--:--:--</span>
+                </div>
+            </div>
+        </div>
+    </header>
 
-    <div class="ml-auto flex items-center gap-4">
-      <div class="text-right">
-        <div class="text-[11px] text-slate-500">当前数据范围</div>
-        <div class="text-[12.5px] text-slate-200 font-medium" id="rangeText">-- 至 --</div>
-      </div>
-      <div class="text-right pl-4 border-l border-slate-700/50">
-        <div class="text-[11px] text-slate-500">实时时间</div>
-        <div class="text-[13px] text-cyan-300 font-mono" id="current-time">--:--:--</div>
-      </div>
-    </div>
-  </div>
-</header>
+    <main class="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
 
-<!-- ============ 主区 ============ -->
-<main class="max-w-[1800px] mx-auto px-5 py-5">
-  <div id="view"></div>
-  <footer class="text-center text-xs text-slate-600 py-6">
-    数据看板 v3.0 · 当前展示为模拟数据 · 全链路漏斗与三大模块均支持下钻至门店 / 顾问
-  </footer>
-</main>
+        <!-- 总览条 -->
+        <section class="overview-bar">
+            <div class="overview-item">
+                <div class="label">总线索</div>
+                <div class="value" id="ovLeads">--</div>
+                <div class="delta text-emerald-400" id="ovLeadsDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">总到店</div>
+                <div class="value" id="ovArrivals">--</div>
+                <div class="delta text-emerald-400" id="ovArrivalsDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">总锁单</div>
+                <div class="value" id="ovLocked">--</div>
+                <div class="delta text-emerald-400" id="ovLockedDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">总交车</div>
+                <div class="value" id="ovDelivered">--</div>
+                <div class="delta text-rose-400" id="ovDeliveredDelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">线索到店率</div>
+                <div class="value" id="ovL2A">--</div>
+                <div class="delta text-emerald-400" id="ovL2ADelta">--</div>
+            </div>
+            <div class="overview-item">
+                <div class="label">整体转化率</div>
+                <div class="value" id="ovConv">--</div>
+                <div class="delta text-emerald-400" id="ovConvDelta">--</div>
+            </div>
+            <div class="ml-auto text-xs text-slate-400 self-center">
+                区间合计 · 自动汇总<br>
+                <span class="text-slate-500">数据每 5 分钟刷新</span>
+            </div>
+        </section>
 
-<script>
-/* =========================================================================
-   1. 基础配置：门店 / 顾问 / 指标 / 漏斗
-   ========================================================================= */
-const STORES = [
-  { id:'s1',  name:'北京朝阳店', weight:1.16 },
-  { id:'s2',  name:'上海浦东店', weight:1.11 },
-  { id:'s3',  name:'广州天河店', weight:1.05 },
-  { id:'s4',  name:'深圳南山店', weight:1.02 },
-  { id:'s5',  name:'成都高新店', weight:0.98 },
-  { id:'s6',  name:'杭州西湖店', weight:0.95 },
-  { id:'s7',  name:'武汉江汉店', weight:0.91 },
-  { id:'s8',  name:'南京鼓楼店', weight:0.87 },
-  { id:'s9',  name:'西安雁塔店', weight:0.83 },
-  { id:'s10', name:'重庆渝北店', weight:0.79 }
-];
+        <!-- 第一页：线索入口 -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>线索入口</div>
+                    <div class="panel-subtitle">从线索进入到邀约的全链路数据 · 区间合计</div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-blue-400"></span>线索
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 ml-2"></span>有效
+                    <span class="w-2 h-2 rounded-full bg-amber-400 ml-2"></span>意向
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-2"></span>邀约
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
+                <div class="metric-card" style="--accent-color:#3b82f6">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                        </span>
+                        线索数量
+                    </div>
+                    <div class="metric-value"><span id="m_leadTotal">--</span><span class="metric-unit">条</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_leadTotal_d">--</span>
+                        <span>较上周期</span>
+                    </div>
+                    <div class="mini-chart" id="m_leadTotal_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#06b6d4">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                        </span>
+                        有效线索
+                    </div>
+                    <div class="metric-value"><span id="m_validLeads">--</span><span class="metric-unit">条</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_validLeads_d">--</span>
+                        <span id="m_validLeads_r">有效率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_validLeads_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#f59e0b">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                        </span>
+                        意向线索
+                    </div>
+                    <div class="metric-value"><span id="m_intentLeads">--</span><span class="metric-unit">条</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_intentLeads_d">--</span>
+                        <span id="m_intentLeads_r">意向度 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_intentLeads_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#10b981">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                        </span>
+                        邀约数量
+                    </div>
+                    <div class="metric-value"><span id="m_invites">--</span><span class="metric-unit">次</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_invites_d">--</span>
+                        <span id="m_invites_r">邀约率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_invites_c"></div>
+                </div>
+            </div>
+        </section>
 
-const ADVISOR_NAMES = [
-  '张伟','李娜','王强','刘洋','陈静',
-  '杨帆','赵磊','孙悦','周涛','吴敏',
-  '郑凯','冯雪','韩磊','曹颖','许鹏',
-  '邓超','沈月','程琳','高峰','彭飞',
-  '谢东','卢薇','姜鹏','苏晴','范磊',
-  '董浩','于蕾','袁明','石磊','严婷',
-  '倪涛','熊英','金鹏','陆瑶','郝强',
-  '阮亮','尹雪','林峰','崔健','万清',
-  '侯磊','罗薇','荆明','唐悦','傅强',
-  '钟毅','邵华','廖敏','耿直','初阳'
-];
+        <!-- 第二页：到店接待 -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>到店接待</div>
+                    <div class="panel-subtitle">从到店到商机建立的全流程数据 · 区间合计</div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-blue-400"></span>到店
+                    <span class="w-2 h-2 rounded-full bg-cyan-400 ml-2"></span>试驾
+                    <span class="w-2 h-2 rounded-full bg-purple-400 ml-2"></span>回访
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 ml-2"></span>商机
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 mt-5">
+                <div class="metric-card" style="--accent-color:#3b82f6">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                        </span>
+                        到店人数
+                    </div>
+                    <div class="metric-value"><span id="m_arrivals">--</span><span class="metric-unit">人</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_arrivals_d">--</span>
+                        <span id="m_arrivals_r">到店率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_arrivals_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#06b6d4">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                        </span>
+                        试驾人数
+                    </div>
+                    <div class="metric-value"><span id="m_testDrives">--</span><span class="metric-unit">人</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_testDrives_d">--</span>
+                        <span id="m_testDrives_r">试驾率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_testDrives_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#8b5cf6">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                        </span>
+                        回访人数
+                    </div>
+                    <div class="metric-value"><span id="m_returnVisits">--</span><span class="metric-unit">人</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_returnVisits_d">--</span>
+                        <span id="m_returnVisits_r">回访率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_returnVisits_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#10b981">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+                        </span>
+                        商机数量
+                    </div>
+                    <div class="metric-value"><span id="m_opportunities">--</span><span class="metric-unit">个</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_opportunities_d">--</span>
+                        <span id="m_opportunities_r">商机率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_opportunities_c"></div>
+                </div>
+            </div>
+        </section>
 
-const METRICS = [
-  { key:'leads',         label:'线索数量', unit:'条', color:'#3b82f6', icon:'📞', group:'lead' },
-  { key:'validLeads',    label:'有效线索', unit:'条', color:'#06b6d4', icon:'✅', group:'lead',   base:'leads',      ratioLabel:'有效率' },
-  { key:'intentLeads',   label:'意向线索', unit:'条', color:'#f59e0b', icon:'⭐', group:'lead',   base:'validLeads', ratioLabel:'意向度' },
-  { key:'invites',       label:'邀约数量', unit:'次', color:'#10b981', icon:'📅', group:'lead',   base:'intentLeads',ratioLabel:'邀约率' },
-  { key:'arrivals',      label:'到店人数', unit:'人', color:'#3b82f6', icon:'🏬', group:'visit',  base:'invites',    ratioLabel:'到店率' },
-  { key:'testDrives',    label:'试驾人数', unit:'人', color:'#06b6d4', icon:'🚗', group:'visit',  base:'arrivals',   ratioLabel:'试驾率' },
-  { key:'returnVisits',  label:'回访人数', unit:'人', color:'#8b5cf6', icon:'🔁', group:'visit',  base:'testDrives', ratioLabel:'回访率' },
-  { key:'opportunities', label:'商机数量', unit:'个', color:'#10b981', icon:'💼', group:'visit',  base:'returnVisits',ratioLabel:'商机率' },
-  { key:'locked',        label:'锁单数量', unit:'单', color:'#10b981', icon:'🔒', group:'result', base:'opportunities',ratioLabel:'锁单率' },
-  { key:'delivered',     label:'交车数量', unit:'辆', color:'#ec4899', icon:'🚙', group:'result', base:'locked',     ratioLabel:'交付率' }
-];
-const METRIC_MAP = Object.fromEntries(METRICS.map(m => [m.key, m]));
+        <!-- 第三页：结果面板 -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>结果面板</div>
+                    <div class="panel-subtitle">最终成交与交付数据 · 区间合计</div>
+                </div>
+                <div class="flex items-center gap-2 text-xs text-slate-400">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>锁单
+                    <span class="w-2 h-2 rounded-full bg-pink-400 ml-2"></span>交车
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                <div class="metric-card" style="--accent-color:#10b981">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                        </span>
+                        锁单数量
+                    </div>
+                    <div class="metric-value"><span id="m_locked">--</span><span class="metric-unit">单</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_locked_d">--</span>
+                        <span id="m_locked_r">锁单率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_locked_c"></div>
+                </div>
+                <div class="metric-card" style="--accent-color:#ec4899">
+                    <div class="metric-label">
+                        <span class="metric-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M5 17a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2M7 17v3M17 17v3"/><circle cx="7" cy="17" r="1.5"/><circle cx="17" cy="17" r="1.5"/></svg>
+                        </span>
+                        交车数量
+                    </div>
+                    <div class="metric-value"><span id="m_delivered">--</span><span class="metric-unit">辆</span></div>
+                    <div class="metric-meta">
+                        <span class="chip up" id="m_delivered_d">--</span>
+                        <span id="m_delivered_r">交付率 --</span>
+                    </div>
+                    <div class="mini-chart" id="m_delivered_c"></div>
+                </div>
+            </div>
+        </section>
 
-/* 全链路 7 阶段（漏斗） */
-const FUNNEL = [
-  { key:'leads',      label:'新增线索' },
-  { key:'validLeads', label:'有效线索' },
-  { key:'invites',    label:'邀约排程' },
-  { key:'arrivals',   label:'到店' },
-  { key:'testDrives', label:'有效试驾' },
-  { key:'locked',     label:'锁单' },
-  { key:'delivered',  label:'交付' }
-];
+        <!-- 多维下钻分析 -->
+        <section class="panel p-6">
+            <div class="flex items-start justify-between mb-1 flex-wrap gap-3">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>多维下钻分析</div>
+                    <div class="panel-subtitle">全国 → 大区 → 小区 → 门店 → 顾问 · 点击柱子或列表继续下钻</div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                    <div id="drillBreadcrumb" class="flex items-center gap-1 text-xs flex-wrap"></div>
+                    <button id="drillBack" class="quick-btn">返回上级</button>
+                    <select id="drillMetric" class="date-input">
+                        <option value="leads">线索量</option>
+                        <option value="arrivals">到店量</option>
+                        <option value="locked">锁单量</option>
+                        <option value="delivered">交车量</option>
+                        <option value="points">积分</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
+                <div class="lg:col-span-2 rounded-xl p-2" style="background:rgba(15,23,42,0.35)">
+                    <div id="drillChart" style="height:340px"></div>
+                </div>
+                <div class="space-y-3">
+                    <div class="rounded-xl p-4" style="background:rgba(15,23,42,0.35)">
+                        <div class="text-xs text-slate-400 mb-3" id="drillSummaryTitle">当前层级合计</div>
+                        <div id="drillSummary" class="space-y-2 text-sm"></div>
+                    </div>
+                    <div class="rounded-xl p-4" style="background:rgba(15,23,42,0.35)">
+                        <div class="text-xs text-slate-400 mb-2">下级明细</div>
+                        <div id="drillList" class="space-y-1 max-h-[190px] overflow-auto pr-1"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
 
-const GROUPS = [
-  { id:'lead',   title:'线索入口', sub:'从线索进入到邀约排程的全链路数据 · 区间合计', metrics:['leads','validLeads','intentLeads','invites'],       cols:4 },
-  { id:'visit',  title:'到店接待', sub:'从到店到商机建立的全链路数据 · 区间合计',     metrics:['arrivals','testDrives','returnVisits','opportunities'], cols:4 },
-  { id:'result', title:'结果面板', sub:'最终成交与交付数据 · 区间合计',              metrics:['locked','delivered'],                                  cols:2 }
-];
+        <!-- 趋势分析 + 线索渠道分布 -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="panel p-6 lg:col-span-2">
+                <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
+                    <div>
+                        <div class="panel-title"><span class="dot"></span>趋势分析</div>
+                        <div class="panel-subtitle">线索 / 到店 / 锁单 / 交车 区间走势</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button class="quick-btn active" data-trend="day">日</button>
+                        <button class="quick-btn" data-trend="week">周</button>
+                        <button class="quick-btn" data-trend="month">月</button>
+                    </div>
+                </div>
+                <div id="trendChart" style="height:320px" class="mt-4"></div>
+            </div>
+            <div class="panel p-6">
+                <div class="panel-title"><span class="dot"></span>线索渠道分布</div>
+                <div class="panel-subtitle">各来源线索占比 · 区间合计</div>
+                <div id="channelChart" style="height:320px" class="mt-4"></div>
+            </div>
+        </section>
 
-/* =========================================================================
-   2. 模拟数据生成
-   ========================================================================= */
-function seededRandom(seed){
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return function(){
-    s = (s * 16807) % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
-const TODAY = new Date();
-const ONE_DAY = 24 * 60 * 60 * 1000;
-const dateStr = d => d.toISOString().slice(0, 10);
-const addDays = (d, n) => new Date(d.getTime() + n * ONE_DAY);
-function parseDate(s){ const [y,m,d] = s.split('-').map(Number); return new Date(y, m-1, d); }
+        <!-- 积分看板 -->
+        <section class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div class="panel p-6 lg:col-span-2">
+                <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
+                    <div>
+                        <div class="panel-title"><span class="dot"></span>积分排行榜</div>
+                        <div class="panel-subtitle">TOP 10 · 按所选维度排序</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button class="quick-btn active" data-points="store">门店</button>
+                        <button class="quick-btn" data-points="consultant">顾问</button>
+                        <button class="quick-btn" data-points="region">大区</button>
+                    </div>
+                </div>
+                <div id="pointsRankChart" style="height:340px" class="mt-4"></div>
+            </div>
+            <div class="panel p-6">
+                <div class="panel-title"><span class="dot"></span>积分来源占比</div>
+                <div class="panel-subtitle">锁单 / 交付 / 试驾 / 回访 / 商机 / 邀约</div>
+                <div id="pointsSourceChart" style="height:340px" class="mt-4"></div>
+            </div>
+        </section>
 
-function generateDailySeries(seed, base, weeklyFactor = 0.55, trend = 0.0009){
-  const rnd = seededRandom(seed);
-  const series = {};
-  for (let i = 364; i >= 0; i--){
-    const d = addDays(TODAY, -i);
-    const day = d.getDay();
-    const isWeekend = (day === 0 || day === 6);
-    const noise = 0.72 + rnd() * 0.56;
-    const factor = isWeekend ? weeklyFactor : 1;
-    const t = (364 - i) / 364;
-    const v = Math.max(0, Math.round(base * factor * noise * (1 + trend * (t - 0.5) * 2)));
-    series[dateStr(d)] = v;
-  }
-  return series;
-}
-function deriveSeries(src, ratio, seed){
-  const rnd = seededRandom(seed);
-  const out = {};
-  for (const k in src){
-    const r = Math.max(0, Math.min(1, ratio * (0.86 + rnd() * 0.28)));
-    out[k] = Math.max(0, Math.round(src[k] * r));
-  }
-  return out;
-}
+        <!-- 产品体验 + 明细数据 -->
+        <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="panel p-6">
+                <div class="panel-title"><span class="dot"></span>产品体验对比</div>
+                <div class="panel-subtitle">外观 / 内饰 / 动力 / 空间 / 智能 / 服务</div>
+                <div id="radarChart" style="height:340px" class="mt-4"></div>
+            </div>
+            <div class="panel p-6">
+                <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
+                    <div>
+                        <div class="panel-title"><span class="dot"></span>明细数据表</div>
+                        <div class="panel-subtitle" id="tableSubtitle">门店维度 · 按积分降序</div>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <button class="quick-btn active" data-table="store">门店</button>
+                        <button class="quick-btn" data-table="consultant">顾问</button>
+                    </div>
+                </div>
+                <div class="mt-4 max-h-[340px] overflow-auto">
+                    <table class="w-full text-sm">
+                        <thead id="detailThead" class="text-xs text-slate-400 sticky top-0" style="background:#111c2f"></thead>
+                        <tbody id="detailTbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
 
-/* 数据结构：
-   storeSeries[sid][metricKey] = { 'YYYY-MM-DD': number }
-   advisors[sid] = [ { id, name, share, series:{ metricKey: {date:number} } } ]
-   totalSeries[metricKey] = { date: number }
-*/
-const storeSeries = {};
-const advisors = {};
-const totalSeries = {};
-METRICS.forEach(m => totalSeries[m.key] = {});
+        <footer class="text-center text-xs text-slate-500 py-4">
+            业务数据看板 V3.1 · 当前展示为模拟数据 · 区间合计基于所选时间筛选动态计算
+        </footer>
+    </main>
 
-function buildAll(){
-  STORES.forEach((store, si) => {
-    const seedBase = 1000 + si * 137;
-    const s = {};
-    s.leads         = generateDailySeries(seedBase,    12 * store.weight);
-    s.validLeads    = deriveSeries(s.leads,         0.62, seedBase + 1);
-    s.intentLeads   = deriveSeries(s.validLeads,    0.55, seedBase + 2);
-    s.invites       = deriveSeries(s.intentLeads,   0.78, seedBase + 3);
-    s.arrivals      = deriveSeries(s.invites,       0.72, seedBase + 4);
-    s.testDrives    = deriveSeries(s.arrivals,      0.68, seedBase + 5);
-    s.returnVisits  = deriveSeries(s.testDrives,    0.74, seedBase + 6);
-    s.opportunities = deriveSeries(s.returnVisits,  0.82, seedBase + 7);
-    s.locked        = deriveSeries(s.opportunities, 0.46, seedBase + 8);
-    s.delivered     = deriveSeries(s.locked,        0.88, seedBase + 9);
-    storeSeries[store.id] = s;
-
-    METRICS.forEach(m => {
-      const tgt = totalSeries[m.key], src = s[m.key];
-      for (const day in src) tgt[day] = (tgt[day] || 0) + src[day];
-    });
-
-    advisors[store.id] = buildAdvisors(store, si, s, seedBase);
-  });
-}
-
-function buildAdvisors(store, si, storeSer, seedBase){
-  const rnd = seededRandom(seedBase + 777);
-  let raw = [];
-  for (let i = 0; i < 5; i++) raw.push(0.62 + rnd() * 0.76);
-  const sumRaw = raw.reduce((a,b) => a + b, 0);
-  const shares = raw.map(r => r / sumRaw);
-
-  const list = [];
-  for (let i = 0; i < 5; i++){
-    list.push({
-      id: store.id + '_a' + i,
-      storeId: store.id,
-      storeName: store.name,
-      name: ADVISOR_NAMES[(si * 5 + i) % ADVISOR_NAMES.length],
-      share: shares[i],
-      series: {}
-    });
-  }
-
-  METRICS.forEach((m, mi) => {
-    const src = storeSer[m.key];
-    const rs = seededRandom(seedBase + 3000 + mi * 13);
-    list.forEach(a => a.series[m.key] = {});
-    for (const day in src){
-      const total = src[day];
-      const ws = list.map(a => a.share * (0.84 + rs() * 0.32));
-      const sumW = ws.reduce((a,b) => a + b, 0) || 1;
-      let acc = 0;
-      list.forEach((a, i) => {
-        let v;
-        if (i === list.length - 1){ v = Math.max(0, total - acc); }
-        else { v = Math.round(total * ws[i] / sumW); acc += v; }
-        a.series[m.key][day] = v;
-      });
+    <script>
+    // ---------- 模拟数据：过去 365 天逐日生成 ----------
+    function seededRandom(seed) {
+        let s = seed % 2147483647;
+        if (s <= 0) s += 2147483646;
+        return function() {
+            s = (s * 16807) % 2147483647;
+            return (s - 1) / 2147483646;
+        };
     }
-  });
-  return list;
-}
+    const TODAY = new Date();
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    function dateStr(d) { return d.toISOString().slice(0, 10); }
+    function addDays(d, n) { return new Date(d.getTime() + n * ONE_DAY); }
+    function parseDate(s) {
+        const [y, m, d] = s.split('-').map(Number);
+        return new Date(y, m - 1, d);
+    }
 
-/* =========================================================================
-   3. 工具函数
-   ========================================================================= */
-function sumRange(series, start, end){
-  let sum = 0;
-  for (const k in series) if (k >= start && k <= end) sum += series[k];
-  return sum;
-}
-function rangeSeries(series, start, end){
-  const out = [];
-  const s = parseDate(start), e = parseDate(end);
-  for (let d = new Date(s); d <= e; d = addDays(d, 1)) out.push(series[dateStr(d)] || 0);
-  return out;
-}
-const fmtNum = n => Math.round(n).toLocaleString('zh-CN');
-function pct(curr, prev){
-  if (prev === 0) return curr === 0 ? 0 : 100;
-  return ((curr - prev) / prev) * 100;
-}
-function rate(curr, base){ return base === 0 ? 0 : (curr / base) * 100; }
-function chipHTML(v){
-  const cls = v > 0.5 ? 'up' : (v < -0.5 ? 'down' : 'flat');
-  const ico = v > 0.5 ? '↑' : (v < -0.5 ? '↓' : '→');
-  return `<span class="chip ${cls}">${ico} ${Math.abs(v).toFixed(1)}%</span>`;
-}
-function esc(s){ return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+    function generateDailySeries(seed, base, weeklyFactor = 0.55, trend = 0.0008) {
+        const rnd = seededRandom(seed);
+        const series = {};
+        for (let i = 364; i >= 0; i--) {
+            const d = addDays(TODAY, -i);
+            const day = d.getDay();
+            const isWeekend = (day === 0 || day === 6);
+            const noise = 0.7 + rnd() * 0.6;
+            const factor = isWeekend ? weeklyFactor : 1;
+            const t = (364 - i) / 364;
+            const value = Math.max(0, Math.round(base * factor * noise * (1 + trend * (t - 0.5) * 2)));
+            series[dateStr(d)] = value;
+        }
+        return series;
+    }
+    function deriveSeries(src, ratio, seed) {
+        const rnd = seededRandom(seed);
+        const out = {};
+        for (const k in src) {
+            const r = Math.max(0, Math.min(1, ratio * (0.85 + rnd() * 0.3)));
+            out[k] = Math.max(0, Math.round(src[k] * r));
+        }
+        return out;
+    }
 
-/* =========================================================================
-   4. 日期范围
-   ========================================================================= */
-const $start = document.getElementById('startDate');
-const $end   = document.getElementById('endDate');
-const $apply = document.getElementById('applyBtn');
-const $rangeText = document.getElementById('rangeText');
-const $quickBtns = document.querySelectorAll('.quick-btn');
-let quickActive = 7;
+    const daily = {
+        leads: generateDailySeries(11, 120),
+        validLeads: null,
+        intentLeads: null,
+        invites: null,
+        arrivals: null,
+        testDrives: null,
+        returnVisits: null,
+        opportunities: null,
+        locked: null,
+        delivered: null
+    };
+    daily.validLeads = deriveSeries(daily.leads, 0.62, 21);
+    daily.intentLeads = deriveSeries(daily.validLeads, 0.55, 31);
+    daily.invites = deriveSeries(daily.intentLeads, 0.78, 41);
+    daily.arrivals = deriveSeries(daily.invites, 0.72, 51);
+    daily.testDrives = deriveSeries(daily.arrivals, 0.68, 61);
+    daily.returnVisits = deriveSeries(daily.testDrives, 0.74, 71);
+    daily.opportunities = deriveSeries(daily.returnVisits, 0.82, 81);
+    daily.locked = deriveSeries(daily.opportunities, 0.46, 91);
+    daily.delivered = deriveSeries(daily.locked, 0.88, 101);
 
-function calcRange(){
-  const start = $start.value, end = $end.value;
-  if (!start || !end || start > end) return null;
-  const lenDays = Math.round((parseDate(end) - parseDate(start)) / ONE_DAY) + 1;
-  const prevEnd = dateStr(addDays(parseDate(start), -1));
-  const prevStart = dateStr(addDays(parseDate(prevEnd), -(lenDays - 1)));
-  return { start, end, prevStart, prevEnd, lenDays };
-}
-function setRange(days){
-  const end = new Date(TODAY);
-  const start = addDays(end, -(days - 1));
-  $start.value = dateStr(start);
-  $end.value = dateStr(end);
-  quickActive = days;
-  $quickBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.range) === days));
-  render();
-}
+    // ---------- 工具 ----------
+    function sumRange(series, start, end) {
+        let sum = 0;
+        for (const k in series) {
+            if (k >= start && k <= end) sum += series[k];
+        }
+        return sum;
+    }
+    function rangeSeries(series, start, end) {
+        const out = [];
+        const s = parseDate(start), e = parseDate(end);
+        for (let d = new Date(s); d <= e; d = addDays(d, 1)) {
+            out.push(series[dateStr(d)] || 0);
+        }
+        return out;
+    }
+    function fmt(n) { return Math.round(n).toLocaleString('zh-CN'); }
+    function pct(curr, prev) {
+        if (prev === 0) return curr === 0 ? 0 : 100;
+        return ((curr - prev) / prev) * 100;
+    }
 
-/* =========================================================================
-   5. 路由
-   ========================================================================= */
-const state = { route:'home', params:new URLSearchParams() };
+    // ---------- DOM ----------
+    const $start = document.getElementById('startDate');
+    const $end = document.getElementById('endDate');
+    const $apply = document.getElementById('applyBtn');
+    const $rangeText = document.getElementById('rangeText');
+    const $quickBtns = document.querySelectorAll('.quick-btn');
+    const miniCharts = {};
 
-function navigate(path, params){
-  const qs = params ? '?' + new URLSearchParams(params).toString() : '';
-  const target = '#/' + path + qs;
-  if (location.hash === target) render();
-  else location.hash = target;
-}
-function goHome(){ navigate('home'); }
+    function setRange(days) {
+        const end = new Date(TODAY);
+        const start = addDays(end, -(days - 1));
+        $start.value = dateStr(start);
+        $end.value = dateStr(end);
+        $quickBtns.forEach(b => b.classList.toggle('active', parseInt(b.dataset.range) === days));
+        render();
+    }
+    $quickBtns.forEach(b => b.addEventListener('click', () => setRange(parseInt(b.dataset.range))));
+    $apply.addEventListener('click', render);
 
-function parseRoute(){
-  const h = location.hash.replace(/^#\/?/, '');
-  const [path, qs] = h.split('?');
-  state.route = (path || 'home');
-  state.params = new URLSearchParams(qs || '');
-}
-window.addEventListener('hashchange', () => { parseRoute(); render(); });
+    function renderMini(elId, data, color) {
+        const el = document.getElementById(elId);
+        if (!el) return;
+        if (miniCharts[elId]) miniCharts[elId].dispose();
+        const chart = echarts.init(el);
+        miniCharts[elId] = chart;
+        chart.setOption({
+            grid: { left: 0, right: 0, top: 4, bottom: 4 },
+            xAxis: { type: 'category', show: false, boundaryGap: false },
+            yAxis: { type: 'value', show: false },
+            tooltip: { show: false },
+            series: [{
+                type: 'line',
+                smooth: true,
+                data,
+                symbol: 'none',
+                lineStyle: { color, width: 2 },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: color + 'AA' },
+                        { offset: 1, color: color + '00' }
+                    ])
+                }
+            }]
+        });
+    }
 
-/* ECharts 实例池 */
-let chartPool = [];
-function disposeCharts(){ chartPool.forEach(c => { try{ c.dispose(); }catch(e){} }); chartPool = []; }
+    function setChip(id, value) {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.remove('up', 'down', 'flat');
+        if (value > 0.5) { el.classList.add('up'); el.textContent = '↑ ' + value.toFixed(1) + '%'; }
+        else if (value < -0.5) { el.classList.add('down'); el.textContent = '↓ ' + Math.abs(value).toFixed(1) + '%'; }
+        else { el.classList.add('flat'); el.textContent = '→ ' + value.toFixed(1) + '%'; }
+    }
+    function setText(id, text) { const el = document.getElementById(id); if (el) el.textContent = text; }
+    function setDelta(id, text, kind = 'up') {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.className = 'delta ' + (kind === 'up' ? 'text-emerald-400' : kind === 'down' ? 'text-rose-400' : 'text-slate-400');
+        el.textContent = text;
+    }
 
-/* =========================================================================
-   6. 渲染：首页
-   ========================================================================= */
-function metricValues(seriesArr, r){
-  // seriesArr: {metricKey: series}；返回 { key: {v, prev, delta} }
-  const out = {};
-  METRICS.forEach(m => {
-    const src = seriesArr[m.key] || totalSeries[m.key];
-    const v = sumRange(src, r.start, r.end);
-    const prev = sumRange(src, r.prevStart, r.prevEnd);
-    out[m.key] = { v, prev, delta: pct(v, prev) };
-  });
-  return out;
-}
+    function render() {
+        const start = $start.value;
+        const end = $end.value;
+        if (!start || !end || start > end) return;
+        $rangeText.textContent = `${start} 至 ${end}`;
 
-function renderHome(r){
-  const vals = metricValues(totalSeries, r);
+        const lenDays = Math.round((parseDate(end) - parseDate(start)) / ONE_DAY) + 1;
+        const prevEnd = dateStr(addDays(parseDate(start), -1));
+        const prevStart = dateStr(addDays(parseDate(prevEnd), -(lenDays - 1)));
 
-  /* --- 总览条 --- */
-  const ovDefs = [
-    { label:'总线索', key:'leads' },
-    { label:'总到店', key:'arrivals' },
-    { label:'总锁单', key:'locked' },
-    { label:'总交车', key:'delivered' }
-  ];
-  let ovHTML = ovDefs.map(d => {
-    const x = vals[d.key];
-    return `<div class="ov-item">
-      <div class="ov-label">${d.label}</div>
-      <div class="ov-value">${fmtNum(x.v)}</div>
-      <div class="ov-delta">${chipHTML(x.delta)}</div>
-    </div>`;
-  }).join('');
-  const l2a = rate(vals.arrivals.v, vals.leads.v) - rate(vals.arrivals.prev, vals.leads.prev);
-  const conv = rate(vals.delivered.v, vals.leads.v) - rate(vals.delivered.prev, vals.leads.prev);
-  ovHTML += `<div class="ov-item">
-      <div class="ov-label">线索到店率</div>
-      <div class="ov-value">${rate(vals.arrivals.v, vals.leads.v).toFixed(1)}%</div>
-      <div class="ov-delta"><span class="chip ${l2a>=0?'up':'down'}">${l2a>=0?'+':''}${l2a.toFixed(1)}pt</span></div>
-    </div>
-    <div class="ov-item">
-      <div class="ov-label">整体转化率</div>
-      <div class="ov-value">${rate(vals.delivered.v, vals.leads.v).toFixed(1)}%</div>
-      <div class="ov-delta"><span class="chip ${conv>=0?'up':'down'}">${conv>=0?'+':''}${conv.toFixed(1)}pt</span></div>
-    </div>
-    <div class="ov-item" style="display:flex;flex-direction:column;justify-content:center">
-      <div class="ov-label" style="margin:0">区间合计</div>
-      <div class="text-[12px] text-slate-400 mt-1">自动汇总</div>
-      <div class="text-[10.5px] text-slate-600 mt-0.5">数据每 5 分钟刷新</div>
-    </div>`;
+        const items = [
+            { key: 'leads',         valEl: 'm_leadTotal',      chipEl: 'm_leadTotal_d',     chartEl: 'm_leadTotal_c',     color: '#3b82f6', unit: '条' },
+            { key: 'validLeads',    valEl: 'm_validLeads',     chipEl: 'm_validLeads_d',    chartEl: 'm_validLeads_c',    color: '#06b6d4', unit: '条', ratioEl: 'm_validLeads_r',    ratioBase: 'leads',         ratioLabel: '有效率' },
+            { key: 'intentLeads',   valEl: 'm_intentLeads',    chipEl: 'm_intentLeads_d',   chartEl: 'm_intentLeads_c',   color: '#f59e0b', unit: '条', ratioEl: 'm_intentLeads_r',   ratioBase: 'validLeads',    ratioLabel: '意向度' },
+            { key: 'invites',       valEl: 'm_invites',        chipEl: 'm_invites_d',       chartEl: 'm_invites_c',       color: '#10b981', unit: '次', ratioEl: 'm_invites_r',       ratioBase: 'intentLeads',   ratioLabel: '邀约率' },
+            { key: 'arrivals',      valEl: 'm_arrivals',       chipEl: 'm_arrivals_d',      chartEl: 'm_arrivals_c',      color: '#3b82f6', unit: '人', ratioEl: 'm_arrivals_r',      ratioBase: 'invites',       ratioLabel: '到店率' },
+            { key: 'testDrives',    valEl: 'm_testDrives',     chipEl: 'm_testDrives_d',    chartEl: 'm_testDrives_c',    color: '#06b6d4', unit: '人', ratioEl: 'm_testDrives_r',    ratioBase: 'arrivals',      ratioLabel: '试驾率' },
+            { key: 'returnVisits',  valEl: 'm_returnVisits',   chipEl: 'm_returnVisits_d',  chartEl: 'm_returnVisits_c',  color: '#8b5cf6', unit: '人', ratioEl: 'm_returnVisits_r',  ratioBase: 'testDrives',    ratioLabel: '回访率' },
+            { key: 'opportunities', valEl: 'm_opportunities',  chipEl: 'm_opportunities_d', chartEl: 'm_opportunities_c', color: '#10b981', unit: '个', ratioEl: 'm_opportunities_r', ratioBase: 'returnVisits',  ratioLabel: '商机率' },
+            { key: 'locked',        valEl: 'm_locked',         chipEl: 'm_locked_d',        chartEl: 'm_locked_c',        color: '#10b981', unit: '单', ratioEl: 'm_locked_r',        ratioBase: 'opportunities', ratioLabel: '锁单率' },
+            { key: 'delivered',     valEl: 'm_delivered',      chipEl: 'm_delivered_d',     chartEl: 'm_delivered_c',     color: '#ec4899', unit: '辆', ratioEl: 'm_delivered_r',     ratioBase: 'locked',        ratioLabel: '交付率' }
+        ];
 
-  /* --- 左侧三大模块 --- */
-  const leftHTML = GROUPS.map(g => {
-    const cards = g.metrics.map(k => {
-      const m = METRIC_MAP[k], x = vals[k];
-      let ratioText = '';
-      if (m.base){
-        const b = vals[m.base];
-        ratioText = `${m.ratioLabel} ${rate(x.v, b.v).toFixed(1)}%`;
-      }
-      return `<div class="metric-card" onclick="navigate('stores',{stage:'${m.key}'})" title="点击查看 10 家门店明细">
-        <div class="mc-hint">下钻门店 ›</div>
-        <div class="mc-head">
-          <span class="mc-ico" style="background:${m.color}22;color:${m.color}">${m.icon}</span>
-          <span class="mc-label">${m.label}</span>
-        </div>
-        <div class="mc-value">${fmtNum(x.v)}<span class="mc-unit">${m.unit}</span></div>
-        <div class="mc-meta">${chipHTML(x.delta)}${ratioText ? `<span class="mc-ratio">${ratioText}</span>` : '<span class="mc-ratio">较上期</span>'}</div>
-        <div class="mc-chart" id="mc_${m.key}"></div>
-      </div>`;
-    }).join('');
-    const gridCls = g.cols === 2 ? 'metric-grid-2' : 'metric-grid-4';
-    return `<section class="panel p-5">
-      <div class="flex items-start justify-between">
-        <div>
-          <div class="sec-title">${g.title}</div>
-          <div class="sec-sub">${g.sub}</div>
-        </div>
-        <div class="flex items-center gap-3 text-[11.5px] text-slate-400 pt-1">
-          ${g.metrics.map(k => `<span><i class="legend-dot" style="background:${METRIC_MAP[k].color}"></i>${METRIC_MAP[k].label.slice(0,2)}</span>`).join('')}
-        </div>
-      </div>
-      <div class="${gridCls} mt-4">${cards}</div>
-    </section>`;
-  }).join('');
+        items.forEach(it => {
+            const series = daily[it.key];
+            const curr = sumRange(series, start, end);
+            const prev = sumRange(series, prevStart, prevEnd);
+            setText(it.valEl, fmt(curr));
+            setChip(it.chipEl, pct(curr, prev));
+            renderMini(it.chartEl, rangeSeries(series, start, end), it.color);
+            if (it.ratioEl && it.ratioBase) {
+                const baseCurr = sumRange(daily[it.ratioBase], start, end);
+                const r = baseCurr === 0 ? 0 : (curr / baseCurr) * 100;
+                setText(it.ratioEl, it.ratioLabel + ' ' + r.toFixed(1) + '%');
+            }
+        });
 
-  /* --- 右侧全链路漏斗 --- */
-  const maxV = Math.max(1, vals[FUNNEL[0].key].v);
-  const funnelHTML = FUNNEL.map((f, i) => {
-    const x = vals[f.key];
-    const prevMetric = i === 0 ? null : FUNNEL[i-1].key;
-    const ratio = prevMetric ? rate(x.v, vals[prevMetric].v) : null;
-    const w = 46 + 54 * (x.v / maxV);
-    return `<div class="funnel-row" style="--w:${w.toFixed(1)}%" onclick="navigate('stores',{stage:'${f.key}'})" title="点击查看 10 家门店明细">
-      <span class="fr-idx">${i+1}</span>
-      <span class="fr-name">${f.label}</span>
-      <span class="fr-spacer"></span>
-      <span class="fr-value">${fmtNum(x.v)}</span>
-      ${ratio === null ? '<span class="fr-ratio ghost">—</span>' : `<span class="fr-ratio">${ratio.toFixed(2)}%</span>`}
-    </div>`;
-  }).join('');
+        // 总览
+        const ovLeads = sumRange(daily.leads, start, end);
+        const ovLeadsPrev = sumRange(daily.leads, prevStart, prevEnd);
+        setText('ovLeads', fmt(ovLeads));
+        setDelta('ovLeadsDelta', (pct(ovLeads, ovLeadsPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovLeads, ovLeadsPrev)).toFixed(1) + '%', pct(ovLeads, ovLeadsPrev) >= 0 ? 'up' : 'down');
 
-  return `
-  <section class="overview-bar mb-5">${ovHTML}</section>
-  <div class="home-layout">
-    <div class="flex flex-col gap-5">${leftHTML}</div>
-    <aside class="home-right">
-      <section class="panel p-5">
-        <div class="flex items-start justify-between mb-4">
-          <div>
-            <div class="sec-title">全链路经营转化漏斗</div>
-            <div class="sec-sub">${r.start} ~ ${r.end} · 跟随时间筛选联动</div>
-          </div>
-          <div class="text-[11.5px] text-cyan-300 pt-1 cursor-pointer whitespace-nowrap" onclick="navigate('stores',{stage:'leads'})">经营下钻 →</div>
-        </div>
-        <div>${funnelHTML}</div>
-        <div class="mt-4 pt-4 border-t border-slate-700/40 grid grid-cols-2 gap-3 text-[12px]">
-          <div class="text-slate-400">整体线索→交付转化</div>
-          <div class="text-right font-bold text-emerald-400">${rate(vals.delivered.v, vals.leads.v).toFixed(2)}%</div>
-          <div class="text-slate-400">成交（锁单）</div>
-          <div class="text-right font-bold text-slate-100">${fmtNum(vals.locked.v)} 单</div>
-          <div class="text-slate-400">交付完成率</div>
-          <div class="text-right font-bold text-pink-400">${rate(vals.delivered.v, vals.locked.v).toFixed(1)}%</div>
-        </div>
-      </section>
-    </aside>
-  </div>`;
-}
+        const ovArrivals = sumRange(daily.arrivals, start, end);
+        const ovArrivalsPrev = sumRange(daily.arrivals, prevStart, prevEnd);
+        setText('ovArrivals', fmt(ovArrivals));
+        setDelta('ovArrivalsDelta', (pct(ovArrivals, ovArrivalsPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovArrivals, ovArrivalsPrev)).toFixed(1) + '%', pct(ovArrivals, ovArrivalsPrev) >= 0 ? 'up' : 'down');
 
-/* 首页迷你折线图（必须在 DOM 插入后调用） */
-function initHomeCharts(r){
-  METRICS.forEach(m => {
-    const el = document.getElementById('mc_' + m.key);
-    if (!el) return;
-    const c = echarts.init(el);
-    chartPool.push(c);
-    c.setOption({
-      grid:{ left:2, right:2, top:4, bottom:2 },
-      xAxis:{ type:'category', show:false, boundaryGap:false },
-      yAxis:{ type:'value', show:false },
-      tooltip:{ show:false },
-      series:[{
-        type:'line', smooth:true, symbol:'none',
-        data: rangeSeries(totalSeries[m.key], r.start, r.end),
-        lineStyle:{ color:m.color, width:2 },
-        areaStyle:{ color:new echarts.graphic.LinearGradient(0,0,0,1,[
-          { offset:0, color:m.color + 'AA' },
-          { offset:1, color:m.color + '00' }
-        ]) }
-      }]
+        const ovLocked = sumRange(daily.locked, start, end);
+        const ovLockedPrev = sumRange(daily.locked, prevStart, prevEnd);
+        setText('ovLocked', fmt(ovLocked));
+        setDelta('ovLockedDelta', (pct(ovLocked, ovLockedPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovLocked, ovLockedPrev)).toFixed(1) + '%', pct(ovLocked, ovLockedPrev) >= 0 ? 'up' : 'down');
+
+        const ovDelivered = sumRange(daily.delivered, start, end);
+        const ovDeliveredPrev = sumRange(daily.delivered, prevStart, prevEnd);
+        setText('ovDelivered', fmt(ovDelivered));
+        setDelta('ovDeliveredDelta', (pct(ovDelivered, ovDeliveredPrev) >= 0 ? '↑ ' : '↓ ') + Math.abs(pct(ovDelivered, ovDeliveredPrev)).toFixed(1) + '%', pct(ovDelivered, ovDeliveredPrev) >= 0 ? 'up' : 'down');
+
+        const l2a = ovLeads === 0 ? 0 : (ovArrivals / ovLeads) * 100;
+        const l2aPrev = ovLeadsPrev === 0 ? 0 : (ovArrivalsPrev / ovLeadsPrev) * 100;
+        setText('ovL2A', l2a.toFixed(1) + '%');
+        setDelta('ovL2ADelta', (l2a - l2aPrev >= 0 ? '+' : '') + (l2a - l2aPrev).toFixed(1) + 'pt', l2a - l2aPrev >= 0 ? 'up' : 'down');
+
+        const conv = ovLeads === 0 ? 0 : (ovDelivered / ovLeads) * 100;
+        const convPrev = ovLeadsPrev === 0 ? 0 : (ovDeliveredPrev / ovLeadsPrev) * 100;
+        setText('ovConv', conv.toFixed(1) + '%');
+        setDelta('ovConvDelta', (conv - convPrev >= 0 ? '+' : '') + (conv - convPrev).toFixed(1) + 'pt', conv - convPrev >= 0 ? 'up' : 'down');
+
+        // 扩展模块
+        renderAllExtras();
+    }
+
+    // 时钟
+    function updateTime() {
+        document.getElementById('current-time').textContent = new Date().toLocaleTimeString('zh-CN');
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // 自适应
+    window.addEventListener('resize', () => Object.values(miniCharts).forEach(c => c.resize()));
+
+    // ---------- 组织架构：全国 → 大区 → 小区 → 门店 → 顾问 ----------
+    const ORG_SPEC = [
+        { region: '华东大区', areas: [
+            { area: '上海一区', stores: ['上海浦东旗舰店', '上海徐汇中心店'] },
+            { area: '杭州小区', stores: ['杭州西湖店', '杭州钱江新城店'] }
+        ]},
+        { region: '华南大区', areas: [
+            { area: '广州小区', stores: ['广州天河店', '广州番禺店'] },
+            { area: '深圳小区', stores: ['深圳南山店', '深圳宝安店'] }
+        ]},
+        { region: '华北大区', areas: [
+            { area: '北京一区', stores: ['北京朝阳店', '北京亦庄店'] },
+            { area: '天津小区', stores: ['天津滨海店'] }
+        ]},
+        { region: '西南大区', areas: [
+            { area: '成都小区', stores: ['成都高新店', '成都锦江店'] },
+            { area: '重庆小区', stores: ['重庆渝北店'] }
+        ]}
+    ];
+    const CONSULTANT_POOL = ['张伟', '李娜', '王强', '刘洋', '陈静', '赵敏', '孙磊', '周婷', '吴鹏', '郑爽', '冯雪', '许晨'];
+    const RATIO_CHAIN = [
+        ['validLeads', 'leads', 0.62],
+        ['intentLeads', 'validLeads', 0.55],
+        ['invites', 'intentLeads', 0.78],
+        ['arrivals', 'invites', 0.72],
+        ['testDrives', 'arrivals', 0.68],
+        ['returnVisits', 'testDrives', 0.74],
+        ['opportunities', 'returnVisits', 0.82],
+        ['locked', 'opportunities', 0.46],
+        ['delivered', 'locked', 0.88]
+    ];
+    const METRIC_KEYS = ['leads', 'validLeads', 'intentLeads', 'invites', 'arrivals', 'testDrives', 'returnVisits', 'opportunities', 'locked', 'delivered', 'points'];
+    const METRIC_LABEL = { leads: '线索量', arrivals: '到店量', locked: '锁单量', delivered: '交车量', points: '积分' };
+    const METRIC_UNIT = { leads: '条', arrivals: '人', locked: '单', delivered: '辆', points: '分' };
+    const METRIC_COLOR = { leads: '#3b82f6', arrivals: '#06b6d4', locked: '#10b981', delivered: '#ec4899', points: '#f59e0b' };
+
+    function hashSeed(str) {
+        let h = 2166136261;
+        for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619); }
+        return Math.abs(h) % 2147483647;
+    }
+    function pointsOf(m) {
+        return Math.round(m.locked * 30 + m.delivered * 50 + m.testDrives * 6 + m.invites * 4 + m.returnVisits * 5 + m.opportunities * 8);
+    }
+    function consultantMetrics(store, name, days) {
+        const rnd = seededRandom(hashSeed(store + '|' + name));
+        const perDay = { leads: 1.5 + rnd() * 4.5 };
+        RATIO_CHAIN.forEach(pair => {
+            const target = pair[0], src = pair[1], ratio = pair[2];
+            perDay[target] = perDay[src] * Math.max(0.05, Math.min(1, ratio * (0.82 + rnd() * 0.36)));
+        });
+        const cur = {};
+        METRIC_KEYS.forEach(k => { if (k !== 'points') cur[k] = Math.max(0, Math.round(perDay[k] * days)); });
+        cur.points = pointsOf(cur);
+        const rnd2 = seededRandom(hashSeed('prev|' + store + '|' + name));
+        const prev = {};
+        METRIC_KEYS.forEach(k => { prev[k] = Math.max(0, Math.round(cur[k] * (0.78 + rnd2() * 0.5))); });
+        return { cur, prev };
+    }
+    function aggregateNode(node) {
+        if (!node.children.length) return node;
+        const metrics = {}, prevMetrics = {};
+        METRIC_KEYS.forEach(k => {
+            metrics[k] = node.children.reduce((s, c) => s + c.metrics[k], 0);
+            prevMetrics[k] = node.children.reduce((s, c) => s + c.prevMetrics[k], 0);
+        });
+        node.metrics = metrics;
+        node.prevMetrics = prevMetrics;
+        return node;
+    }
+    function buildOrgTree(days, targetLeads) {
+        const root = { name: '全国', level: '全国', children: [] };
+        ORG_SPEC.forEach(r => {
+            const regionNode = { name: r.region, level: '大区', children: [] };
+            r.areas.forEach(a => {
+                const areaNode = { name: a.area, level: '小区', children: [] };
+                a.stores.forEach(store => {
+                    const storeNode = { name: store, level: '门店', children: [] };
+                    const rnd = seededRandom(hashSeed('c|' + store));
+                    const count = 4 + Math.floor(rnd() * 3);
+                    const pool = CONSULTANT_POOL.slice();
+                    for (let i = 0; i < count && pool.length; i++) {
+                        const cname = pool.splice(Math.floor(rnd() * pool.length), 1)[0];
+                        const mm = consultantMetrics(store, cname, days);
+                        storeNode.children.push({ name: cname, level: '顾问', children: [], metrics: mm.cur, prevMetrics: mm.prev });
+                    }
+                    areaNode.children.push(aggregateNode(storeNode));
+                });
+                regionNode.children.push(aggregateNode(areaNode));
+            });
+            root.children.push(aggregateNode(regionNode));
+        });
+        const tree = aggregateNode(root);
+        // 与首页「线索入口」口径对齐：按区间总线索等比缩放
+        if (targetLeads > 0 && tree.metrics.leads > 0) {
+            scaleLeaves(tree, targetLeads / tree.metrics.leads);
+            // 修正取整误差，使全国合计与首页总线索完全一致
+            const diff = targetLeads - tree.metrics.leads;
+            if (diff !== 0) {
+                const leaves = [];
+                (function gather(n) { if (!n.children.length) leaves.push(n); else n.children.forEach(gather); })(tree);
+                let biggest = leaves[0];
+                leaves.forEach(l => { if (l.metrics.leads > biggest.metrics.leads) biggest = l; });
+                biggest.metrics.leads = Math.max(0, biggest.metrics.leads + diff);
+                (function recompute(n) { if (!n.children.length) return; n.children.forEach(recompute); aggregateNode(n); })(tree);
+            }
+        }
+        return tree;
+    }
+    function scaleLeaves(node, factor) {
+        if (!node.children.length) {
+            METRIC_KEYS.forEach(k => {
+                node.metrics[k] = Math.round(node.metrics[k] * factor);
+                node.prevMetrics[k] = Math.round(node.prevMetrics[k] * factor);
+            });
+            return;
+        }
+        node.children.forEach(c => scaleLeaves(c, factor));
+        aggregateNode(node);
+    }
+
+    let orgTree = null, orgKey = '', drillPath = [];
+    function ensureOrg(start, end) {
+        const days = rangeDays(start, end);
+        const key = days + '|' + sumRange(daily.leads, start, end);
+        if (!orgTree || orgKey !== key) {
+            orgTree = buildOrgTree(days, sumRange(daily.leads, start, end));
+            orgKey = key;
+            drillPath = [orgTree];
+        }
+    }
+    function collectLevel(node, level, out) {
+        if (node.level === level) out.push(node);
+        node.children.forEach(c => collectLevel(c, level, out));
+        return out;
+    }
+
+    // ---------- 图表实例池 ----------
+    const extCharts = {};
+    function chart(id) {
+        if (!extCharts[id]) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            extCharts[id] = echarts.init(el);
+        }
+        return extCharts[id];
+    }
+    const AXIS_STYLE = {
+        axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+        axisTick: { show: false },
+        axisLabel: { color: '#94a3b8', fontSize: 11 },
+        splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
+    };
+    const TOOLTIP_STYLE = {
+        backgroundColor: 'rgba(11,18,32,0.95)',
+        borderColor: 'rgba(148,163,184,0.2)',
+        textStyle: { color: '#e2e8f0', fontSize: 12 }
+    };
+    function deltaPct(cur, prev) {
+        if (prev === 0) return cur === 0 ? 0 : 100;
+        return ((cur - prev) / prev) * 100;
+    }
+    function rangeDays(start, end) {
+        return Math.round((parseDate(end) - parseDate(start)) / ONE_DAY) + 1;
+    }
+
+    // ---------- 多维下钻 ----------
+    const $drillMetric = document.getElementById('drillMetric');
+    const CHILD_LEVEL_TEXT = { '全国': '大区', '大区': '小区', '小区': '门店', '门店': '顾问', '顾问': '无' };
+    function renderDrill() {
+        const start = $start.value, end = $end.value;
+        if (!start || !end || start > end) return;
+        ensureOrg(start, end);
+        const cur = drillPath[drillPath.length - 1];
+        const metric = $drillMetric.value || 'leads';
+        const color = METRIC_COLOR[metric];
+        const unit = METRIC_UNIT[metric];
+
+        // 面包屑
+        const bc = document.getElementById('drillBreadcrumb');
+        bc.innerHTML = drillPath.map((n, i) => {
+            const active = i === drillPath.length - 1;
+            return '<button data-idx="' + i + '" class="px-2 py-1 rounded-md transition ' +
+                (active ? 'bg-blue-500/20 text-blue-300' : 'text-slate-400 hover:text-white hover:bg-white/5') + '">' + n.name + '</button>';
+        }).join('<span class="text-slate-600">/</span>');
+        bc.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+            drillPath = drillPath.slice(0, parseInt(b.dataset.idx, 10) + 1);
+            renderDrill();
+        }));
+        const backBtn = document.getElementById('drillBack');
+        backBtn.style.opacity = drillPath.length > 1 ? '1' : '.45';
+        backBtn.dataset.enabled = drillPath.length > 1 ? '1' : '0';
+
+        const children = cur.children.slice().sort((a, b) => b.metrics[metric] - a.metrics[metric]);
+        const hasChild = children.length > 0;
+        const names = hasChild ? children.map(c => c.name) : [cur.name];
+        const values = hasChild ? children.map(c => c.metrics[metric]) : [cur.metrics[metric]];
+        const total = values.reduce((s, v) => s + v, 0) || 1;
+
+        const c1 = chart('drillChart');
+        if (c1) {
+            c1.off('click');
+            c1.setOption({
+                grid: { left: 10, right: 22, top: 34, bottom: 6, containLabel: true },
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    backgroundColor: 'rgba(11,18,32,0.95)',
+                    borderColor: 'rgba(148,163,184,0.2)',
+                    textStyle: { color: '#e2e8f0', fontSize: 12 },
+                    formatter: function (p) {
+                        const node = hasChild ? children[p[0].dataIndex] : cur;
+                        const d = deltaPct(node.metrics[metric], node.prevMetrics[metric]);
+                        return node.name + '<br/><b style="color:' + color + '">' + METRIC_LABEL[metric] + '：' + fmt(node.metrics[metric]) + ' ' + unit + '</b>' +
+                            '<br/>占比：' + ((node.metrics[metric] / total) * 100).toFixed(1) + '%' +
+                            '<br/>环比：' + (d >= 0 ? '+' : '') + d.toFixed(1) + '%';
+                    }
+                },
+                xAxis: {
+                    type: 'category',
+                    data: names,
+                    ...AXIS_STYLE,
+                    splitLine: { show: false },
+                    axisLabel: { color: '#94a3b8', fontSize: 11, interval: 0, rotate: names.length > 6 ? 24 : 0 }
+                },
+                yAxis: { type: 'value', ...AXIS_STYLE },
+                series: [{
+                    type: 'bar',
+                    data: values,
+                    barMaxWidth: 44,
+                    cursor: hasChild ? 'pointer' : 'default',
+                    itemStyle: {
+                        borderRadius: [6, 6, 0, 0],
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: color },
+                            { offset: 1, color: color + '33' }
+                        ])
+                    },
+                    label: { show: true, position: 'top', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return fmt(p.value); } }
+                }]
+            }, true);
+            if (hasChild) {
+                c1.on('click', function (p) {
+                    if (children[p.dataIndex]) {
+                        drillPath.push(children[p.dataIndex]);
+                        renderDrill();
+                    }
+                });
+            }
+        }
+
+        // 右侧汇总
+        document.getElementById('drillSummaryTitle').textContent =
+            cur.name + ' · ' + cur.level + '层级合计（下级：' + CHILD_LEVEL_TEXT[cur.level] + '）';
+        const sumRows = ['leads', 'arrivals', 'locked', 'delivered', 'points'];
+        document.getElementById('drillSummary').innerHTML = sumRows.map(k => {
+            const d = deltaPct(cur.metrics[k], cur.prevMetrics[k]);
+            return '<div class="flex items-center justify-between gap-2">' +
+                '<span class="text-xs" style="color:' + METRIC_COLOR[k] + '">' + METRIC_LABEL[k] + '</span>' +
+                '<span class="flex items-center gap-2">' +
+                '<span class="font-semibold text-white">' + fmt(cur.metrics[k]) +
+                '<span class="text-[11px] text-slate-500 ml-0.5">' + METRIC_UNIT[k] + '</span></span>' +
+                '<span class="chip ' + (d >= 0 ? 'up' : 'down') + '">' + (d >= 0 ? '↑' : '↓') + ' ' + Math.abs(d).toFixed(1) + '%</span>' +
+                '</span></div>';
+        }).join('') +
+            '<div class="pt-2 mt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">' +
+            '<span>线索到店率</span><span class="text-slate-200 font-medium">' +
+            (cur.metrics.leads ? (cur.metrics.arrivals / cur.metrics.leads * 100).toFixed(1) : '0.0') + '%</span></div>' +
+            '<div class="flex items-center justify-between text-xs text-slate-400 mt-1">' +
+            '<span>线索转化率</span><span class="text-slate-200 font-medium">' +
+            (cur.metrics.leads ? (cur.metrics.delivered / cur.metrics.leads * 100).toFixed(1) : '0.0') + '%</span></div>';
+
+        // 下级明细列表
+        const list = document.getElementById('drillList');
+        if (!hasChild) {
+            list.innerHTML = '<div class="text-xs text-slate-500 py-2">已到达最末级（顾问），无下级数据</div>';
+            return;
+        }
+        list.innerHTML = children.map((c, i) => {
+            const share = (c.metrics[metric] / total) * 100;
+            return '<button data-i="' + i + '" class="w-full text-left px-2 py-2 rounded-lg hover:bg-white/5 transition">' +
+                '<div class="flex items-center justify-between text-xs gap-2">' +
+                '<span class="text-slate-300 truncate">' + c.name + '</span>' +
+                '<span class="text-slate-100 font-medium">' + fmt(c.metrics[metric]) + '</span></div>' +
+                '<div class="mt-1 h-1 rounded bg-white/5 overflow-hidden">' +
+                '<div style="width:' + share.toFixed(1) + '%;background:' + color + ';height:100%"></div></div></button>';
+        }).join('');
+        list.querySelectorAll('button').forEach(b => b.addEventListener('click', () => {
+            drillPath.push(children[parseInt(b.dataset.i, 10)]);
+            renderDrill();
+        }));
+    }
+
+    // ---------- 趋势分析 ----------
+    let trendMode = 'day';
+    function buildBuckets(start, end, mode) {
+        const keys = ['leads', 'arrivals', 'locked', 'delivered'];
+        const buckets = [];
+        const s = parseDate(start), e = parseDate(end);
+        let cursor = new Date(s);
+        while (cursor <= e) {
+            let bs = new Date(cursor), be = new Date(cursor), label = '';
+            if (mode === 'day') {
+                label = (cursor.getMonth() + 1) + '/' + cursor.getDate();
+                cursor = addDays(cursor, 1);
+            } else if (mode === 'week') {
+                const wd = cursor.getDay() === 0 ? 7 : cursor.getDay();
+                bs = addDays(cursor, -(wd - 1));
+                be = addDays(bs, 6);
+                if (bs < s) bs = new Date(s);
+                if (be > e) be = new Date(e);
+                label = (bs.getMonth() + 1) + '/' + bs.getDate() + ' 周';
+                cursor = addDays(be, 1);
+            } else {
+                bs = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+                be = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+                if (bs < s) bs = new Date(s);
+                if (be > e) be = new Date(e);
+                label = bs.getFullYear() + '/' + (bs.getMonth() + 1);
+                cursor = addDays(be, 1);
+            }
+            const values = {};
+            keys.forEach(k => { values[k] = sumRange(daily[k], dateStr(bs), dateStr(be)); });
+            buckets.push({ label: label, values: values });
+        }
+        return buckets;
+    }
+    function renderTrend() {
+        const start = $start.value, end = $end.value;
+        if (!start || !end || start > end) return;
+        const buckets = buildBuckets(start, end, trendMode);
+        const conf = [
+            { key: 'leads', name: '线索', color: '#3b82f6' },
+            { key: 'arrivals', name: '到店', color: '#06b6d4' },
+            { key: 'locked', name: '锁单', color: '#10b981' },
+            { key: 'delivered', name: '交车', color: '#ec4899' }
+        ];
+        const c = chart('trendChart');
+        if (!c) return;
+        c.setOption({
+            grid: { left: 10, right: 22, top: 42, bottom: 6, containLabel: true },
+            legend: { data: conf.map(s => s.name), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
+            tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+            xAxis: {
+                type: 'category',
+                data: buckets.map(b => b.label),
+                boundaryGap: false,
+                ...AXIS_STYLE,
+                splitLine: { show: false },
+                axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) }
+            },
+            yAxis: { type: 'value', ...AXIS_STYLE },
+            series: conf.map(s => ({
+                name: s.name,
+                type: 'line',
+                smooth: true,
+                symbol: 'circle',
+                symbolSize: 5,
+                showSymbol: buckets.length <= 40,
+                data: buckets.map(b => b.values[s.key]),
+                lineStyle: { color: s.color, width: 2 },
+                itemStyle: { color: s.color },
+                areaStyle: {
+                    color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                        { offset: 0, color: s.color + '55' },
+                        { offset: 1, color: s.color + '00' }
+                    ])
+                }
+            }))
+        }, true);
+    }
+
+    // ---------- 线索渠道分布 ----------
+    const CHANNEL_SPEC = [
+        ['自然进店', 0.18, '#3b82f6'],
+        ['官网 / 小程序', 0.13, '#06b6d4'],
+        ['汽车之家', 0.16, '#10b981'],
+        ['懂车帝', 0.14, '#f59e0b'],
+        ['抖音', 0.12, '#8b5cf6'],
+        ['小红书', 0.09, '#ec4899'],
+        ['电话热线', 0.08, '#14b8a6'],
+        ['老客转介绍', 0.10, '#a3e635']
+    ];
+    function renderChannel() {
+        const start = $start.value, end = $end.value;
+        if (!start || !end || start > end) return;
+        const total = sumRange(daily.leads, start, end);
+        const c = chart('channelChart');
+        if (!c) return;
+        c.setOption({
+            tooltip: {
+                trigger: 'item', ...TOOLTIP_STYLE,
+                formatter: function (p) { return p.name + '<br/><b>' + fmt(p.value) + '</b> 条（' + p.percent + '%）'; }
+            },
+            legend: { type: 'scroll', bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle', itemWidth: 8, itemHeight: 8 },
+            series: [{
+                type: 'pie',
+                radius: ['48%', '72%'],
+                center: ['50%', '44%'],
+                avoidLabelOverlap: true,
+                itemStyle: { borderColor: 'rgba(11,18,32,0.9)', borderWidth: 2 },
+                label: { show: false },
+                labelLine: { show: false },
+                emphasis: { label: { show: true, color: '#fff', fontSize: 13, fontWeight: 'bold', formatter: '{b}\n{d}%' } },
+                data: CHANNEL_SPEC.map(ch => ({ name: ch[0], value: Math.round(total * ch[1]), itemStyle: { color: ch[2] } }))
+            }]
+        }, true);
+    }
+
+    // ---------- 积分看板 ----------
+    let pointsDim = 'store';
+    function renderPoints() {
+        const start = $start.value, end = $end.value;
+        if (!start || !end || start > end) return;
+        ensureOrg(start, end);
+        const levelMap = { store: '门店', consultant: '顾问', region: '大区' };
+        const nodes = collectLevel(orgTree, levelMap[pointsDim], [])
+            .slice().sort((a, b) => b.metrics.points - a.metrics.points).slice(0, 10);
+        const c = chart('pointsRankChart');
+        if (c) {
+            c.setOption({
+                grid: { left: 10, right: 64, top: 12, bottom: 10, containLabel: true },
+                tooltip: {
+                    trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE,
+                    formatter: function (p) { return p[0].name + '<br/><b style="color:#f59e0b">积分：' + fmt(p[0].value) + '</b>'; }
+                },
+                xAxis: { type: 'value', ...AXIS_STYLE },
+                yAxis: { type: 'category', data: nodes.map(n => n.name).reverse(), ...AXIS_STYLE, splitLine: { show: false } },
+                series: [{
+                    type: 'bar',
+                    data: nodes.map(n => n.metrics.points).reverse(),
+                    barMaxWidth: 16,
+                    itemStyle: {
+                        borderRadius: [0, 6, 6, 0],
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: '#3b82f6' },
+                            { offset: 1, color: '#f59e0b' }
+                        ])
+                    },
+                    label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return fmt(p.value); } }
+                }]
+            }, true);
+        }
+
+        const m = orgTree.metrics;
+        const src = [
+            ['锁单积分', m.locked * 30, '#10b981'],
+            ['交付积分', m.delivered * 50, '#ec4899'],
+            ['试驾积分', m.testDrives * 6, '#06b6d4'],
+            ['回访积分', m.returnVisits * 5, '#8b5cf6'],
+            ['商机积分', m.opportunities * 8, '#f59e0b'],
+            ['邀约积分', m.invites * 4, '#3b82f6']
+        ].map(it => ({ name: it[0], value: Math.round(it[1]), itemStyle: { color: it[2] } }));
+
+        const c2 = chart('pointsSourceChart');
+        if (c2) {
+            c2.setOption({
+                tooltip: {
+                    trigger: 'item', ...TOOLTIP_STYLE,
+                    formatter: function (p) { return p.name + '<br/><b>' + fmt(p.value) + '</b> 分（' + p.percent + '%）'; }
+                },
+                legend: { bottom: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle', itemWidth: 8, itemHeight: 8 },
+                series: [{
+                    type: 'pie',
+                    radius: ['40%', '68%'],
+                    center: ['50%', '44%'],
+                    itemStyle: { borderColor: 'rgba(11,18,32,0.9)', borderWidth: 2 },
+                    label: { color: '#94a3b8', fontSize: 11, formatter: '{d}%' },
+                    data: src
+                }]
+            }, true);
+        }
+    }
+
+    // ---------- 产品体验雷达 ----------
+    function renderRadar() {
+        const c = chart('radarChart');
+        if (!c) return;
+        c.setOption({
+            legend: { data: ['本品', '竞品 A', '竞品 B'], bottom: 0, textStyle: { color: '#94a3b8', fontSize: 12 }, icon: 'circle', itemWidth: 8, itemHeight: 8 },
+            tooltip: { ...TOOLTIP_STYLE },
+            radar: {
+                indicator: [
+                    { name: '外观', max: 100 }, { name: '内饰', max: 100 }, { name: '动力', max: 100 },
+                    { name: '空间', max: 100 }, { name: '智能', max: 100 }, { name: '服务', max: 100 }
+                ],
+                center: ['50%', '46%'],
+                radius: '62%',
+                axisName: { color: '#cbd5e1', fontSize: 12 },
+                splitLine: { lineStyle: { color: 'rgba(148,163,184,0.15)' } },
+                splitArea: { areaStyle: { color: ['rgba(59,130,246,0.05)', 'rgba(59,130,246,0.01)'] } },
+                axisLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } }
+            },
+            series: [{
+                type: 'radar',
+                data: [
+                    { value: [88, 84, 91, 79, 93, 86], name: '本品', lineStyle: { color: '#3b82f6', width: 2 }, itemStyle: { color: '#3b82f6' }, areaStyle: { color: 'rgba(59,130,246,0.25)' } },
+                    { value: [82, 79, 85, 86, 74, 78], name: '竞品 A', lineStyle: { color: '#f59e0b', width: 2 }, itemStyle: { color: '#f59e0b' }, areaStyle: { color: 'rgba(245,158,11,0.18)' } },
+                    { value: [79, 88, 76, 82, 81, 72], name: '竞品 B', lineStyle: { color: '#10b981', width: 2 }, itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16,185,129,0.18)' } }
+                ]
+            }]
+        }, true);
+    }
+
+    // ---------- 明细数据表 ----------
+    let tableDim = 'store';
+    function renderDetail() {
+        const start = $start.value, end = $end.value;
+        if (!start || !end || start > end) return;
+        ensureOrg(start, end);
+        const level = tableDim === 'store' ? '门店' : '顾问';
+        const rows = collectLevel(orgTree, level, []).slice().sort((a, b) => b.metrics.points - a.metrics.points);
+        document.getElementById('tableSubtitle').textContent = level + '维度 · 按积分降序 · 共 ' + rows.length + ' 条';
+        const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', '积分'];
+        document.getElementById('detailThead').innerHTML = '<tr>' + cols.map((c, i) =>
+            '<th class="py-2 px-2 font-medium whitespace-nowrap ' + (i ? 'text-right' : 'text-left') + '">' + c + '</th>').join('') + '</tr>';
+        document.getElementById('detailTbody').innerHTML = rows.map((n, i) => {
+            const m = n.metrics;
+            const l2a = m.leads ? (m.arrivals / m.leads) * 100 : 0;
+            const conv = m.leads ? (m.delivered / m.leads) * 100 : 0;
+            return '<tr class="border-t border-white/5 hover:bg-white/5 transition">' +
+                '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' + n.name + '</td>' +
+                '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.leads) + '</td>' +
+                '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.arrivals) + '</td>' +
+                '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.locked) + '</td>' +
+                '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.delivered) + '</td>' +
+                '<td class="py-2 px-2 text-right text-slate-400">' + l2a.toFixed(1) + '%</td>' +
+                '<td class="py-2 px-2 text-right text-slate-400">' + conv.toFixed(1) + '%</td>' +
+                '<td class="py-2 px-2 text-right font-semibold text-amber-400">' + fmt(m.points) + '</td></tr>';
+        }).join('');
+    }
+
+    // ---------- 扩展模块统一渲染 ----------
+    function renderAllExtras() {
+        renderDrill();
+        renderTrend();
+        renderChannel();
+        renderPoints();
+        renderRadar();
+        renderDetail();
+    }
+
+    document.getElementById('drillBack').addEventListener('click', () => {
+        if (drillPath.length > 1) { drillPath.pop(); renderDrill(); }
     });
-  });
-}
+    document.getElementById('drillMetric').addEventListener('change', renderDrill);
+    document.querySelectorAll('[data-trend]').forEach(b => b.addEventListener('click', () => {
+        trendMode = b.dataset.trend;
+        document.querySelectorAll('[data-trend]').forEach(x => x.classList.toggle('active', x === b));
+        renderTrend();
+    }));
+    document.querySelectorAll('[data-points]').forEach(b => b.addEventListener('click', () => {
+        pointsDim = b.dataset.points;
+        document.querySelectorAll('[data-points]').forEach(x => x.classList.toggle('active', x === b));
+        renderPoints();
+    }));
+    document.querySelectorAll('[data-table]').forEach(b => b.addEventListener('click', () => {
+        tableDim = b.dataset.table;
+        document.querySelectorAll('[data-table]').forEach(x => x.classList.toggle('active', x === b));
+        renderDetail();
+    }));
+    window.addEventListener('resize', () => Object.values(extCharts).forEach(c => c.resize()));
 
-/* =========================================================================
-   7. 渲染：面包屑
-   ========================================================================= */
-function crumb(items){
-  return `<div class="crumb mb-4">${items.map((it, i) => {
-    const node = it.click
-      ? `<span class="ck" onclick="${it.click}">${esc(it.label)}</span>`
-      : `<span class="${i === items.length-1 ? 'cur' : ''}">${esc(it.label)}</span>`;
-    return (i > 0 ? '<span class="sep">›</span>' : '') + node;
-  }).join('')}</div>`;
-}
-
-/* =========================================================================
-   8. 渲染：门店维度页
-   ========================================================================= */
-function renderStores(r){
-  const stageKey = state.params.get('stage') || 'leads';
-  const stageLabel = FUNNEL.find(f => f.key === stageKey)?.label || METRIC_MAP[stageKey]?.label || '线索数量';
-  const stIdx = FUNNEL.findIndex(f => f.key === stageKey);
-
-  /* 汇总十店数据 */
-  const rows = STORES.map((s, i) => {
-    const ser = storeSeries[s.id];
-    const chain = {};
-    METRICS.forEach(m => { chain[m.key] = sumRange(ser[m.key], r.start, r.end); });
-    METRICS.forEach(m => {
-      chain[m.key + '_prev'] = sumRange(ser[m.key], r.prevStart, r.prevEnd);
-    });
-    return { store:s, idx:i, chain, value:chain[stageKey] };
-  });
-  rows.sort((a, b) => b.value - a.value);
-
-  const totalVal = rows.reduce((sum, x) => sum + x.value, 0);
-  const maxVal = Math.max(1, ...rows.map(x => x.value));
-  const prevMetricKey = stIdx > 0 ? FUNNEL[stIdx - 1].key : (METRIC_MAP[stageKey]?.base || null);
-
-  const cards = rows.map((x, rank) => {
-    const s = x.store;
-    const ratio = prevMetricKey ? rate(x.value, x.chain[prevMetricKey]) : null;
-    const ratioLabel = prevMetricKey
-      ? (METRIC_MAP[stageKey]?.ratioLabel || '转化率')
-      : '链条起点';
-    const delta = pct(x.value, x.chain[stageKey + '_prev']);
-    const chainCells = METRICS.map(m => {
-      const isActive = m.key === stageKey;
-      return `<div class="chain-cell${isActive ? ' active' : ''}">
-        <div class="cc-label" title="${m.label}">${m.label}</div>
-        <div class="cc-value" style="${isActive ? 'color:#93c5fd' : ''}">${fmtNum(x.chain[m.key])}</div>
-      </div>`;
-    }).join('');
-
-    /* 本店 7 阶段迷你漏斗 */
-    const localMax = Math.max(1, x.chain[FUNNEL[0].key]);
-    const miniFunnel = FUNNEL.map((f, i) => {
-      const v = x.chain[f.key];
-      const w = 46 + 54 * (v / localMax);
-      const pv = i === 0 ? null : x.chain[FUNNEL[i-1].key];
-      const rr = pv === null ? null : rate(v, pv);
-      return `<div class="mf-row" style="--w:${w.toFixed(1)}%">
-        <span class="mf-name">${f.label}</span>
-        <span class="mf-sp"></span>
-        <span class="mf-val">${fmtNum(v)}</span>
-        ${rr === null ? '' : `<span class="mf-ratio">${rr.toFixed(1)}%</span>`}
-      </div>`;
-    }).join('');
-
-    const rankCls = rank === 0 ? 'rank-1' : rank === 1 ? 'rank-2' : rank === 2 ? 'rank-3' : 'rank-n';
-
-    return `<div class="store-card">
-      <div class="flex items-center gap-3 flex-wrap">
-        <span class="rank-badge ${rankCls}">${rank + 1}</span>
-        <div>
-          <div class="store-name">${esc(s.name)}</div>
-          <div class="store-sub">占总量 ${totalVal === 0 ? '0.0' : (x.value / totalVal * 100).toFixed(1)}% · 排名第 ${rank + 1} / ${rows.length}</div>
-        </div>
-        <div class="ml-3">
-          <div class="text-[11px] text-slate-500">${stageLabel}</div>
-          <div class="stage-value" style="color:#93c5fd">${fmtNum(x.value)}</div>
-        </div>
-        <div class="flex items-center gap-3 ml-auto flex-wrap">
-          <div class="text-right">
-            <div class="text-[11px] text-slate-500">${ratioLabel}</div>
-            <div class="text-[14px] font-bold ${ratio === null ? 'text-slate-400' : (ratio >= 60 ? 'text-emerald-400' : ratio >= 30 ? 'text-amber-400' : 'text-rose-400')}">
-              ${ratio === null ? '—' : ratio.toFixed(1) + '%'}
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-[11px] text-slate-500">环比</div>
-            <div class="mt-0.5">${chipHTML(delta)}</div>
-          </div>
-          <button class="link-btn" onclick="navigate('advisors',{store:'${s.id}',stage:'${stageKey}'})">查看顾问 ›</button>
-        </div>
-      </div>
-      <div class="chain-grid">${chainCells}</div>
-      <details class="sf">
-        <summary>展开本店漏斗</summary>
-        <div class="mini-funnel">${miniFunnel}</div>
-      </details>
-    </div>`;
-  }).join('');
-
-  return `
-    ${crumb([
-      { label:'首页', click:'goHome()' },
-      { label:'门店维度' },
-      { label:stageLabel }
-    ])}
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div>
-        <div class="text-[19px] font-bold">${stageLabel} · 门店维度</div>
-        <div class="text-[12.5px] text-slate-500 mt-1">共 ${STORES.length} 家门店 · 区间 ${r.start} ~ ${r.end} · 按 ${stageLabel} 降序排名</div>
-      </div>
-      <button class="back-btn" onclick="goHome()">← 返回首页</button>
-    </div>
-    <section class="panel p-5 mb-5">
-      <div class="sec-title">全链路漏斗总览（全部门店合计）</div>
-      <div class="sec-sub mb-4">点击任一阶段可切换门店排名维度</div>
-      <div>${FUNNEL.map((f, i) => {
-        const v = sumRange(totalSeries[f.key], r.start, r.end);
-        const mv = Math.max(1, sumRange(totalSeries[FUNNEL[0].key], r.start, r.end));
-        const w = 46 + 54 * (v / mv);
-        const pv = i === 0 ? null : sumRange(totalSeries[FUNNEL[i-1].key], r.start, r.end);
-        const rr = pv === null ? null : rate(v, pv);
-        const isActive = f.key === stageKey;
-        return `<div class="funnel-row" style="--w:${w.toFixed(1)}%;${isActive ? 'outline:2px solid #93c5fd;outline-offset:2px' : ''}" onclick="navigate('stores',{stage:'${f.key}'})">
-          <span class="fr-idx">${i + 1}</span>
-          <span class="fr-name">${f.label}</span>
-          <span class="fr-spacer"></span>
-          <span class="fr-value">${fmtNum(v)}</span>
-          ${rr === null ? '<span class="fr-ratio ghost">—</span>' : `<span class="fr-ratio">${rr.toFixed(2)}%</span>`}
-        </div>`;
-      }).join('')}</div>
-    </section>
-    <div class="flex flex-col gap-4">${cards}</div>`;
-}
-
-/* =========================================================================
-   9. 渲染：顾问维度页
-   ========================================================================= */
-function renderAdvisors(r){
-  const storeId = state.params.get('store') || STORES[0].id;
-  const stageKey = state.params.get('stage') || 'leads';
-  const store = STORES.find(s => s.id === storeId) || STORES[0];
-  const list = advisors[store.id] || [];
-  const stIdx = FUNNEL.findIndex(f => f.key === stageKey);
-  const stageLabel = FUNNEL.find(f => f.key === stageKey)?.label || METRIC_MAP[stageKey]?.label || '线索数量';
-
-  const rows = list.map((a, i) => {
-    const chain = {};
-    METRICS.forEach(m => {
-      chain[m.key] = sumRange(a.series[m.key], r.start, r.end);
-      chain[m.key + '_prev'] = sumRange(a.series[m.key], r.prevStart, r.prevEnd);
-    });
-    return { a, idx:i, chain, value:chain[stageKey] };
-  });
-  rows.sort((x, y) => y.value - x.value);
-
-  const totalVal = rows.reduce((sum, x) => sum + x.value, 0);
-  const prevMetricKey = stIdx > 0 ? FUNNEL[stIdx - 1].key : (METRIC_MAP[stageKey]?.base || null);
-
-  const cards = rows.map((x, rank) => {
-    const a = x.a;
-    const ratio = prevMetricKey ? rate(x.value, x.chain[prevMetricKey]) : null;
-    const delta = pct(x.value, x.chain[stageKey + '_prev']);
-    const localMax = Math.max(1, x.chain[FUNNEL[0].key]);
-    const miniFunnel = FUNNEL.map((f, i) => {
-      const v = x.chain[f.key];
-      const w = 46 + 54 * (v / localMax);
-      const pv = i === 0 ? null : x.chain[FUNNEL[i-1].key];
-      const rr = pv === null ? null : rate(v, pv);
-      return `<div class="mf-row" style="--w:${w.toFixed(1)}%">
-        <span class="mf-name">${f.label}</span><span class="mf-sp"></span>
-        <span class="mf-val">${fmtNum(v)}</span>
-        ${rr === null ? '' : `<span class="mf-ratio">${rr.toFixed(1)}%</span>`}
-      </div>`;
-    }).join('');
-    const chainCells = FUNNEL.map(f => {
-      const isActive = f.key === stageKey;
-      return `<div class="chain-cell${isActive ? ' active' : ''}">
-        <div class="cc-label">${f.label}</div>
-        <div class="cc-value" style="${isActive ? 'color:#93c5fd' : ''}">${fmtNum(x.chain[f.key])}</div>
-      </div>`;
-    }).join('');
-    const rankCls = rank === 0 ? 'rank-1' : rank === 1 ? 'rank-2' : rank === 2 ? 'rank-3' : 'rank-n';
-    const avaColors = ['#3b82f6','#06b6d4','#10b981','#f59e0b','#8b5cf6'];
-    const avaColor = avaColors[x.idx % avaColors.length];
-
-    return `<div class="store-card">
-      <div class="flex items-center gap-3 flex-wrap">
-        <span class="rank-badge ${rankCls}">${rank + 1}</span>
-        <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-[14px]"
-             style="background:${avaColor}28;color:${avaColor};border:1px solid ${avaColor}55">${esc(a.name[0])}</div>
-        <div>
-          <div class="store-name">${esc(a.name)}</div>
-          <div class="store-sub">${esc(store.name)} · 业绩占比 ${(a.share * 100).toFixed(1)}% · 门店内排名 ${rank + 1} / ${rows.length}</div>
-        </div>
-        <div class="ml-3">
-          <div class="text-[11px] text-slate-500">${stageLabel}</div>
-          <div class="stage-value" style="color:#93c5fd">${fmtNum(x.value)}</div>
-        </div>
-        <div class="flex items-center gap-3 ml-auto flex-wrap">
-          <div class="text-right">
-            <div class="text-[11px] text-slate-500">${prevMetricKey ? (METRIC_MAP[stageKey]?.ratioLabel || '转化率') : '占门店比'}</div>
-            <div class="text-[14px] font-bold text-emerald-400">
-              ${prevMetricKey ? ratio.toFixed(1) + '%' : (totalVal === 0 ? '0.0' : (x.value / totalVal * 100).toFixed(1)) + '%'}
-            </div>
-          </div>
-          <div class="text-right">
-            <div class="text-[11px] text-slate-500">环比</div>
-            <div class="mt-0.5">${chipHTML(delta)}</div>
-          </div>
-        </div>
-      </div>
-      <div class="chain-grid">${chainCells}</div>
-      <details class="sf">
-        <summary>展开个人漏斗</summary>
-        <div class="mini-funnel">${miniFunnel}</div>
-      </details>
-    </div>`;
-  }).join('');
-
-  return `
-    ${crumb([
-      { label:'首页', click:'goHome()' },
-      { label:'门店维度', click:`navigate('stores',{stage:'${stageKey}'})` },
-      { label:store.name },
-      { label:stageLabel }
-    ])}
-    <div class="flex items-center justify-between mb-4 flex-wrap gap-3">
-      <div>
-        <div class="text-[19px] font-bold">${esc(store.name)} · 顾问维度</div>
-        <div class="text-[12.5px] text-slate-500 mt-1">共 ${rows.length} 名顾问 · ${stageLabel} · 区间 ${r.start} ~ ${r.end}</div>
-      </div>
-      <button class="back-btn" onclick="navigate('stores',{stage:'${stageKey}'})">← 返回门店维度</button>
-    </div>
-    <section class="panel p-5 mb-5">
-      <div class="sec-title">${esc(store.name)} · 全链路漏斗</div>
-      <div class="sec-sub mb-4">点击任一阶段可在顾问维度切换指标</div>
-      <div>${FUNNEL.map((f, i) => {
-        const v = sumRange(storeSeries[store.id][f.key], r.start, r.end);
-        const mv = Math.max(1, sumRange(storeSeries[store.id][FUNNEL[0].key], r.start, r.end));
-        const w = 46 + 54 * (v / mv);
-        const pv = i === 0 ? null : sumRange(storeSeries[store.id][FUNNEL[i-1].key], r.start, r.end);
-        const rr = pv === null ? null : rate(v, pv);
-        const isActive = f.key === stageKey;
-        return `<div class="funnel-row" style="--w:${w.toFixed(1)}%;${isActive ? 'outline:2px solid #93c5fd;outline-offset:2px' : ''}" onclick="navigate('advisors',{store:'${store.id}',stage:'${f.key}'})">
-          <span class="fr-idx">${i + 1}</span>
-          <span class="fr-name">${f.label}</span>
-          <span class="fr-spacer"></span>
-          <span class="fr-value">${fmtNum(v)}</span>
-          ${rr === null ? '<span class="fr-ratio ghost">—</span>' : `<span class="fr-ratio">${rr.toFixed(2)}%</span>`}
-        </div>`;
-      }).join('')}</div>
-    </section>
-    <div class="flex flex-col gap-4">${cards}</div>`;
-}
-
-/* =========================================================================
-   10. 主渲染
-   ========================================================================= */
-function render(){
-  const r = calcRange();
-  if (!r) return;
-  $rangeText.textContent = `${r.start} 至 ${r.end}`;
-
-  disposeCharts();
-  const view = document.getElementById('view');
-
-  if (state.route === 'stores'){
-    view.innerHTML = renderStores(r);
-  } else if (state.route === 'advisors'){
-    view.innerHTML = renderAdvisors(r);
-  } else {
-    view.innerHTML = renderHome(r);
-    initHomeCharts(r);
-  }
-  window.scrollTo(0, 0);
-}
-
-/* =========================================================================
-   11. 事件绑定与启动
-   ========================================================================= */
-$quickBtns.forEach(b => b.addEventListener('click', () => setRange(parseInt(b.dataset.range))));
-$apply.addEventListener('click', render);
-window.addEventListener('resize', () => chartPool.forEach(c => { try{ c.resize(); }catch(e){} }));
-
-function tickClock(){ document.getElementById('current-time').textContent = new Date().toLocaleTimeString('zh-CN'); }
-setInterval(tickClock, 1000);
-tickClock();
-
-buildAll();
-parseRoute();
-setRange(7);
-</script>
+    // 初始
+    setRange(7);
+    </script>
 </body>
 </html>

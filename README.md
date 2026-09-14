@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含两个历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v2.1-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v3.1-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,7 +20,7 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v2 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | 首页重构：线索入口 / 到店接待 / 结果面板 三大模块 + 时间筛选 |
+| **🟢 v3.1 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | 三大模块 + 积分看板 + 趋势分析 + 产品体验雷达 + 渠道分布 + 多维下钻 + 明细表 |
 | **🟡 v1 · 历史归档** | **👉 [https://casteryu.github.io/dashboard/legacy/v1/](https://casteryu.github.io/dashboard/legacy/v1/)** | 📦 归档 | 白板草图完整模块版：漏斗/积分/下钻/排行榜/雷达 |
 
 > 💡 直接 Ctrl + 点击可在新标签页打开，与当前页同时浏览。
@@ -73,6 +73,8 @@ dashboard/
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
+| **v3.1** | 2026-09-14 | 首页补齐模块：积分看板、趋势分析、产品体验雷达、线索渠道分布、多维下钻、明细数据表 |
+| **v3.0** | 2026-09-14 | 首页重构：左右分栏 + 全链路 7 阶段漏斗 + 门店/顾问两级下钻 |
 | **v2.1** | 2026-09-14 | 新增 `push-to-github.ps1` 一键推送脚本；补充 `.gitattributes` |
 | **v2.0** | 2026-09-14 | 归档 v1 至 `legacy/v1/`；重构首页为"线索入口/到店接待/结果"三大模块 + 时间筛选 |
 | **v1.1** | 2026-09-14 | README 补充版本说明 |
