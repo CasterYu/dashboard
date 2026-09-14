@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>业务数据看板 v0 · 完整模块版（历史归档）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --accent: #06b6d4;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg-dark: #0f172a;
+            --panel: #1e293b;
+        }
+        * { box-sizing: border-box; }
+        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg-dark); color: #e2e8f0; margin: 0; min-height: 100vh; }
+        .dashboard-header { background: linear-gradient(90deg, rgba(30,41,59,0.95) 0%, rgba(15,23,42,0.98) 100%); border-bottom: 1px solid rgba(59,130,246,0.2); backdrop-filter: blur(10px); }
+        .panel { background: var(--panel); border: 1px solid rgba(148,163,184,0.1); border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.2); overflow: hidden; }
+        .panel-header { padding: 12px 16px; border-bottom: 1px solid rgba(148,163,184,0.1); display: flex; align-items: center; justify-content: space-between; }
+        .panel-title { font-size: 15px; font-weight: 600; color: #f8fafc; display: flex; align-items: center; gap: 8px; }
+        .panel-title::before { content: ''; width: 4px; height: 16px; background: var(--primary); border-radius: 2px; }
+        .kpi-card { background: linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(6,182,212,0.05) 100%); border: 1px solid rgba(59,130,246,0.2); border-radius: 12px; padding: 16px; position: relative; overflow: hidden; }
+        .kpi-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, var(--primary), var(--accent)); }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #fff; margin: 8px 0; }
+        .kpi-label { font-size: 13px; color: #94a3b8; }
+        .kpi-change { font-size: 12px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+        .kpi-change.up { background: rgba(16,185,129,0.15); color: var(--success); }
+        .kpi-change.down { background: rgba(239,68,68,0.15); color: var(--danger); }
+        .btn { padding: 6px 14px; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-ghost { background: transparent; border-color: rgba(148,163,184,0.25); color: #cbd5e1; }
+        .btn-group .btn.active { background: var(--primary); border-color: var(--primary); color: white; }
+        .flow-step { flex: 1; min-width: 80px; text-align: center; padding: 12px 8px; background: rgba(30,41,59,0.8); border: 1px solid rgba(148,163,184,0.15); border-radius: 8px; }
+        .flow-step.active { border-color: var(--primary); background: rgba(59,130,246,0.1); }
+        .flow-step .number { font-size: 20px; font-weight: 700; color: #fff; }
+        .flow-step .label { font-size: 12px; color: #94a3b8; margin-top: 4px; }
+        .flow-arrow { color: #64748b; font-size: 18px; padding: 0 6px; display: flex; align-items: center; }
+        .rank-item { display: flex; align-items: center; padding: 10px 12px; border-bottom: 1px solid rgba(148,163,184,0.08); }
+        .rank-item:last-child { border-bottom: none; }
+        .rank-num { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; margin-right: 12px; }
+        .rank-num.top { background: linear-gradient(135deg, #f59e0b, #ef4444); color: white; }
+        .rank-num.normal { background: rgba(148,163,184,0.15); color: #94a3b8; }
+        .progress-bar { height: 6px; background: rgba(148,163,184,0.15); border-radius: 3px; overflow: hidden; margin-top: 6px; }
+        .progress-fill { height: 100%; border-radius: 3px; background: linear-gradient(90deg, var(--primary), var(--accent)); }
+        .tag { padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 500; }
+        .tag-blue { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .tag-green { background: rgba(16,185,129,0.15); color: #34d399; }
+        .tag-orange { background: rgba(245,158,11,0.15); color: #fbbf24; }
+        .table-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr 1fr; padding: 10px 16px; border-bottom: 1px solid rgba(148,163,184,0.08); font-size: 13px; }
+        .table-row.header { background: rgba(15,23,42,0.5); color: #94a3b8; font-weight: 500; }
+        .chart-container { width: 100%; height: 100%; min-height: 240px; }
+        .drill-breadcrumb { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+        .drill-breadcrumb a { color: #60a5fa; cursor: pointer; text-decoration: none; }
+        .drill-breadcrumb .current { color: #cbd5e1; font-weight: 500; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.3); border-radius: 3px; }
+    </style>
+</head>
+<body>
+    <header class="dashboard-header sticky top-0 z-50 px-6 py-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center gap-4">
+                <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
+                <div>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs text-slate-400 ml-2">v0 · 完整模块版</span></h1>
+                    <p class="text-xs text-slate-400">汽车销售运营中心 · 实时数据监控</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="btn-group flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button class="btn btn-ghost active">销售Leader</button>
+                    <button class="btn btn-ghost">总经理</button>
+                </div>
+                <div class="btn-group flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                    <button class="btn btn-ghost active">日</button>
+                    <button class="btn btn-ghost">周</button>
+                    <button class="btn btn-ghost">月</button>
+                </div>
+                <div class="text-sm text-slate-300 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span id="current-time">--:--:--</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="p-4 grid grid-cols-12 gap-4">
+        <div class="col-span-12 grid grid-cols-6 gap-4">
+            <div class="kpi-card"><div class="kpi-label">总线索数</div><div class="kpi-value">1,248</div><div class="flex items-center gap-2"><span class="kpi-change up">↑ 12.5%</span><span class="text-xs text-slate-400">较上期</span></div></div>
+            <div class="kpi-card"><div class="kpi-label">到店量</div><div class="kpi-value">386</div><div class="flex items-center gap-2"><span class="kpi-change up">↑ 8.3%</span><span class="text-xs text-slate-400">较上期</span></div></div>
+            <div class="kpi-card"><div class="kpi-label">成交订单</div><div class="kpi-value">142</div><div class="flex items-center gap-2"><span class="kpi-change up">↑ 5.7%</span><span class="text-xs text-slate-400">较上期</span></div></div>
+            <div class="kpi-card"><div class="kpi-label">交车量</div><div class="kpi-value">118</div><div class="flex items-center gap-2"><span class="kpi-change down">↓ 2.1%</span><span class="text-xs text-slate-400">较上期</span></div></div>
+            <div class="kpi-card"><div class="kpi-label">总积分</div><div class="kpi-value">8,642</div><div class="flex items-center gap-2"><span class="kpi-change up">↑ 18.2%</span><span class="text-xs text-slate-400">较上期</span></div></div>
+            <div class="kpi-card"><div class="kpi-label">转化率</div><div class="kpi-value">11.4%</div><div class="flex items-center gap-2"><span class="kpi-change up">↑ 1.2%</span><span class="text-xs text-slate-400">较上期</span></div></div>
+        </div>
+
+        <div class="col-span-12 lg:col-span-3 flex flex-col gap-4">
+            <div class="panel flex-1">
+                <div class="panel-header"><div class="panel-title">线索入口漏斗</div><span class="tag tag-blue">实时</span></div>
+                <div class="p-3"><div id="leadFunnelChart" class="chart-container" style="height: 260px;"></div></div>
+            </div>
+            <div class="panel flex-1">
+                <div class="panel-header"><div class="panel-title">到店接待流程</div><span class="tag tag-green">流程</span></div>
+                <div class="p-4">
+                    <div class="flex items-center mb-4">
+                        <div class="flow-step active"><div class="number">386</div><div class="label">到店</div></div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step active"><div class="number">298</div><div class="label">试驾</div></div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step"><div class="number">245</div><div class="label">回访</div></div>
+                        <div class="flow-arrow">→</div>
+                        <div class="flow-step"><div class="number">142</div><div class="label">成交</div></div>
+                    </div>
+                    <div id="processChart" class="chart-container" style="height: 180px;"></div>
+                </div>
+            </div>
+            <div class="panel">
+                <div class="panel-header"><div class="panel-title">结果指标</div><span class="tag tag-orange">结果</span></div>
+                <div class="p-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="text-center p-3 rounded-lg bg-slate-800/50 border border-slate-700"><div class="text-2xl font-bold text-white">142</div><div class="text-xs text-slate-400 mt-1">订单</div></div>
+                        <div class="text-center p-3 rounded-lg bg-slate-800/50 border border-slate-700"><div class="text-2xl font-bold text-white">118</div><div class="text-xs text-slate-400 mt-1">交车</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-span-12 lg:col-span-6 flex flex-col gap-4">
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">积分看板（核心）</div>
+                    <select class="bg-slate-800 border border-slate-700 text-xs text-white rounded px-2 py-1 outline-none"><option>按销售顾问</option><option>按门店</option><option>按小区</option><option>按大区</option></select>
+                </div>
+                <div class="p-4 grid grid-cols-2 gap-4">
+                    <div><div id="pointsChart" class="chart-container" style="height: 280px;"></div></div>
+                    <div>
+                        <div id="pointsPieChart" class="chart-container" style="height: 160px;"></div>
+                        <div class="grid grid-cols-3 gap-2 text-center mt-2">
+                            <div class="p-2 rounded bg-slate-800/50"><div class="text-lg font-bold text-emerald-400">35%</div><div class="text-xs text-slate-400">成交</div></div>
+                            <div class="p-2 rounded bg-slate-800/50"><div class="text-lg font-bold text-blue-400">28%</div><div class="text-xs text-slate-400">邀约</div></div>
+                            <div class="p-2 rounded bg-slate-800/50"><div class="text-lg font-bold text-amber-400">22%</div><div class="text-xs text-slate-400">试驾</div></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="panel flex-1">
+                <div class="panel-header">
+                    <div class="panel-title">多维下钻分析</div>
+                    <div class="drill-breadcrumb"><a>全国</a><span class="text-slate-500">/</span><span class="current">华东大区</span></div>
+                </div>
+                <div class="p-4"><div id="regionChart" class="chart-container" style="height: 320px;"></div></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">趋势分析</div>
+                    <div><span class="tag tag-blue">目标</span> <span class="tag tag-green">实际</span></div>
+                </div>
+                <div class="p-4"><div id="trendChart" class="chart-container" style="height: 240px;"></div></div>
+            </div>
+        </div>
+
+        <div class="col-span-12 lg:col-span-3 flex flex-col gap-4">
+            <div class="panel">
+                <div class="panel-header"><div class="panel-title">积分排行榜</div><span class="text-xs text-slate-400">TOP 8</span></div>
+                <div class="p-2" id="ranking-list"></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header"><div class="panel-title">产品体验分析</div><span class="tag tag-orange">体验</span></div>
+                <div class="p-3"><div id="experienceChart" class="chart-container" style="height: 220px;"></div></div>
+            </div>
+            <div class="panel">
+                <div class="panel-header"><div class="panel-title">线索渠道分布</div><span class="tag tag-blue">来源</span></div>
+                <div class="p-3"><div id="channelChart" class="chart-container" style="height: 200px;"></div></div>
+            </div>
+        </div>
+
+        <div class="col-span-12 panel">
+            <div class="panel-header"><div class="panel-title">门店/顾问明细数据</div></div>
+            <div class="overflow-x-auto">
+                <div class="table-row header"><div>门店/顾问</div><div>线索数</div><div>到店率</div><div>试驾率</div><div>成交率</div><div>积分</div></div>
+                <div id="detail-table-body"></div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const colors = { primary: '#3b82f6', accent: '#06b6d4', success: '#10b981', warning: '#f59e0b', purple: '#8b5cf6' };
+        function updateTime() { document.getElementById('current-time').textContent = new Date().toLocaleTimeString('zh-CN'); }
+        setInterval(updateTime, 1000); updateTime();
+
+        echarts.init(document.getElementById('leadFunnelChart')).setOption({
+            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
+            color: [colors.primary, colors.accent, colors.warning, colors.success],
+            series: [{ type: 'funnel', left: '10%', top: 10, bottom: 10, width: '80%', sort: 'descending', gap: 2,
+                label: { show: true, position: 'inside', color: '#fff' }, itemStyle: { borderColor: '#1e293b', borderWidth: 1 },
+                data: [{ value: 100, name: '线索' }, { value: 78, name: '有效' }, { value: 45, name: '意向' }, { value: 31, name: '邀约' }] }]
+        });
+        echarts.init(document.getElementById('processChart')).setOption({
+            tooltip: { trigger: 'axis' },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', data: ['到店','试驾','回访','成交'], axisLine: { lineStyle: { color: '#475569' } }, axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
+            series: [{ data: [386, 298, 245, 142], type: 'bar', barWidth: '40%',
+                itemStyle: { borderRadius: [4, 4, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: colors.primary}, {offset: 1, color: colors.accent}]) } }]
+        });
+        echarts.init(document.getElementById('pointsChart')).setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '8%', containLabel: true },
+            xAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'category', data: ['赵六','钱七','孙八','周五','李四','张三','王五','李雷'], axisLine: { lineStyle: { color: '#475569' } }, axisLabel: { color: '#94a3b8' } },
+            series: [{ type: 'bar', data: [820, 950, 1080, 1240, 1360, 1580, 1720, 1950],
+                itemStyle: { borderRadius: [0, 4, 4, 0], color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [{offset: 0, color: colors.primary}, {offset: 1, color: colors.success}]) },
+                label: { show: true, position: 'right', color: '#fff', fontSize: 11 } }]
+        });
+        echarts.init(document.getElementById('pointsPieChart')).setOption({
+            tooltip: { trigger: 'item' }, legend: { show: false },
+            series: [{ type: 'pie', radius: ['40%', '70%'], label: { show: false }, labelLine: { show: false },
+                data: [{ value: 35, name: '成交', itemStyle: { color: colors.success } }, { value: 28, name: '邀约', itemStyle: { color: colors.primary } },
+                       { value: 22, name: '试驾', itemStyle: { color: colors.warning } }, { value: 15, name: '回访', itemStyle: { color: colors.accent } }] }]
+        });
+        echarts.init(document.getElementById('regionChart')).setOption({
+            tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '10%', containLabel: true },
+            xAxis: { type: 'category', data: ['上海','江苏','浙江','安徽','福建'], axisLine: { lineStyle: { color: '#475569' } }, axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
+            series: [{ type: 'bar', data: [1200, 980, 860, 640, 520], barWidth: '45%',
+                itemStyle: { borderRadius: [4, 4, 0, 0], color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: colors.purple}, {offset: 1, color: colors.primary}]) } }]
+        });
+        echarts.init(document.getElementById('trendChart')).setOption({
+            tooltip: { trigger: 'axis' }, legend: { data: ['实际', '目标'], textStyle: { color: '#94a3b8' }, top: 0 },
+            grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
+            xAxis: { type: 'category', boundaryGap: false, data: ['周一','周二','周三','周四','周五','周六','周日'], axisLine: { lineStyle: { color: '#475569' } }, axisLabel: { color: '#94a3b8' } },
+            yAxis: { type: 'value', axisLine: { show: false }, splitLine: { lineStyle: { color: '#334155' } }, axisLabel: { color: '#94a3b8' } },
+            series: [
+                { name: '实际', type: 'line', smooth: true, data: [45, 52, 48, 61, 55, 72, 68],
+                  lineStyle: { color: colors.success, width: 3 },
+                  areaStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{offset: 0, color: 'rgba(16,185,129,0.3)'}, {offset: 1, color: 'rgba(16,185,129,0.05)'}]) },
+                  itemStyle: { color: colors.success } },
+                { name: '目标', type: 'line', data: [50, 50, 50, 60, 60, 60, 60], lineStyle: { color: colors.primary, width: 2, type: 'dashed' }, itemStyle: { color: colors.primary } }
+            ]
+        });
+        echarts.init(document.getElementById('experienceChart')).setOption({
+            tooltip: {},
+            radar: { indicator: [{name:'外观',max:100},{name:'内饰',max:100},{name:'动力',max:100},{name:'空间',max:100},{name:'智能',max:100},{name:'服务',max:100}],
+                     shape: 'circle', splitNumber: 4, axisName: { color: '#94a3b8' },
+                     splitLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } }, splitArea: { show: false }, axisLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } } },
+            series: [{ type: 'radar',
+                data: [{ value: [92, 88, 85, 78, 90, 86], name: '本品', itemStyle: { color: colors.primary }, areaStyle: { color: 'rgba(59,130,246,0.2)' } },
+                        { value: [80, 82, 78, 85, 75, 80], name: '竞品均值', itemStyle: { color: colors.warning }, areaStyle: { color: 'rgba(245,158,11,0.1)' } }] }]
+        });
+        echarts.init(document.getElementById('channelChart')).setOption({
+            tooltip: { trigger: 'item' },
+            legend: { orient: 'vertical', right: 0, top: 'center', textStyle: { color: '#94a3b8', fontSize: 11 } },
+            series: [{ type: 'pie', radius: ['35%', '65%'], center: ['35%', '50%'], label: { show: false },
+                data: [{ value: 420, name: '汽车之家', itemStyle: { color: colors.primary } }, { value: 310, name: '抖音直播', itemStyle: { color: colors.accent } },
+                       { value: 240, name: '官网', itemStyle: { color: colors.success } }, { value: 180, name: '微信', itemStyle: { color: colors.warning } },
+                       { value: 98, name: '转介绍', itemStyle: { color: colors.purple } }] }]
+        });
+
+        const rankData = [
+            { name: '张伟', store: '浦东店', score: 1950, trend: 'up' }, { name: '李娜', store: '徐汇店', score: 1720, trend: 'up' },
+            { name: '王强', store: '闵行店', score: 1580, trend: 'down' }, { name: '刘洋', store: '宝山店', score: 1360, trend: 'up' },
+            { name: '陈静', store: '浦东店', score: 1240, trend: 'up' }, { name: '赵敏', store: '徐汇店', score: 1080, trend: 'down' },
+            { name: '孙杰', store: '闵行店', score: 950, trend: 'up' }, { name: '周涛', store: '宝山店', score: 820, trend: 'down' }
+        ];
+        const max = Math.max(...rankData.map(d => d.score));
+        document.getElementById('ranking-list').innerHTML = rankData.map((item, idx) => `
+            <div class="rank-item">
+                <div class="rank-num ${idx < 3 ? 'top' : 'normal'}">${idx + 1}</div>
+                <div class="flex-1">
+                    <div class="flex items-center justify-between">
+                        <div><div class="text-sm font-medium text-white">${item.name}</div><div class="text-xs text-slate-400">${item.store}</div></div>
+                        <div class="text-right"><div class="text-sm font-bold text-white">${item.score.toLocaleString()}</div>
+                            <span class="text-xs ${item.trend === 'up' ? 'text-emerald-400' : 'text-rose-400'}">${item.trend === 'up' ? '↑' : '↓'}</span></div>
+                    </div>
+                    <div class="progress-bar"><div class="progress-fill" style="width: ${(item.score / max * 100).toFixed(0)}%"></div></div>
+                </div>
+            </div>`).join('');
+
+        const detailData = [
+            { name: '张伟 / 浦东店', leads: 86, arrival: '68%', test: '58%', deal: '22%', score: 1950 },
+            { name: '李娜 / 徐汇店', leads: 74, arrival: '62%', test: '51%', deal: '19%', score: 1720 },
+            { name: '王强 / 闵行店', leads: 68, arrival: '59%', test: '49%', deal: '18%', score: 1580 },
+            { name: '刘洋 / 宝山店', leads: 62, arrival: '55%', test: '45%', deal: '16%', score: 1360 }
+        ];
+        document.getElementById('detail-table-body').innerHTML = detailData.map(row => `
+            <div class="table-row"><div class="text-white font-medium">${row.name}</div><div class="text-slate-300">${row.leads}</div>
+            <div class="text-emerald-400">${row.arrival}</div><div class="text-blue-400">${row.test}</div>
+            <div class="text-amber-400">${row.deal}</div><div class="text-white font-semibold">${row.score.toLocaleString()}</div></div>`).join('');
+    </script>
+</body>
+</html>
