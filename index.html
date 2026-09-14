@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.3 · 汽车销售运营中心</title>
+    <title>业务数据看板 V3.4 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -93,7 +93,28 @@
         .chip.down { background: rgba(239,68,68,0.15); color: #f87171; }
         .chip.flat { background: rgba(148,163,184,0.15); color: #cbd5e1; }
         .chip.none { background: rgba(148,163,184,0.1); color: #64748b; }
-        .mini-chart { position: absolute; right: 12px; bottom: 10px; width: 130px; height: 60px; opacity: .85; }
+        /* 板块展开时间轴 */
+        .expand-btn {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+            background: rgba(59,130,246,0.14); color: #93c5fd;
+            border: 1px solid rgba(59,130,246,0.28); cursor: pointer; transition: all .15s;
+        }
+        .expand-btn:hover { background: rgba(59,130,246,0.26); color: #fff; }
+        .panel-chips { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+        .metric-chip {
+            display: inline-flex; align-items: center; gap: 7px;
+            padding: 6px 14px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+            background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.18);
+            color: #94a3b8; transition: all .15s; user-select: none;
+        }
+        .metric-chip:hover { border-color: rgba(148,163,184,0.4); color: #e2e8f0; }
+        .metric-chip.on { color: #fff; background: rgba(59,130,246,0.16); border-color: rgba(59,130,246,0.5); }
+        .metric-chip .mc-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; opacity: .45; }
+        .metric-chip.on .mc-dot { opacity: 1; }
+        .mchip-all { font-size: 12px; color: #67e8f9; cursor: pointer; padding: 0 4px; }
+        .mchip-all:hover { color: #fff; }
+        .panel-chart { width: 100%; height: 320px; }
         .date-input, .org-select {
             background: rgba(15,23,42,0.6);
             border: 1px solid rgba(148,163,184,0.15);
@@ -232,7 +253,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.3</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.4</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 组织维度总览</p>
                 </div>
             </div>
@@ -428,7 +449,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.3 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算
+            业务数据看板 V3.4 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势
         </footer>
     </main>
 
@@ -729,8 +750,11 @@
             drillIds: [],
             trendMode: 'day',
             pointsDim: '门店',
-            tableDim: '门店'
+            tableDim: '门店',
+            expanded: [false, false, false],   // 三大板块各自的展开状态
+            panelSel: {}                       // 各板块勾选的指标 key
         };
+        const panelCharts = {};                // 板块展开态折线图实例
 
         const $start = document.getElementById('startDate');
         const $end = document.getElementById('endDate');
@@ -940,14 +964,16 @@
                 '<div class="metric-label"><span class="metric-icon">' + iconOf(key) + '</span>' + METRIC_LABEL[key] + '</div>' +
                 '<span class="chip flat" id="' + id + '_d">--</span></div>' +
                 '<div class="metric-value" id="' + id + '_v">0<span class="metric-unit">' + METRIC_UNIT[key] + '</span></div>' +
-                '<div class="metric-meta"><span id="' + id + '_r" class="text-slate-400"></span></div>' +
-                '<div class="mini-chart" id="' + id + '_c"></div></div>';
+                '<div class="metric-meta"><span id="' + id + '_r" class="text-slate-400"></span></div></div>';
         }
         function renderSingleView() {
             const r = currentIdx(), pr = prevRange();
             const node = currentNode();
             const m = metricsOf(node, r[0], r[1]);
             const pm = metricsOf(node, pr.i0, pr.i1);
+
+            // 重绘前释放已展开的折线图实例
+            Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) panelCharts[k].dispose(); delete panelCharts[k]; });
 
             // 总览条（3 列 × 2 行）
             const ovItems = [
@@ -973,15 +999,33 @@
                 return ovCell(it.label, fmt(m[it.k]) + ' ' + it.unit, (d >= 0 ? '↑ ' : '↓ ') + Math.abs(d).toFixed(1) + '%', d >= 0);
             }).join('');
 
-            // 三大模块
+            // 三大模块（支持各自展开为随时间变化的折线图）
             const blocks = MODULE_GROUPS.map(function (g, gi) {
-                const cards = g.keys.map(function (k) { return cardHTML(k, 'sv_'); }).join('');
-                const cols = g.keys.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 2xl:grid-cols-4';
+                const expanded = !!state.expanded[gi];
+                if (!state.panelSel[gi] || !state.panelSel[gi].length) state.panelSel[gi] = g.keys.slice();
+                let body;
+                if (expanded) {
+                    const chips = g.keys.map(function (k) {
+                        const on = state.panelSel[gi].indexOf(k) >= 0;
+                        return '<span class="metric-chip' + (on ? ' on' : '') + '" data-chip="' + k + '" data-g="' + gi + '">' +
+                            '<span class="mc-dot" style="background:' + METRIC_COLOR[k] + '"></span>' + METRIC_LABEL[k] + '</span>';
+                    }).join('');
+                    const allOn = state.panelSel[gi].length === g.keys.length;
+                    body = '<div class="panel-chips">' + chips +
+                        (allOn ? '' : '<span class="mchip-all" data-all="' + gi + '">全选</span>') + '</div>' +
+                        '<div class="panel-chart" id="svChart' + gi + '"></div>';
+                } else {
+                    const cards = g.keys.map(function (k) { return cardHTML(k, 'sv_'); }).join('');
+                    const cols = g.keys.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 2xl:grid-cols-4';
+                    body = '<div class="grid ' + cols + ' gap-4">' + cards + '</div>';
+                }
                 return '<section class="panel p-6">' +
                     '<div class="flex items-center justify-between mb-4 gap-3 flex-wrap">' +
                     '<div class="panel-title"><span class="dot"></span>' + g.title + '</div>' +
-                    '<div class="text-xs text-slate-400" id="svSub' + gi + '"></div></div>' +
-                    '<div class="grid ' + cols + ' gap-4">' + cards + '</div></section>';
+                    '<div class="flex items-center gap-3">' +
+                    '<div class="text-xs text-slate-400" id="svSub' + gi + '"></div>' +
+                    '<button class="expand-btn" data-expand="' + gi + '">' + (expanded ? '收起 ▲' : '展开时间轴 ▼') + '</button>' +
+                    '</div></div>' + body + '</section>';
             }).join('');
 
             document.getElementById('singleView').innerHTML =
@@ -1017,47 +1061,15 @@
                 const el = document.getElementById('svSub' + gi);
                 if (el) el.textContent = node.name + ' · ' + g.keys.length + ' 项指标';
             });
-            // 迷你走势图
-            MODULE_GROUPS.forEach(function (g) {
-                g.keys.forEach(function (k) { renderMini('sv_' + k + '_c', node.series[k], r[0], r[1], METRIC_COLOR[k]); });
+            // 展开板块的按日折线图
+            MODULE_GROUPS.forEach(function (g, gi) {
+                if (state.expanded[gi]) renderPanelChart(gi);
             });
         }
         function ovCell(label, value, deltaText, up) {
             return '<div class="overview-item"><div class="label">' + label + '</div>' +
                 '<div class="value">' + value + '</div>' +
                 '<div class="delta ' + (up ? 'text-emerald-400' : 'text-rose-400') + '">' + deltaText + '</div></div>';
-        }
-
-        // ---------- 迷你走势 ----------
-        const miniCharts = {};
-        function renderMini(id, series, i0, i1, color) {
-            const el = document.getElementById(id);
-            if (!el || !series) return;
-            if (miniCharts[id]) { miniCharts[id].dispose(); }
-            const c = echarts.init(el);
-            miniCharts[id] = c;
-            const span = i1 - i0 + 1;
-            const step = Math.max(1, Math.ceil(span / 40));
-            const xs = [], ys = [];
-            for (let i = i0; i <= i1; i += step) {
-                xs.push(dateStr(new Date(START_DATE.getTime() + i * ONE_DAY)).slice(5));
-                ys.push(series[i]);
-            }
-            c.setOption({
-                grid: { left: 0, right: 0, top: 4, bottom: 0 },
-                xAxis: { type: 'category', data: xs, show: false, boundaryGap: false },
-                yAxis: { type: 'value', show: false },
-                series: [{
-                    type: 'line', data: ys, smooth: true, showSymbol: false,
-                    lineStyle: { color: color, width: 1.6 },
-                    areaStyle: {
-                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                            { offset: 0, color: scaleColor(color, 0.35) },
-                            { offset: 1, color: scaleColor(color, 0) }
-                        ])
-                    }
-                }]
-            });
         }
 
         // ==================== PART4：PK 对比视图 + 全链路七阶段漏斗 ====================
@@ -1281,6 +1293,61 @@
             borderColor: 'rgba(148,163,184,0.2)',
             textStyle: { color: '#e2e8f0', fontSize: 12 }
         };
+
+        // ---------- 板块展开：按日多指标折线图 ----------
+        function renderPanelChart(gi) {
+            const g = MODULE_GROUPS[gi];
+            const el = document.getElementById('svChart' + gi);
+            if (!el) return;
+            const cid = 'svChart' + gi;
+            if (panelCharts[cid]) { panelCharts[cid].dispose(); delete panelCharts[cid]; }
+            const c = echarts.init(el);
+            panelCharts[cid] = c;
+
+            const node = currentNode();
+            const r = currentIdx();
+            const sel = (state.panelSel[gi] && state.panelSel[gi].length) ? state.panelSel[gi] : g.keys.slice();
+            const span = r[1] - r[0] + 1;
+            const step = Math.max(1, Math.ceil(span / 90));
+            const xs = [], idxs = [];
+            for (let i = r[0]; i <= r[1]; i += step) {
+                idxs.push(i);
+                xs.push(dateStr(new Date(START_DATE.getTime() + i * ONE_DAY)).slice(5));
+            }
+            c.setOption({
+                grid: { left: 10, right: 24, top: 44, bottom: 6, containLabel: true },
+                legend: {
+                    data: sel.map(function (k) { return METRIC_LABEL[k]; }),
+                    textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0,
+                    icon: 'roundRect', itemWidth: 10, itemHeight: 10
+                },
+                tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+                xAxis: {
+                    type: 'category', data: xs, boundaryGap: false, ...AXIS_STYLE,
+                    splitLine: { show: false },
+                    axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(xs.length / 14) - 1) }
+                },
+                yAxis: { type: 'value', ...AXIS_STYLE },
+                series: sel.map(function (k) {
+                    const color = METRIC_COLOR[k];
+                    return {
+                        name: METRIC_LABEL[k], type: 'line', smooth: true,
+                        symbol: 'circle', symbolSize: 4, showSymbol: xs.length <= 40,
+                        data: idxs.map(function (i) { return Math.round(node.series[k][i]); }),
+                        lineStyle: { color: color, width: 2 }, itemStyle: { color: color },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: scaleColor(color, 0.28) },
+                                { offset: 1, color: scaleColor(color, 0) }
+                            ])
+                        }
+                    };
+                })
+            }, true);
+
+            const sub = document.getElementById('svSub' + gi);
+            if (sub) sub.textContent = node.name + ' · 按日 ' + sel.length + '/' + g.keys.length + ' 项';
+        }
         function drillNode() {
             let node = currentNode();
             state.drillIds.forEach(function (id) {
@@ -1715,8 +1782,9 @@
             $pkBar.classList.toggle('hidden', single);
             $pkBar.classList.toggle('flex', !single);
             $pkOptionsWrap.classList.toggle('hidden', single);
-            if (single) {
-                Object.keys(miniCharts).forEach(function (k) { if (miniCharts[k]) { miniCharts[k].dispose(); delete miniCharts[k]; } });
+            if (!single) {
+                // 进入 PK 模式时释放单选视图的展开态图表
+                Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) { panelCharts[k].dispose(); } delete panelCharts[k]; });
             }
         }
         function renderAll() {
@@ -1792,6 +1860,38 @@
             state.drillIds = [];
             renderAll();
         });
+        // 单选视图：板块展开 / 收起、指标勾选（至少保留 1 项）
+        document.getElementById('singleView').addEventListener('click', function (e) {
+            const eb = e.target.closest('[data-expand]');
+            if (eb) {
+                const gi = parseInt(eb.dataset.expand, 10);
+                state.expanded[gi] = !state.expanded[gi];
+                renderSingleView();
+                return;
+            }
+            const ab = e.target.closest('[data-all]');
+            if (ab) {
+                const gi = parseInt(ab.dataset.all, 10);
+                state.panelSel[gi] = MODULE_GROUPS[gi].keys.slice();
+                renderSingleView();
+                return;
+            }
+            const chip = e.target.closest('[data-chip]');
+            if (chip) {
+                const gi = parseInt(chip.dataset.g, 10);
+                const k = chip.dataset.chip;
+                const cur = (state.panelSel[gi] || MODULE_GROUPS[gi].keys.slice()).slice();
+                const idx = cur.indexOf(k);
+                if (idx >= 0) {
+                    if (cur.length <= 1) return;
+                    cur.splice(idx, 1);
+                } else {
+                    cur.push(k);
+                }
+                state.panelSel[gi] = cur;
+                renderSingleView();
+            }
+        });
         document.querySelectorAll('#modeSeg button').forEach(function (b) {
             b.addEventListener('click', function () {
                 document.querySelectorAll('#modeSeg button').forEach(function (x) { x.classList.toggle('active', x === b); });
@@ -1865,7 +1965,7 @@
         updateTime();
         window.addEventListener('resize', function () {
             Object.values(extCharts).forEach(function (c) { c.resize(); });
-            Object.values(miniCharts).forEach(function (c) { c.resize(); });
+            Object.values(panelCharts).forEach(function (c) { c.resize(); });
         });
 
         // 初始
