@@ -1,0 +1,7 @@
+* text=auto eol=lf
+*.html linguist-detectable=true
+*.md   linguist-detectable=true
+*.png  binary
+*.jpg  binary
+*.gif  binary
+*.ico  binary

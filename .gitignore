@@ -1,32 +1,29 @@
-# 依赖
-node_modules/
-package-lock.json
-yarn.lock
-
-# 系统文件
-.DS/
+# 操作系统
+.DS_Store
 Thumbs.db
 desktop.ini
 
-# IDE
+# 编辑器
 .vscode/
 .idea/
 *.swp
 *.swo
+*~
 
 # 日志
 *.log
-logs/
-
-# 环境变量
-.env
-.env.local
-.env.*.local
+npm-debug.log*
 
 # 临时文件
 *.tmp
-.cache/
-dist/
+*.bak
+*.cache
+node_modules/
 
-# 数据看板（单文件静态页面，无需构建）
-# 此项目仅包含 index.html，无需忽略
+# 本地推送脚本中的敏感信息（避免误提交token）
+push-config.local.ps1
+.github-token
+
+# 让 archive/、backups/ 不被跟踪
+archive/
+backups/
