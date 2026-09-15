@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.5 · 汽车销售运营中心</title>
+    <title>业务数据看板 V3.6 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -253,7 +253,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.5</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.6</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 组织维度总览</p>
                 </div>
             </div>
@@ -450,7 +450,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.5 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴
+            业务数据看板 V3.6 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴，量级悬殊时自动归一化对比
         </footer>
     </main>
 
@@ -764,6 +764,7 @@
             drillIds: [],
             trendMode: 'day',
             trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营结果趋势分析默认指标
+            trendNorm: null,   // 绝对量归一化：null=自动, true=强制, false=强制关闭
             pointsDim: '门店',
             tableDim: '门店',
             expanded: [false, false, false],   // 三大板块各自的展开状态
@@ -1605,12 +1606,6 @@
             const chipsEl = document.getElementById('trendChips');
             const c = chart('trendChart');
             if (!c || !chipsEl) return;
-            // 渲染指标多选胶囊
-            chipsEl.innerHTML = TREND_METRICS.map(function (m) {
-                const on = state.trendMetrics.indexOf(m.key) >= 0;
-                return '<span class="metric-chip' + (on ? ' on' : '') + '" data-trend-metric="' + m.key + '">' +
-                    '<span class="mc-dot" style="background:' + m.color + '"></span>' + m.label + '</span>';
-            }).join('');
             if (state.mode === 'pk') {
                 const nodes = pkNodes();
                 if (nodes.length < 2) { c.clear(); sub.textContent = 'PK 模式下请先勾选 2 ~ 6 个对象'; return; }
@@ -1636,39 +1631,104 @@
             }
             const node = currentNode();
             const selected = TREND_METRICS.filter(function (m) { return state.trendMetrics.indexOf(m.key) >= 0; });
+            const absSelected = selected.filter(function (m) { return m.type === 'abs'; });
+            // 自动判断是否需要归一化：绝对量指标之间峰值差距 >=10 倍时开启
+            let normAuto = false;
+            if (state.mode !== 'pk' && absSelected.length >= 2) {
+                const peakBuckets = buildBuckets(state.start, state.end, state.trendMode, [node], absSelected);
+                const peaks = absSelected.map(function (m) {
+                    return Math.max.apply(null, peakBuckets.map(function (b) { return b.values[m.key] || 0; }));
+                });
+                const mx = Math.max.apply(null, peaks);
+                const mn = Math.min.apply(null, peaks.filter(function (p) { return p > 0; }));
+                normAuto = mn > 0 && mx / mn >= 10;
+            }
+            const normEff = state.mode !== 'pk' && selected.some(function (m) { return m.type === 'abs'; }) &&
+                (state.trendNorm === null ? normAuto : state.trendNorm);
+            state._trendNormEff = normEff; // 供点击切换时知道当前生效状态
+
+            // 渲染指标多选胶囊（加上归一化切换按钮）
+            let chipsHtml = TREND_METRICS.map(function (m) {
+                const on = state.trendMetrics.indexOf(m.key) >= 0;
+                return '<span class="metric-chip' + (on ? ' on' : '') + '" data-trend-metric="' + m.key + '">' +
+                    '<span class="mc-dot" style="background:' + m.color + '"></span>' + m.label + '</span>';
+            }).join('');
+            chipsHtml += '<span class="metric-chip' + (normEff ? ' on' : '') + ' norm-chip" data-trend-norm="1" title="自动：绝对量指标峰值相差 10 倍以上时开启。点击强制切换">' +
+                '<span class="mc-dot" style="background:#cbd5e1"></span>' + (normEff ? '归一化对比' : '绝对量对比') + '</span>';
+            chipsEl.innerHTML = chipsHtml;
+
             sub.textContent = node.name + ' · ' + (selected.length ? selected.map(function (m) { return m.label; }).join(' / ') : '未选择指标');
+            if (normEff) sub.textContent += ' · 已归一化（各绝对量按自身峰值缩放为 100%）';
+
             const buckets = buildBuckets(state.start, state.end, state.trendMode, [node], selected);
-            const hasAbs = selected.some(function (m) { return m.type === 'abs'; });
             const hasRate = selected.some(function (m) { return m.type === 'rate'; });
-            const yAxis = [];
-            if (hasAbs) yAxis.push({ type: 'value', name: '数量', nameTextStyle: { color: '#64748b', padding: [0, 0, 0, -24] }, ...AXIS_STYLE });
-            if (hasRate) yAxis.push({ type: 'value', name: '转化率', nameTextStyle: { color: '#64748b', padding: [0, -24, 0, 0] }, min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 }, ...AXIS_STYLE });
+
+            // 预计算每个绝对量指标的峰值
+            const absPeak = {};
+            absSelected.forEach(function (m) {
+                absPeak[m.key] = Math.max.apply(null, buckets.map(function (b) { return b.values[m.key] || 0; }));
+            });
+
             const tooltipFormatter = function (p) {
                 let s = p[0].name + '<br/>';
                 p.forEach(function (it) {
                     const ms = selected.filter(function (x) { return x.label === it.seriesName; });
                     const m = ms[0];
-                    if (m) {
-                        if (m.type === 'rate') s += it.marker + ' ' + it.seriesName + '：<b>' + it.value.toFixed(1) + '%</b><br/>';
-                        else s += it.marker + ' ' + it.seriesName + '：<b>' + fmt(it.value) + '</b> ' + (METRIC_UNIT[m.key] || '') + '<br/>';
+                    if (!m) return;
+                    if (m.type === 'rate') {
+                        s += it.marker + ' ' + it.seriesName + '：<b>' + it.value.toFixed(1) + '%</b><br/>';
+                    } else if (normEff) {
+                        const peak = absPeak[m.key] || 0;
+                        const real = peak ? (it.value * peak / 100) : 0;
+                        s += it.marker + ' ' + it.seriesName + '：<b>' + it.value.toFixed(1) + '%</b> 缩放（实值 <b>' + fmt(real) + '</b> ' + (METRIC_UNIT[m.key] || '') + '）<br/>';
+                    } else {
+                        s += it.marker + ' ' + it.seriesName + '：<b>' + fmt(it.value) + '</b> ' + (METRIC_UNIT[m.key] || '') + '<br/>';
                     }
                 });
                 return s;
             };
+
+            let yAxis, gridRight, yAxisIndexForRate;
+            if (normEff) {
+                // 归一化模式下所有可展示的系列都落在 0-100% 区间内，统一一个 Y 轴
+                yAxis = [{ type: 'value', name: '%', nameTextStyle: { color: '#64748b', padding: [0, 0, 0, -16] }, min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 }, ...AXIS_STYLE }];
+                gridRight = 22;
+                yAxisIndexForRate = 0;
+            } else {
+                yAxis = [];
+                if (absSelected.length) yAxis.push({ type: 'value', name: '数量', nameTextStyle: { color: '#64748b', padding: [0, 0, 0, -24] }, ...AXIS_STYLE });
+                if (hasRate) yAxis.push({ type: 'value', name: '转化率', nameTextStyle: { color: '#64748b', padding: [0, -24, 0, 0] }, min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 }, ...AXIS_STYLE });
+                gridRight = hasRate ? 52 : 22;
+                yAxisIndexForRate = absSelected.length ? 1 : 0;
+            }
+
             c.setOption({
-                grid: { left: 10, right: hasRate ? 52 : 22, top: 42, bottom: 6, containLabel: true },
+                grid: { left: 10, right: gridRight, top: 42, bottom: 6, containLabel: true },
                 legend: { data: selected.map(function (m) { return m.label; }), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
                 tooltip: { trigger: 'axis', ...TOOLTIP_STYLE, formatter: tooltipFormatter },
                 xAxis: { type: 'category', data: buckets.map(function (b) { return b.label; }), boundaryGap: false, ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) } },
                 yAxis: yAxis,
                 series: selected.map(function (m) {
+                    if (m.type === 'rate') {
+                        return {
+                            name: m.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+                            showSymbol: buckets.length <= 40,
+                            yAxisIndex: yAxisIndexForRate,
+                            data: buckets.map(function (b) { return Math.round(b.values[m.key] * 10) / 10; }),
+                            lineStyle: { color: m.color, width: 2 }, itemStyle: { color: m.color }
+                        };
+                    }
+                    const peak = absPeak[m.key] || 0;
                     return {
                         name: m.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
                         showSymbol: buckets.length <= 40,
-                        yAxisIndex: m.type === 'rate' ? (hasAbs ? 1 : 0) : 0,
-                        data: buckets.map(function (b) { return m.type === 'rate' ? Math.round(b.values[m.key] * 10) / 10 : Math.round(b.values[m.key]); }),
+                        yAxisIndex: 0,
+                        data: buckets.map(function (b) {
+                            const v = b.values[m.key] || 0;
+                            return normEff ? (peak ? Math.round(v / peak * 1000) / 10 : 0) : Math.round(v);
+                        }),
                         lineStyle: { color: m.color, width: 2 }, itemStyle: { color: m.color },
-                        areaStyle: {
+                        areaStyle: normEff ? undefined : {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
                                 { offset: 0, color: scaleColor(m.color, 0.35) },
                                 { offset: 1, color: scaleColor(m.color, 0) }
@@ -1973,9 +2033,15 @@
         });
         // 经营结果趋势分析指标多选胶囊（最多 4 项，至少 1 项）
         document.getElementById('trendChips').addEventListener('click', function (e) {
-            const chip = e.target.closest('[data-trend-metric]');
-            if (!chip) return;
-            const k = chip.dataset.trendMetric;
+            const metricChip = e.target.closest('[data-trend-metric]');
+            const normChip = e.target.closest('[data-trend-norm]');
+            if (normChip) {
+                state.trendNorm = !state._trendNormEff;
+                renderTrend();
+                return;
+            }
+            if (!metricChip) return;
+            const k = metricChip.dataset.trendMetric;
             const cur = state.trendMetrics.slice();
             const idx = cur.indexOf(k);
             if (idx >= 0) {
