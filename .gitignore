@@ -27,3 +27,8 @@ push-config.local.ps1
 # 让 archive/、backups/ 不被跟踪
 archive/
 backups/
+
+# v3.8 后端：SQLite 数据库文件（含 WAL 副本）不入库
+server/data/
+*.db-wal
+*.db-shm

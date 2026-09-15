@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.7 · 汽车销售运营中心</title>
+    <title>业务数据看板 V3.8 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -302,7 +302,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.7</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.8</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -512,7 +512,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.7 · 当前展示为模拟数据 · 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线
+            业务数据看板 V3.8 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线
         </footer>
     </div>
 
@@ -523,9 +523,10 @@
     <script>
         // ==================== PART1：基础常量与工具 ====================
         const ONE_DAY = 86400000;
-        const DAYS = 365;
-        const TODAY = (function () { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
-        const START_DATE = new Date(TODAY.getTime() - (DAYS - 1) * ONE_DAY);
+        // v3.8：DAYS/TODAY/START_DATE 改为可变 —— API 模式下以服务端数据范围为准（见数据源层 bootApi）
+        let DAYS = 365;
+        let TODAY = (function () { const d = new Date(); d.setHours(0, 0, 0, 0); return d; })();
+        let START_DATE = new Date(TODAY.getTime() - (DAYS - 1) * ONE_DAY);
 
         function dateStr(d) {
             const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), dd = String(d.getDate()).padStart(2, '0');
@@ -816,7 +817,13 @@
         const metricCache = new Map();
         function clearMetricCache() { metricCache.clear(); }
         function metricsOf(node, i0, i1) {
-            if (!node || !node.series) return null;
+            if (!node) return null;
+            // API 模式：未加载逐日序列的节点走服务端区间合计缓存
+            //（人员来自 /api/persons 根范围预载；其他节点来自 /api/nodesums 批量预载）
+            if (DATA_MODE === 'api' && !node.series) {
+                return lookupPersonSums(node, i0, i1) || lookupNodeSums(node, i0, i1) || METRIC_ZERO;
+            }
+            if (!node.series) return null;
             const key = node.id + '|' + i0 + '|' + i1;
             const hit = metricCache.get(key);
             if (hit) return hit;
@@ -854,7 +861,172 @@
         // 层级可跳转规则：全国→大区→小区→门店→岗位→人员
         const NEXT_LEVEL = { '全国': '大区', '大区': '小区', '小区': '门店', '门店': '岗位', '岗位': '人员', '人员': null };
 
-        let tree = buildTree();
+        // ==================== PART2.5：数据源层（v3.8：mock / api 双模式）====================
+        // 用法：默认 mock 演示模式（无后端可独立运行）；URL 加 ?data=api&api=http://host:port 切换真实数据
+        const DATA_MODE = new URLSearchParams(location.search).get('data') === 'api' ? 'api' : 'mock';
+        const API_BASE = (new URLSearchParams(location.search).get('api') || 'http://127.0.0.1:3777').replace(/\/+$/, '');
+
+        const personsSums = new Map();      // 人员区间合计缓存：'n<id>|<from>|<to>' → 已取整的指标对象
+        const personsScopeJobs = new Map(); // 范围级去重：'<scopeId>|<from>|<to>' → Promise
+        const seriesJobs = new Map();       // 节点级去重：nodeId → Promise（全区间序列只拉一次）
+        const nodeSums = new Map();         // 非人员节点区间合计缓存：'n<id>|<from>|<to>' → 指标对象
+        const nodeSumsJobs = new Map();     // 批量去重：'<ids>|<from>|<to>' → Promise
+
+        function fetchJson(url) {
+            return fetch(url).then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status + ' - ' + url);
+                return r.json();
+            });
+        }
+        function idxToDate(i) { return dateStr(addDays(START_DATE, i)); }
+        // 节点 id → 接口参数；根节点（服务端未落「全国」节点）无 id 时用 all，表示全网口径
+        function apiNodeId(node) { return (node && node.id != null) ? String(node.id).replace(/^n/, '') : 'all'; }
+        const METRIC_ZERO = (function () { const m = { points: 0 }; METRIC_KEYS.forEach(function (k) { m[k] = 0; }); return m; })();
+
+        // 拉取节点全区间逐日序列并写入 node.series（结构与 mock buildPersonSeries/aggSeries 完全一致，渲染层零改动）
+        function ensureSeries(list) {
+            const jobs = [];
+            (list || []).forEach(function (n) {
+                if (!n || n.series || seriesJobs.has(n.id)) return;
+                const job = fetchJson(API_BASE + '/api/metrics?node=' + apiNodeId(n) +
+                    '&from=' + dateStr(START_DATE) + '&to=' + idxToDate(DAYS - 1))
+                    .then(function (d) {
+                        if (!d.ok) throw new Error('指标接口返回失败');
+                        const s = {};
+                        METRIC_KEYS.forEach(function (k) { s[k] = Float64Array.from(d.series[k] || []); });
+                        s.points = Float64Array.from(d.series.points || []);
+                        n.series = s;
+                    });
+                job.catch(function () { seriesJobs.delete(n.id); });
+                seriesJobs.set(n.id, job);
+                jobs.push(job);
+            });
+            return Promise.all(jobs);
+        }
+
+        // 拉取某节点子树的人员区间合计（积分榜 / 明细表 / PK / 闭环散点的人员指标来源）
+        function ensurePersons(scopeNode, from, to) {
+            if (!scopeNode) return Promise.resolve();
+            const key = scopeNode.id + '|' + from + '|' + to;
+            if (!personsScopeJobs.has(key)) {
+                const job = fetchJson(API_BASE + '/api/persons?node=' + apiNodeId(scopeNode) + '&from=' + from + '&to=' + to)
+                    .then(function (d) {
+                        if (!d.ok) throw new Error('人员接口返回失败');
+                        d.persons.forEach(function (p) {
+                            const m = {};
+                            METRIC_KEYS.forEach(function (k) { m[k] = Math.round(p.sums[k] || 0); });
+                            m.points = Math.round(p.sums.points || 0);
+                            personsSums.set('n' + p.personId + '|' + from + '|' + to, m);
+                        });
+                    });
+                job.catch(function () { personsScopeJobs.delete(key); });
+                personsScopeJobs.set(key, job);
+            }
+            return personsScopeJobs.get(key);
+        }
+        function lookupPersonSums(node, i0, i1) {
+            return personsSums.get(node.id + '|' + idxToDate(i0) + '|' + idxToDate(i1)) || null;
+        }
+
+        // 批量拉取非人员节点的区间合计（一次请求覆盖全部下级/榜单/明细节点，避免逐日序列请求风暴）
+        function ensureNodeSums(list, from, to) {
+            const need = (list || []).filter(function (n) { return n && n.level !== '人员' && !nodeSums.has(n.id + '|' + from + '|' + to); });
+            if (!need.length) return Promise.resolve();
+            const key = need.map(function (n) { return n.id; }).join(',') + '|' + from + '|' + to;
+            if (!nodeSumsJobs.has(key)) {
+                const job = fetchJson(API_BASE + '/api/nodesums?nodes=' + need.map(apiNodeId).join(',') + '&from=' + from + '&to=' + to)
+                    .then(function (d) {
+                        if (!d.ok) throw new Error('节点合计接口返回失败');
+                        need.forEach(function (n) {
+                            const s = d.sums[apiNodeId(n)];
+                            if (!s) return;
+                            const m = {};
+                            METRIC_KEYS.forEach(function (k) { m[k] = Math.round(s[k] || 0); });
+                            m.points = Math.round(s.points || 0);
+                            nodeSums.set(n.id + '|' + from + '|' + to, m);
+                        });
+                    });
+                job.catch(function () { nodeSumsJobs.delete(key); });
+                nodeSumsJobs.set(key, job);
+            }
+            return nodeSumsJobs.get(key);
+        }
+        function lookupNodeSums(node, i0, i1) {
+            return nodeSums.get(node.id + '|' + idxToDate(i0) + '|' + idxToDate(i1)) || null;
+        }
+
+        // 加载提示（右上角小浮条）
+        function apiLoading(on, text) {
+            let el = document.getElementById('apiLoadingTip');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'apiLoadingTip';
+                el.style.cssText = 'position:fixed;top:14px;right:16px;z-index:9999;background:rgba(15,23,42,.94);color:#93c5fd;border:1px solid #3b82f6;border-radius:10px;padding:8px 14px;font-size:13px;box-shadow:0 8px 24px rgba(0,0,0,.35);display:none;pointer-events:none';
+                document.body.appendChild(el);
+            }
+            el.textContent = text || '正在从服务端加载数据…';
+            el.style.display = on ? 'block' : 'none';
+        }
+        function apiError(e) {
+            console.error(e);
+            apiLoading(false);
+            alert('数据加载失败：' + (e && e.message ? e.message : e) + '\n\n请确认后端服务已启动且地址正确（?api=http://host:port），或去掉 ?data=api 使用演示模式。');
+        }
+
+        // API 组织树 → 前端节点结构（补齐 parent / storeName / postName / postStats 等渲染层依赖字段）
+        function apiTreeToNodes(t, parent) {
+            const n = {
+                id: 'n' + t.id, name: t.name, level: t.level, postKey: t.postKey || null,
+                children: [], series: null, parent: parent,
+                storeName: '', postName: '', postStats: null
+            };
+            (t.children || []).forEach(function (c) { n.children.push(apiTreeToNodes(c, n)); });
+            if (n.level === '门店') {
+                n.children.forEach(function (postNode) {
+                    postNode.storeName = n.name;
+                    postNode.postName = postNode.name;
+                    postNode.children.forEach(function (p) {
+                        p.storeName = n.name; p.postName = postNode.name;
+                        p.fullName = n.name + ' · ' + p.name;
+                    });
+                });
+                let total = 0;
+                n.children.forEach(function (c) { total += c.children.length; });
+                const missing = [];
+                POSTS.forEach(function (p) {
+                    if (!n.children.some(function (c) { return c.postKey === p.key; })) missing.push(p.key);
+                });
+                n.postStats = { total: total, missing: missing };
+            }
+            return n;
+        }
+
+        // API 模式启动：组织树 + 岗位配置 + 日期范围 → 重建全局常量 → startApp()
+        function bootApi() {
+            apiLoading(true, '正在连接数据服务…');
+            return fetchJson(API_BASE + '/api/org').then(function (d) {
+                if (!d.ok || !d.tree) throw new Error('服务端组织树为空：请先导入名册或在服务端执行 npm run seed');
+                POSTS.length = 0;
+                Object.keys(POSTS_BY_KEY).forEach(function (k) { delete POSTS_BY_KEY[k]; });
+                d.posts.forEach(function (p) {
+                    const np = { key: p.key, name: p.name, color: p.color, min: p.min, max: p.max, pw: p.pw };
+                    POSTS.push(np);
+                    POSTS_BY_KEY[p.key] = np;
+                });
+                START_DATE = parseDate(d.dateRange.from);
+                const endD = parseDate(d.dateRange.to);
+                DAYS = Math.round((endD - START_DATE) / ONE_DAY) + 1;
+                TODAY = endD;
+                tree = apiTreeToNodes(d.tree, null);
+                apiLoading(false);
+                startApp();
+            }).catch(apiError);
+        }
+
+        let tree = null;
+
+        function startApp() {
+            if (DATA_MODE === 'mock') tree = buildTree();
 
         // ==================== PART3：状态、组织筛选器、单选视图 ====================
         const NODE_BY_ID = new Map();
@@ -2035,6 +2207,14 @@
             return list;
         }
         function renderClosure() {
+            if (DATA_MODE === 'api') {
+                apiLoading(true);
+                preloadForRender().then(function (ok) { apiLoading(false); if (ok) renderClosureSync(); });
+                return;
+            }
+            renderClosureSync();
+        }
+        function renderClosureSync() {
             const $bc = document.getElementById('boardClosure');
             if (!$bc) return;
             const allStores = collectLevel(tree, '门店', []);
@@ -2317,7 +2497,50 @@
                 Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) { panelCharts[k].dispose(); } delete panelCharts[k]; });
             }
         }
+        async function preloadForRender() {
+            try {
+                const r = currentIdx(), pr = prevRange();
+                const from = idxToDate(r[0]), to = idxToDate(r[1]);
+                const pfrom = idxToDate(pr.i0), pto = idxToDate(pr.i1);
+                // 收集本视图可能访问的节点：
+                // ① sumNodes —— 只需区间合计（下钻子级、PK 候选、榜单/明细维度）
+                // ② dailyNodes —— 需要逐日序列（当前节点、PK 已选、下钻链，用于趋势/面板折线）
+                const sumNodes = [], dailyNodes = [], seen = {};
+                function addSum(n) { if (n && n.level !== '人员' && !seen[n.id]) { seen[n.id] = 1; sumNodes.push(n); } }
+                function addDaily(n) { if (n && !seen[n.id]) { seen[n.id] = 1; dailyNodes.push(n); if (n.level !== '人员') sumNodes.push(n); } }
+                const cur = currentNode();
+                addDaily(cur);
+                collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
+                collectLevel(tree, state.pkLevel, []).forEach(addSum);
+                collectLevel(tree, state.pointsDim, []).forEach(addSum);
+                collectLevel(tree, state.tableDim, []).forEach(addSum);
+                state.drillIds.forEach(function (id) {
+                    const n = nodeById(id);
+                    addDaily(n);
+                    if (n) collectLevel(n, NEXT_LEVEL[n.level], []).forEach(addSum);
+                });
+                pkNodes().forEach(addDaily);
+                // 并行预载：人员合计（当前+对比周期）× 节点批量合计 × 逐日序列
+                await Promise.all([
+                    ensurePersons(tree, from, to),
+                    ensurePersons(tree, pfrom, pto),
+                    ensureNodeSums(sumNodes, from, to),
+                    ensureNodeSums(sumNodes, pfrom, pto),
+                    ensureSeries(dailyNodes)
+                ]);
+                return true;
+            } catch (e) { apiError(e); return false; }
+        }
+
         function renderAll() {
+            if (DATA_MODE === 'api') {
+                apiLoading(true);
+                preloadForRender().then(function (ok) { apiLoading(false); if (ok) renderAllSync(); });
+                return;
+            }
+            renderAllSync();
+        }
+        function renderAllSync() {
             // 看板切换：先显隐，再调对应渲染
             const isOverview = state.board === 'overview';
             const $bo = document.getElementById('boardOverview');
@@ -2586,6 +2809,10 @@
 
         // 初始
         setRange(7);
+        } // ---- end startApp ----
+
+        if (DATA_MODE === 'mock') startApp();
+        else bootApi();
     </script>
 </body>
 </html>
