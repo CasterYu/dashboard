@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v4.0-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v4.1-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,9 +20,10 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v4.0 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
-| **🟡 v3.8 · 历史版** | 👉 同上链接（与 v4.0 同批发布，页面即 v4.0） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
-| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.0） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
+| **🟢 v4.1 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名，消除人数规模优势；tooltip 同时展示人均 / 总分 / 人数 |
+| **🟡 v4.0 · 历史版** | 👉 同上链接（与 v4.1 同批发布，页面即 v4.1） | 📦 归档 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
+| **🟡 v3.8 · 历史版** | 👉 同上链接（页面即 v4.1） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
+| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.1） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
 | **🟡 v1 · 历史归档** | **👉 [https://casteryu.github.io/dashboard/legacy/v1/](https://casteryu.github.io/dashboard/legacy/v1/)** | 📦 归档 | 白板草图完整模块版：漏斗/积分/下钻/排行榜/雷达 |
 
 > 💡 直接 Ctrl + 点击可在新标签页打开，与当前页同时浏览。
@@ -31,7 +32,7 @@
 
 | 版本 | 文件路径 |
 |:---:|:---|
-| **v4.0 最新版** | `D:\projects\dashboard\index.html` |
+| **v4.1 最新版** | `D:\projects\dashboard\index.html` |
 | **v1 历史版** | `D:\projects\dashboard\legacy\v1\index.html` |
 
 ---
@@ -40,7 +41,8 @@
 
 汽车销售运营场景下的数据看板，单文件 HTML 部署，零构建、零依赖。
 
-- **v4.0（当前）**：**组织生命周期 + 工号识别**。① 节点停用/恢复（软删除）：人员离职、门店闭店走同一机制，历史指标完整保留、重新出现在名册即自动恢复；② 人员以**工号**为唯一身份（明文存储，不采集身份证），改名不新增人员、调岗不重复计数；③ 任职区间时间切片：历史报表按**当时**门店/岗位归属统计；④ 名册导入支持增量合并（`mode=merge`）与全量快照（`mode=snapshot`），支持预检（`dryRun=1`）与大批量停用拦截（409 + `force=1`）；⑤ 筛选区新增「显示已停用」开关（默认关闭，仅 API 模式可见）。
+- **v4.1（当前）**：**积分排行榜门店人均口径**。门店维度按「总积分 ÷ 在职人数」的人均积分排名（人数 = 树内该门店人员节点数，打开「显示已停用」时含停用人员），消除人数规模优势；tooltip 三要素：人均积分 / 总积分 / 人数；条形标签保留 1 位小数；副标题标注口径。岗位 / 人员维度与 PK 模式维持总积分口径不变。
+- **v4.0（历史）**：**组织生命周期 + 工号识别**。① 节点停用/恢复（软删除）：人员离职、门店闭店走同一机制，历史指标完整保留、重新出现在名册即自动恢复；② 人员以**工号**为唯一身份（明文存储，不采集身份证），改名不新增人员、调岗不重复计数；③ 任职区间时间切片：历史报表按**当时**门店/岗位归属统计；④ 名册导入支持增量合并（`mode=merge`）与全量快照（`mode=snapshot`），支持预检（`dryRun=1`）与大批量停用拦截（409 + `force=1`）；⑤ 筛选区新增「显示已停用」开关（默认关闭，仅 API 模式可见）。
 - **v3.8（历史）**：真实数据接入。前端双模式：默认演示模式（内嵌模拟数据，零部署可用），URL 加 `?data=api&api=http://后端地址:3777` 切换真实数据；后端 Node.js + Express + SQLite（`server/` 目录），提供组织树/指标聚合/人员汇总 API 与 Excel/CSV 导入接口，数据按需懒加载 + 本地缓存。
 - **v3.7（历史）**：双看板结构。顶栏胶囊切换「**经营总览** / **业务执行与闭环**」。岗位体系扩展至 10，新增试驾点评率 / 线索试驾率；闭环看板人员散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率三选一，按门店分色 + 均值参考线），6 张 KPI 摘要 + 人员明细表。
 - **v3.6（历史）**：底部「经营结果趋势分析」改为指标多选折线图，绝对量指标峰值相差 ≥10 倍时自动归一化。
@@ -90,7 +92,7 @@
 ```
 dashboard/
 ├── README.md               ← 本文件
-├── index.html              ← v4.0 当前最新版（前端，双模式：演示/真实数据）
+├── index.html              ← v4.1 当前最新版（前端，双模式：演示/真实数据）
 ├── .gitignore
 ├── .gitattributes
 ├── push-to-github.ps1
@@ -173,6 +175,7 @@ curl.exe -H "X-Import-Token: change-me-import-token" `
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
+| **v4.1** | 2026-09-15 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名（人数 = 门店子树人员节点数，含「显示已停用」开关影响），消除人数规模优势；tooltip 展示「人均积分 / 总积分 / 人数」三要素；条形标签保留 1 位小数；岗位 / 人员 / PK 维度口径不变 |
 | **v4.0** | 2026-09-15 | **组织生命周期 + 工号识别**：节点停用/恢复（离职、闭店软删除，历史数据保留，重现即恢复）；工号唯一识别（前导零保真、认领去重、改名不新增、同名不同人靠工号区分）；任职区间时间切片（`person_assignments` + `node_paths` 分片，调岗后历史报表按当时门店/岗位归属）；名册导入 merge/snapshot、dryRun 预检、大批量停用 409 安全阀 + force；指标导入支持按工号定位；新增 `GET /api/import/logs`、`GET /api/admin/data-quality`；前端新增「显示已停用」开关与停用标识（mock 模式零改动） |
 | **v3.8** | 2026-09-15 | **真实数据接入**：Node.js + Express + SQLite 后端；组织树/指标聚合/人员汇总 API；Excel/CSV 名册与指标导入（upsert + 逐行校验报告）；前端 mock/API 双模式（`?data=api`），按需懒加载 + 本地缓存 |
 | **v3.7** | 2026-09-15 | **双看板结构**：顶栏胶囊切换「经营总览 / 业务执行与闭环」；岗位体系由 3 扩展至 10；差异化积分权重与岗位空缺机制；新增试驾点评数与**试驾点评率 / 线索试驾率**；闭环看板按门店分色人员散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率）+ 琥珀色均值参考线 + 6 张 KPI 摘要 + 人员明细表 |
@@ -228,6 +231,6 @@ git push origin --tags
 
 ✨ **推荐使用 GitHub Pages 在线版访问，无需启动本地服务** ✨
 
-[👉 v4.0 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.0 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.0/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
+[👉 v4.1 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.1 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.1/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
 
 </div>

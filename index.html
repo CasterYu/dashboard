@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V4.0 · 汽车销售运营中心</title>
+    <title>业务数据看板 V4.1 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -319,7 +319,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.0</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.1</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -534,7 +534,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V4.0 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留
+            业务数据看板 V4.1 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势
         </footer>
     </div>
 
@@ -2154,31 +2154,48 @@
             const level = state.pointsDim;
             let cands = collectLevel(node, level, []);
             if (!cands.length) cands = collectLevel(tree, level, []);
-            const nodes = cands.slice().sort(function (a, b) { return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points; }).slice(0, 10);
-            sub.textContent = level + '维度 · TOP ' + nodes.length + ' · 范围：' + node.name;
+            // 门店维度按人均口径：总积分 ÷ 该门店在职人数（树内人员节点数），排序同样按人均降序
+            const perStore = level === '门店';
+            const hcCache = new Map();
+            function headcountOf(n) {
+                if (!hcCache.has(n.id)) hcCache.set(n.id, collectLevel(n, '人员', []).length);
+                return hcCache.get(n.id);
+            }
+            const rows = cands.map(function (n) {
+                const points = metricsOf(n, r[0], r[1]).points;
+                const hc = perStore ? headcountOf(n) : 0;
+                return { n: n, name: (n.storeName && level === '人员' ? n.storeName + ' · ' : '') + n.name, points: points, hc: hc, avg: perStore ? (hc > 0 ? points / hc : 0) : 0 };
+            }).sort(function (a, b) { return perStore ? b.avg - a.avg : b.points - a.points; }).slice(0, 10);
+            sub.textContent = level + '维度' + (perStore ? ' · 人均积分（总积分 ÷ 在职人数）' : '') + ' · TOP ' + rows.length + ' · 范围：' + node.name;
             c.setOption({
                 grid: { left: 10, right: 64, top: 12, bottom: 10, containLabel: true },
                 tooltip: {
                     trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE,
-                    formatter: function (p) { return p[0].name + '<br/><b style="color:#f59e0b">积分：' + fmt(p[0].value) + '</b>'; }
+                    formatter: function (p) {
+                        const it = rows[rows.length - 1 - p[0].dataIndex];
+                        if (perStore && it) {
+                            return it.n.name + '<br/><b style="color:#f59e0b">人均积分：' + (Math.round(it.avg * 10) / 10).toFixed(1) + '</b>（总积分 ' + fmt(it.points) + ' ÷ ' + it.hc + ' 人）';
+                        }
+                        return p[0].name + '<br/><b style="color:#f59e0b">积分：' + fmt(p[0].value) + '</b>';
+                    }
                 },
                 xAxis: { type: 'value', ...AXIS_STYLE },
                 yAxis: {
                     type: 'category',
-                    data: nodes.map(function (n) { return (n.storeName && level === '人员' ? n.storeName + ' · ' : '') + n.name; }).reverse(),
+                    data: rows.map(function (it) { return it.name; }).reverse(),
                     ...AXIS_STYLE, splitLine: { show: false },
                     axisLabel: { color: '#94a3b8', fontSize: 11, width: 130, overflow: 'truncate' }
                 },
                 series: [{
                     type: 'bar', barMaxWidth: 16,
-                    data: nodes.map(function (n) { return metricsOf(n, r[0], r[1]).points; }).reverse(),
+                    data: rows.map(function (it) { return perStore ? it.avg : it.points; }).reverse(),
                     itemStyle: {
                         borderRadius: [0, 6, 6, 0],
                         color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
                             { offset: 0, color: '#3b82f6' }, { offset: 1, color: '#f59e0b' }
                         ])
                     },
-                    label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return fmt(p.value); } }
+                    label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return perStore ? (Math.round(p.value * 10) / 10).toFixed(1) : fmt(p.value); } }
                 }]
             }, true);
         }
