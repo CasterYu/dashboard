@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.4 · 汽车销售运营中心</title>
+    <title>业务数据看板 V3.5 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -253,7 +253,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.4</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.5</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 组织维度总览</p>
                 </div>
             </div>
@@ -411,12 +411,12 @@
             </div>
         </section>
 
-        <!-- 趋势分析 -->
+        <!-- 经营结果趋势分析 -->
         <section class="panel p-6">
             <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
                 <div>
-                    <div class="panel-title"><span class="dot"></span>趋势分析</div>
-                    <div class="panel-subtitle" id="trendSubtitle">线索 / 到店 / 锁单 / 交车 区间走势</div>
+                    <div class="panel-title"><span class="dot"></span>经营结果趋势分析</div>
+                    <div class="panel-subtitle" id="trendSubtitle">请选择对比指标（最多 4 项）</div>
                 </div>
                 <div class="flex items-center gap-1">
                     <button class="quick-btn active" data-trend="day">日</button>
@@ -424,7 +424,8 @@
                     <button class="quick-btn" data-trend="month">月</button>
                 </div>
             </div>
-            <div id="trendChart" style="height:320px" class="mt-4"></div>
+            <div id="trendChips" class="panel-chips mt-2"></div>
+            <div id="trendChart" style="height:320px" class="mt-2"></div>
         </section>
 
         <!-- 明细数据表 -->
@@ -449,7 +450,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.4 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势
+            业务数据看板 V3.5 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴
         </footer>
     </main>
 
@@ -488,6 +489,19 @@
             arrivals: '#3b82f6', testDrives: '#06b6d4', returnVisits: '#8b5cf6', opportunities: '#10b981',
             locked: '#10b981', delivered: '#ec4899', points: '#f59e0b'
         };
+        // 经营结果趋势分析可选指标（type='abs' 绝对量 / type='rate' 阶段转化率）
+        const TREND_METRICS = [
+            { key: 'intentLeads', type: 'abs', label: '意向线索', color: METRIC_COLOR.intentLeads },
+            { key: 'arrivals', type: 'abs', label: '到店', color: '#22d3ee' },
+            { key: 'locked', type: 'abs', label: '锁单', color: METRIC_COLOR.locked },
+            { key: 'leads', type: 'abs', label: '新增线索', color: METRIC_COLOR.leads },
+            { key: 'testDrives', type: 'abs', label: '试驾', color: METRIC_COLOR.testDrives },
+            { key: 'delivered', type: 'abs', label: '交付', color: METRIC_COLOR.delivered },
+            { key: 'invites', type: 'abs', label: '邀约排程', color: METRIC_COLOR.invites },
+            { key: 'intentToArrival', type: 'rate', num: 'arrivals', den: 'intentLeads', label: '意向线索→到店 转化率', color: '#a78bfa' },
+            { key: 'arrivalToTest', type: 'rate', num: 'testDrives', den: 'arrivals', label: '到店→试驾 转化率', color: '#fbbf24' },
+            { key: 'testToLock', type: 'rate', num: 'locked', den: 'testDrives', label: '试驾→锁单 转化率', color: '#f472b6' }
+        ];
         const RATIO_CHAIN = [
             ['validLeads', 'leads', 0.62],
             ['intentLeads', 'validLeads', 0.55],
@@ -749,6 +763,7 @@
             pkBase: null,
             drillIds: [],
             trendMode: 'day',
+            trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营结果趋势分析默认指标
             pointsDim: '门店',
             tableDim: '门店',
             expanded: [false, false, false],   // 三大板块各自的展开状态
@@ -1544,8 +1559,8 @@
         }
 
         // ---------- 趋势分析 ----------
-        function buildBuckets(start, end, mode, targets) {
-            const keys = ['leads', 'arrivals', 'locked', 'delivered'];
+        function buildBuckets(start, end, mode, targets, metrics) {
+            metrics = metrics || TREND_METRICS;
             const buckets = [];
             const s = parseDate(start), e = parseDate(end);
             let cursor = new Date(s);
@@ -1572,8 +1587,14 @@
                 }
                 const i0 = clampIdx(dayIndex(dateStr(bs))), i1 = clampIdx(dayIndex(dateStr(be)));
                 const values = {};
-                keys.forEach(function (k) {
-                    values[k] = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[k], i0, i1) : 0); }, 0);
+                metrics.forEach(function (m) {
+                    if (m.type === 'rate') {
+                        const num = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[m.num], i0, i1) : 0); }, 0);
+                        const den = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[m.den], i0, i1) : 0); }, 0);
+                        values[m.key] = den ? (num / den) * 100 : 0;
+                    } else {
+                        values[m.key] = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[m.key], i0, i1) : 0); }, 0);
+                    }
                 });
                 buckets.push({ label: label, values: values });
             }
@@ -1581,19 +1602,19 @@
         }
         function renderTrend() {
             const sub = document.getElementById('trendSubtitle');
+            const chipsEl = document.getElementById('trendChips');
             const c = chart('trendChart');
-            if (!c) return;
-            const r = currentIdx();
-            const conf = [
-                { key: 'leads', name: '线索', color: '#3b82f6' },
-                { key: 'arrivals', name: '到店', color: '#06b6d4' },
-                { key: 'locked', name: '锁单', color: '#10b981' },
-                { key: 'delivered', name: '交车', color: '#ec4899' }
-            ];
+            if (!c || !chipsEl) return;
+            // 渲染指标多选胶囊
+            chipsEl.innerHTML = TREND_METRICS.map(function (m) {
+                const on = state.trendMetrics.indexOf(m.key) >= 0;
+                return '<span class="metric-chip' + (on ? ' on' : '') + '" data-trend-metric="' + m.key + '">' +
+                    '<span class="mc-dot" style="background:' + m.color + '"></span>' + m.label + '</span>';
+            }).join('');
             if (state.mode === 'pk') {
                 const nodes = pkNodes();
                 if (nodes.length < 2) { c.clear(); sub.textContent = 'PK 模式下请先勾选 2 ~ 6 个对象'; return; }
-                sub.textContent = 'PK 模式 · 各对象线索量走势（' + state.trendMode + '粒度）';
+                sub.textContent = 'PK 模式 · 各对象新增线索走势（' + state.trendMode + '粒度）';
                 const buckets = buildBuckets(state.start, state.end, state.trendMode, nodes);
                 c.setOption({
                     grid: { left: 10, right: 22, top: 42, bottom: 6, containLabel: true },
@@ -1614,24 +1635,43 @@
                 return;
             }
             const node = currentNode();
-            sub.textContent = node.name + ' · 线索 / 到店 / 锁单 / 交车 区间走势';
-            const buckets = buildBuckets(state.start, state.end, state.trendMode, [node]);
+            const selected = TREND_METRICS.filter(function (m) { return state.trendMetrics.indexOf(m.key) >= 0; });
+            sub.textContent = node.name + ' · ' + (selected.length ? selected.map(function (m) { return m.label; }).join(' / ') : '未选择指标');
+            const buckets = buildBuckets(state.start, state.end, state.trendMode, [node], selected);
+            const hasAbs = selected.some(function (m) { return m.type === 'abs'; });
+            const hasRate = selected.some(function (m) { return m.type === 'rate'; });
+            const yAxis = [];
+            if (hasAbs) yAxis.push({ type: 'value', name: '数量', nameTextStyle: { color: '#64748b', padding: [0, 0, 0, -24] }, ...AXIS_STYLE });
+            if (hasRate) yAxis.push({ type: 'value', name: '转化率', nameTextStyle: { color: '#64748b', padding: [0, -24, 0, 0] }, min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 }, ...AXIS_STYLE });
+            const tooltipFormatter = function (p) {
+                let s = p[0].name + '<br/>';
+                p.forEach(function (it) {
+                    const ms = selected.filter(function (x) { return x.label === it.seriesName; });
+                    const m = ms[0];
+                    if (m) {
+                        if (m.type === 'rate') s += it.marker + ' ' + it.seriesName + '：<b>' + it.value.toFixed(1) + '%</b><br/>';
+                        else s += it.marker + ' ' + it.seriesName + '：<b>' + fmt(it.value) + '</b> ' + (METRIC_UNIT[m.key] || '') + '<br/>';
+                    }
+                });
+                return s;
+            };
             c.setOption({
-                grid: { left: 10, right: 22, top: 42, bottom: 6, containLabel: true },
-                legend: { data: conf.map(function (s) { return s.name; }), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
-                tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+                grid: { left: 10, right: hasRate ? 52 : 22, top: 42, bottom: 6, containLabel: true },
+                legend: { data: selected.map(function (m) { return m.label; }), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
+                tooltip: { trigger: 'axis', ...TOOLTIP_STYLE, formatter: tooltipFormatter },
                 xAxis: { type: 'category', data: buckets.map(function (b) { return b.label; }), boundaryGap: false, ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) } },
-                yAxis: { type: 'value', ...AXIS_STYLE },
-                series: conf.map(function (s) {
+                yAxis: yAxis,
+                series: selected.map(function (m) {
                     return {
-                        name: s.name, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+                        name: m.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
                         showSymbol: buckets.length <= 40,
-                        data: buckets.map(function (b) { return Math.round(b.values[s.key]); }),
-                        lineStyle: { color: s.color, width: 2 }, itemStyle: { color: s.color },
+                        yAxisIndex: m.type === 'rate' ? (hasAbs ? 1 : 0) : 0,
+                        data: buckets.map(function (b) { return m.type === 'rate' ? Math.round(b.values[m.key] * 10) / 10 : Math.round(b.values[m.key]); }),
+                        lineStyle: { color: m.color, width: 2 }, itemStyle: { color: m.color },
                         areaStyle: {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: scaleColor(s.color, 0.35) },
-                                { offset: 1, color: scaleColor(s.color, 0) }
+                                { offset: 0, color: scaleColor(m.color, 0.35) },
+                                { offset: 1, color: scaleColor(m.color, 0) }
                             ])
                         }
                     };
@@ -1930,6 +1970,23 @@
                 document.querySelectorAll('[data-trend]').forEach(function (x) { x.classList.toggle('active', x === b); });
                 renderTrend();
             });
+        });
+        // 经营结果趋势分析指标多选胶囊（最多 4 项，至少 1 项）
+        document.getElementById('trendChips').addEventListener('click', function (e) {
+            const chip = e.target.closest('[data-trend-metric]');
+            if (!chip) return;
+            const k = chip.dataset.trendMetric;
+            const cur = state.trendMetrics.slice();
+            const idx = cur.indexOf(k);
+            if (idx >= 0) {
+                if (cur.length <= 1) return;
+                cur.splice(idx, 1);
+            } else {
+                if (cur.length >= 4) cur.shift();
+                cur.push(k);
+            }
+            state.trendMetrics = cur;
+            renderTrend();
         });
         document.querySelectorAll('[data-points]').forEach(function (b) {
             b.addEventListener('click', function () {
