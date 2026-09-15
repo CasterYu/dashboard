@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.6 · 汽车销售运营中心</title>
+    <title>业务数据看板 V3.7 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -243,6 +243,55 @@
         .base-badge { cursor: pointer; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-thumb { background: rgba(148,163,184,0.25); border-radius: 4px; }
+        /* 业务执行与闭环看板 */
+        .post-chip {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 12px; border-radius: 999px; font-size: 12px;
+            background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.18);
+            color: #cbd5e1; cursor: pointer; transition: all .15s; user-select: none; white-space: nowrap;
+        }
+        .post-chip:hover { border-color: rgba(59,130,246,0.5); color: #fff; }
+        .post-chip.on {
+            background: var(--chip-color-12, rgba(59,130,246,0.16));
+            border-color: var(--chip-color, #3b82f6);
+            color: #fff;
+            box-shadow: 0 0 0 1px var(--chip-color-50, rgba(59,130,246,0.5)), 0 0 16px var(--chip-color-30, rgba(59,130,246,0.3));
+        }
+        .post-chip .pc-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--chip-color, #94a3b8); flex: none; }
+        .post-chip.on .pc-dot { box-shadow: 0 0 6px var(--chip-color, #94a3b8); }
+        .store-chip-row { display: flex; flex-wrap: wrap; gap: 8px; max-height: 96px; overflow-y: auto; padding-right: 4px; }
+        .y-radio { display: inline-flex; align-items: center; gap: 4px; padding: 5px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.18); color: #94a3b8; transition: all .15s; }
+        .y-radio:hover { color: #e2e8f0; border-color: rgba(59,130,246,0.5); }
+        .y-radio.on { background: linear-gradient(135deg, var(--primary), var(--accent)); border-color: transparent; color: #fff; }
+        .avg-toggle { display: inline-flex; align-items: center; gap: 6px; padding: 5px 12px; border-radius: 999px; font-size: 12px; cursor: pointer; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; transition: all .15s; }
+        .avg-toggle.on { background: rgba(245,158,11,0.25); border-color: rgba(245,158,11,0.6); color: #fff; box-shadow: 0 0 12px rgba(245,158,11,0.3); }
+        .avg-toggle .switch-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        .closure-grid-6 { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 14px; }
+        @media (max-width: 1279px) { .closure-grid-6 { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+        @media (max-width: 767px) { .closure-grid-6 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+        .closure-cell { position: relative; background: linear-gradient(135deg, rgba(27,41,64,0.95) 0%, rgba(15,25,45,0.95) 100%); border: 1px solid rgba(148,163,184,0.1); border-radius: 14px; padding: 16px 18px; overflow: hidden; }
+        .closure-cell::before { content: ''; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--cell-color, var(--primary)); opacity: .85; }
+        .closure-cell .cc-label { font-size: 12px; color: #94a3b8; }
+        .closure-cell .cc-value { font-size: 24px; font-weight: 700; color: #fff; margin-top: 6px; letter-spacing: -.3px; }
+        .closure-cell .cc-delta { font-size: 11px; margin-top: 4px; }
+        .closure-empty {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+            min-height: 360px; color: #94a3b8; text-align: center;
+        }
+        .closure-empty .ce-icon { width: 56px; height: 56px; border-radius: 50%; background: rgba(148,163,184,0.1); display: flex; align-items: center; justify-content: center; font-size: 28px; color: #64748b; }
+        .closure-rank-badge {
+            display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px;
+            border-radius: 50%; font-size: 12px; font-weight: 700; color: #0b1220; flex: none;
+        }
+        .closure-rank-badge.gold { background: linear-gradient(135deg, #fde68a, #f59e0b); }
+        .closure-rank-badge.silver { background: linear-gradient(135deg, #e2e8f0, #94a3b8); }
+        .closure-rank-badge.bronze { background: linear-gradient(135deg, #fed7aa, #c2410c); color: #fff; }
+        .closure-rank-badge.normal { background: rgba(148,163,184,0.15); color: #94a3b8; }
+        .closure-context { font-size: 12px; color: #94a3b8; }
+        .closure-context strong { color: #e2e8f0; font-weight: 600; }
+        .scatter-legend { display: flex; flex-wrap: wrap; gap: 8px; max-height: 80px; overflow-y: auto; padding-top: 8px; }
+        .scatter-legend .sl-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #cbd5e1; padding: 2px 10px; border-radius: 999px; background: rgba(15,23,42,0.5); border: 1px solid rgba(148,163,184,0.15); }
+        .scatter-legend .sl-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,0.3); }
         ::-webkit-scrollbar-track { background: transparent; }
     </style>
 </head>
@@ -253,8 +302,8 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.6</span></h1>
-                    <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 组织维度总览</p>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.7</span></h1>
+                    <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
 
@@ -289,8 +338,18 @@
             </div>
         </div>
 
-        <!-- 组织树筛选 -->
-        <div class="max-w-[1600px] mx-auto px-6 pb-3 space-y-2">
+        <!-- 看板切换器 -->
+        <div class="max-w-[1600px] mx-auto px-6 pb-2 flex items-center gap-3 flex-wrap">
+            <span class="text-xs text-slate-400 whitespace-nowrap">看板视图</span>
+            <div class="seg" id="boardSeg">
+                <button data-board="overview" class="active">经营总览</button>
+                <button data-board="closure">业务执行与闭环</button>
+            </div>
+            <span class="text-[11px] text-slate-500 ml-1">顶栏时间筛选全站共享 · 切换后约 1s 内重渲染</span>
+        </div>
+
+        <!-- 组织树筛选（仅经营总览使用，闭环看板自带岗位 × 门店筛选） -->
+        <div id="overviewControls" class="max-w-[1600px] mx-auto px-6 pb-3 space-y-2">
             <div class="flex items-center justify-between gap-3 flex-wrap">
                 <div class="flex items-center gap-2 flex-wrap">
                     <span class="text-xs text-slate-400 whitespace-nowrap">组织范围</span>
@@ -336,6 +395,9 @@
     </header>
 
     <main class="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+
+    <!-- 经营总览看板（原单看板全部内容） -->
+    <div id="boardOverview">
 
         <!-- 主体：左侧指标区 + 右侧全链路漏斗 -->
         <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_540px] gap-6 items-start">
@@ -450,8 +512,12 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.6 · 当前展示为模拟数据 · 组织树支持 全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴，量级悬殊时自动归一化对比
+            业务数据看板 V3.7 · 当前展示为模拟数据 · 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线
         </footer>
+    </div>
+
+    <!-- 业务执行与闭环看板 -->
+    <div id="boardClosure" class="hidden"></div>
     </main>
 
     <script>
@@ -474,19 +540,19 @@
         function clampIdx(i) { return Math.max(0, Math.min(DAYS - 1, i)); }
         function rangeIdx(start, end) { return [clampIdx(dayIndex(start)), clampIdx(dayIndex(end))]; }
 
-        const METRIC_KEYS = ['leads', 'validLeads', 'intentLeads', 'invites', 'arrivals', 'testDrives', 'returnVisits', 'opportunities', 'locked', 'delivered'];
+        const METRIC_KEYS = ['leads', 'validLeads', 'intentLeads', 'invites', 'arrivals', 'testDrives', 'testReviews', 'returnVisits', 'opportunities', 'locked', 'delivered'];
         const METRIC_LABEL = {
             leads: '线索量', validLeads: '有效线索', intentLeads: '意向线索', invites: '邀约排程',
-            arrivals: '到店量', testDrives: '有效试驾', returnVisits: '二次回访', opportunities: '商机量',
+            arrivals: '到店量', testDrives: '有效试驾', testReviews: '试驾点评数', returnVisits: '二次回访', opportunities: '商机量',
             locked: '锁单量', delivered: '交付量', points: '积分'
         };
         const METRIC_UNIT = {
             leads: '条', validLeads: '条', intentLeads: '条', invites: '次', arrivals: '人',
-            testDrives: '人', returnVisits: '人', opportunities: '个', locked: '单', delivered: '辆', points: '分'
+            testDrives: '人', testReviews: '条', returnVisits: '人', opportunities: '个', locked: '单', delivered: '辆', points: '分'
         };
         const METRIC_COLOR = {
             leads: '#3b82f6', validLeads: '#06b6d4', intentLeads: '#f59e0b', invites: '#10b981',
-            arrivals: '#3b82f6', testDrives: '#06b6d4', returnVisits: '#8b5cf6', opportunities: '#10b981',
+            arrivals: '#3b82f6', testDrives: '#06b6d4', testReviews: '#22d3ee', returnVisits: '#8b5cf6', opportunities: '#10b981',
             locked: '#10b981', delivered: '#ec4899', points: '#f59e0b'
         };
         // 经营结果趋势分析可选指标（type='abs' 绝对量 / type='rate' 阶段转化率）
@@ -508,6 +574,7 @@
             ['invites', 'intentLeads', 0.78],
             ['arrivals', 'invites', 0.72],
             ['testDrives', 'arrivals', 0.68],
+            ['testReviews', 'testDrives', 0.72],
             ['returnVisits', 'testDrives', 0.74],
             ['opportunities', 'returnVisits', 0.82],
             ['locked', 'opportunities', 0.46],
@@ -523,12 +590,35 @@
             { key: 'locked', name: '锁单', color: '#f59e0b' },
             { key: 'delivered', name: '交付', color: '#ec4899' }
         ];
-        // 岗位规则：店长一岗一人；销售顾问一岗多人；线上直播部分门店空缺（一岗多人）
+        // 岗位规则：10 岗位体系；店长/经理类一岗一人，专员/专家类一岗多人；数营专家、直播专员、新媒体运营在部分门店空缺
+        // pw：积分权重覆盖（按岗位差异化，让散点图的 X = 累计积分 与 Y = 锁单量 非线性相关）
         const POSTS = [
-            { key: '店长', name: '店长', color: '#8b5cf6', leadFactor: 0.34, damp: 1.05, min: 1, max: 1, note: '一岗一人' },
-            { key: '销售顾问', name: '销售顾问', color: '#3b82f6', leadFactor: 1.00, damp: 1.00, min: 2, max: 4, note: '一岗多人' },
-            { key: '线上直播', name: '线上直播', color: '#ec4899', leadFactor: 1.62, damp: 0.55, min: 0, max: 2, note: '部分门店空缺' }
+            { key: 'dataExpert', name: '数营专家', color: '#22d3ee', leadFactor: 1.30, damp: 1.00, min: 0, max: 1, note: '部分门店空缺',
+              blankStores: ['上海徐汇中心店', '杭州钱江新城店', '北京朝阳店', '重庆渝北店', '成都锦江店'],
+              pw: { locked: 22, delivered: 30, testDrives: 8, invites: 6, returnVisits: 6, opportunities: 10 } },
+            { key: 'salesManager', name: '销售店长', color: '#8b5cf6', leadFactor: 0.42, damp: 1.05, min: 1, max: 1, note: '一岗一人',
+              pw: { locked: 36, delivered: 55, testDrives: 5, invites: 4, returnVisits: 4, opportunities: 7 } },
+            { key: 'salesSpecialist', name: '销售专员', color: '#3b82f6', leadFactor: 1.00, damp: 1.00, min: 2, max: 4, note: '一岗多人',
+              pw: { locked: 30, delivered: 50, testDrives: 6, invites: 4, returnVisits: 5, opportunities: 8 } },
+            { key: 'productExpert', name: '产品专家', color: '#06b6d4', leadFactor: 1.15, damp: 1.12, min: 2, max: 3, note: '一岗多人',
+              pw: { locked: 28, delivered: 40, testDrives: 12, invites: 5, returnVisits: 7, opportunities: 10 } },
+            { key: 'deliveryManager', name: '交付店长', color: '#a78bfa', leadFactor: 0.38, damp: 1.08, min: 1, max: 1, note: '一岗一人',
+              pw: { locked: 20, delivered: 70, testDrives: 4, invites: 3, returnVisits: 6, opportunities: 9 } },
+            { key: 'deliverySpecialist', name: '交付专员', color: '#c084fc', leadFactor: 0.92, damp: 1.04, min: 2, max: 3, note: '一岗多人',
+              pw: { locked: 24, delivered: 60, testDrives: 5, invites: 4, returnVisits: 5, opportunities: 8 } },
+            { key: 'liveStreamer', name: '直播专员', color: '#ec4899', leadFactor: 1.62, damp: 0.55, min: 0, max: 2, note: '部分门店空缺',
+              blankStores: ['上海徐汇中心店', '杭州西湖店', '深圳南山店', '广州天河店', '成都高新店', '重庆渝北店'],
+              pw: { locked: 26, delivered: 45, testDrives: 7, invites: 8, returnVisits: 4, opportunities: 9 } },
+            { key: 'newMedia', name: '新媒体运营', color: '#f472b6', leadFactor: 1.18, damp: 0.78, min: 0, max: 1, note: '部分门店空缺',
+              blankStores: ['上海浦东旗舰店', '杭州钱江新城店', '深圳宝安店', '北京朝阳店', '广州天河店', '重庆渝北店', '成都锦江店'],
+              pw: { locked: 22, delivered: 36, testDrives: 5, invites: 7, returnVisits: 5, opportunities: 8 } },
+            { key: 'marketManager', name: '市场经理', color: '#f59e0b', leadFactor: 0.86, damp: 1.02, min: 1, max: 1, note: '一岗一人',
+              pw: { locked: 24, delivered: 42, testDrives: 5, invites: 8, returnVisits: 5, opportunities: 7 } },
+            { key: 'customerManager', name: '客户管家/经理', color: '#10b981', leadFactor: 1.05, damp: 1.10, min: 2, max: 3, note: '一岗多人',
+              pw: { locked: 30, delivered: 48, testDrives: 6, invites: 9, returnVisits: 8, opportunities: 10 } }
         ];
+        const POSTS_BY_KEY = {};
+        POSTS.forEach(function (p) { POSTS_BY_KEY[p.key] = p; });
         const DAMP_FROM = ['arrivals', 'testDrives', 'returnVisits', 'opportunities', 'locked', 'delivered'];
 
         function hashSeed(str) {
@@ -541,9 +631,16 @@
             if (s <= 0) s += 2147483646;
             return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
         }
-        function pointsOf(m) {
-            return Math.round(m.locked * 30 + m.delivered * 50 + m.testDrives * 6 + m.invites * 4 + m.returnVisits * 5 + m.opportunities * 8);
+        // 默认积分权重（销售专员沿用此口径），POSTS[*].pw 可覆盖
+        const DEFAULT_POINTS_W = { locked: 30, delivered: 50, testDrives: 6, invites: 4, returnVisits: 5, opportunities: 8 };
+        // 原始（未取整）积分计算 — 用于按日写入 series.points，保证逐日小数不被抹平
+        function pointsOfRaw(m, postKey) {
+            const w = (postKey && POSTS_BY_KEY[postKey] && POSTS_BY_KEY[postKey].pw) || DEFAULT_POINTS_W;
+            return (m.locked || 0) * w.locked + (m.delivered || 0) * w.delivered + (m.testDrives || 0) * w.testDrives +
+                (m.invites || 0) * w.invites + (m.returnVisits || 0) * w.returnVisits + (m.opportunities || 0) * w.opportunities;
         }
+        // 取整版积分（散点图 tooltip 等直接展示处使用）
+        function pointsOf(m, postKey) { return Math.round(pointsOfRaw(m, postKey)); }
 
         // 单人单指标日序列（浮点存储，区间求和后再取整，避免小指标被逐日取整抹平）
         function buildPersonSeries(seedBase, post) {
@@ -560,6 +657,7 @@
             });
             const series = {};
             METRIC_KEYS.forEach(function (k) { series[k] = new Float64Array(DAYS); });
+            series.points = new Float64Array(DAYS);
             for (let i = 0; i < DAYS; i++) {
                 const d = new Date(START_DATE.getTime() + i * ONE_DAY);
                 const wd = d.getDay();
@@ -567,10 +665,14 @@
                 const wave = 1 + Math.sin(i * 0.29 + phase) * 0.16 + Math.sin(i * 0.053) * 0.1;
                 const noise = 0.82 + rnd() * 0.36;
                 const leads = Math.max(0, baseLeads * weekend * wave * noise);
+                const daily = { leads: 0 };
                 METRIC_KEYS.forEach(function (k) {
                     const jitter = 0.88 + rnd() * 0.24;
-                    series[k][i] = Math.max(0, leads * cum[k] * jitter);
+                    const v = Math.max(0, leads * cum[k] * jitter);
+                    series[k][i] = v;
+                    daily[k] = v;
                 });
+                series.points[i] = pointsOfRaw(daily, post.key);
             }
             return series;
         }
@@ -608,8 +710,8 @@
                 { area: '重庆小区', stores: ['重庆渝北店'] }
             ]}
         ];
-        // 配备线上直播岗的门店（其余门店该岗位空缺，体现「部分门店无此岗」）
-        const LIVE_STORES = ['上海浦东旗舰店', '上海徐汇中心店', '杭州西湖店', '杭州钱江新城店', '深圳南山店', '北京朝阳店', '广州天河店', '成都高新店', '重庆渝北店'];
+        // 配备「部分门店空缺」类岗位（数营专家/直播专员/新媒体运营）的空缺白名单
+        // 已合并到 POSTS[*].blankStores；此处保留说明，本常量不再使用
         const SURNAMES = ['张', '李', '王', '刘', '陈', '赵', '孙', '周', '吴', '郑', '冯', '许', '何', '吕', '施', '曹', '袁', '邓', '沈', '韩', '杨', '朱', '秦', '尤'];
         const GIVEN_NAMES = ['伟', '娜', '强', '洋', '静', '敏', '磊', '婷', '鹏', '爽', '雪', '晨', '辉', '琳', '涛', '倩', '宁', '超', '梅', '俊', '峰', '丽', '斌', '霞', '坤', '颖', '昊', '萍', '浩', '丹'];
 
@@ -635,6 +737,7 @@
             if (!node.children.length) return node.series;
             const s = {};
             METRIC_KEYS.forEach(function (k) { s[k] = new Float64Array(DAYS); });
+            s.points = new Float64Array(DAYS);
             node.children.forEach(function (c) {
                 const cs = aggSeries(c);
                 if (!cs) return;
@@ -642,6 +745,8 @@
                     const a = s[k], b = cs[k];
                     for (let i = 0; i < DAYS; i++) a[i] += b[i];
                 });
+                const ap = s.points, bp = cs.points;
+                for (let i = 0; i < DAYS; i++) ap[i] += bp[i];
             });
             node.series = s;
             return s;
@@ -667,8 +772,9 @@
                         POSTS.forEach(function (post) {
                             const sRnd = seededRandom(hashSeed('post|' + store + '|' + post.key));
                             let count = 0;
-                            if (post.key === '线上直播') {
-                                count = LIVE_STORES.indexOf(store) >= 0 ? (sRnd() < 0.45 ? 2 : 1) : 0;
+                            if (Array.isArray(post.blankStores)) {
+                                // blankStores = 该岗位在这些门店空缺（count=0），其余门店出现（45% 概率 2 人 / 否则 1 人）
+                                count = post.blankStores.indexOf(store) >= 0 ? 0 : (sRnd() < 0.45 ? 2 : 1);
                             } else {
                                 count = post.min === post.max ? post.min : post.min + Math.floor(sRnd() * (post.max - post.min + 1));
                             }
@@ -716,7 +822,8 @@
             if (hit) return hit;
             const m = {};
             METRIC_KEYS.forEach(function (k) { m[k] = Math.round(sumIdx(node.series[k], i0, i1)); });
-            m.points = pointsOf(m);
+            // 积分从 series.points 累加得到（按岗位差异化权重已写入），与人员积分相加后取整
+            m.points = Math.round(sumIdx(node.series.points, i0, i1));
             metricCache.set(key, m);
             return m;
         }
@@ -755,6 +862,7 @@
         function nodeById(id) { return NODE_BY_ID.get(id) || tree; }
 
         const state = {
+            board: 'overview',                 // 当前看板：overview（经营总览） / closure（业务执行与闭环）
             start: '', end: '',
             mode: 'single',
             sel: { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' },
@@ -763,12 +871,14 @@
             pkBase: null,
             drillIds: [],
             trendMode: 'day',
-            trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营结果趋势分析默认指标
+            trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营总览趋势分析默认指标
             trendNorm: null,   // 绝对量归一化：null=自动, true=强制, false=强制关闭
             pointsDim: '门店',
             tableDim: '门店',
             expanded: [false, false, false],   // 三大板块各自的展开状态
-            panelSel: {}                       // 各板块勾选的指标 key
+            panelSel: {},                      // 各板块勾选的指标 key
+            // 业务执行与闭环看板状态
+            closure: { postKey: 'productExpert', storeIds: null, yMetric: 'locked', avgLine: true }
         };
         const panelCharts = {};                // 板块展开态折线图实例
 
@@ -919,15 +1029,18 @@
                 const nm = state.pkLevel === '岗位' || state.pkLevel === '人员' ? (n.storeName ? n.storeName + ' · ' + n.name : n.name) : n.name;
                 return '<button class="pk-opt' + (on ? ' on' : '') + '" data-id="' + n.id + '">' + nm + '</button>';
             }).join('');
-            // 空缺岗位置灰展示（体现「本店暂无」而非 0）
+            // 空缺岗位置灰展示（体现「本店暂无」而非 0）— 按 10 岗位中设置了 blankStores 的岗位动态展示
             if (state.pkLevel === '岗位') {
                 const storeNodes = collectLevel(currentNode().level === '门店' ? currentNode().parent : currentNode(), '门店', []);
-                const liveMissing = storeNodes.filter(function (s) { return s.postStats.missing.indexOf('线上直播') >= 0; });
-                if (liveMissing.length) {
-                    $pkOptions.innerHTML += liveMissing.map(function (s) {
-                        return '<span class="pk-opt empty">' + s.name + ' · 线上直播（暂无）</span>';
+                const blankPostKeys = POSTS.filter(function (p) { return Array.isArray(p.blankStores); }).map(function (p) { return p.key; });
+                blankPostKeys.forEach(function (pk) {
+                    const missing = storeNodes.filter(function (s) { return (s.postStats.missing || []).indexOf(pk) >= 0; });
+                    if (!missing.length) return;
+                    const postName = POSTS_BY_KEY[pk].name;
+                    $pkOptions.innerHTML += missing.map(function (s) {
+                        return '<span class="pk-opt empty">' + s.name + ' · ' + postName + '（暂无）</span>';
                     }).join('');
-                }
+                });
             }
             $pkOptions.querySelectorAll('button[data-id]').forEach(function (b) {
                 b.addEventListener('click', function () {
@@ -1094,38 +1207,43 @@
             const i = state.pkIds.indexOf(node.id);
             return PK_PALETTE[(i >= 0 ? i : 0) % PK_PALETTE.length];
         }
-        const PK_ROWS = [
-            { group: '核心指标' },
-            { label: '线索量', key: 'leads', unit: '条' },
-            { label: '到店量', key: 'arrivals', unit: '人' },
-            { label: '锁单量', key: 'locked', unit: '单' },
-            { label: '交付量', key: 'delivered', unit: '辆' },
-            { label: '积分', key: 'points', unit: '分' },
-            { group: '效率指标（比率按分子 / 分母重算，不做平均）' },
-            { label: '线索到店率', ratio: ['arrivals', 'leads'] },
-            { label: '线索转化率', ratio: ['delivered', 'leads'] },
-            { label: '有效率', ratio: ['validLeads', 'leads'] },
-            { label: '锁单率', ratio: ['locked', 'opportunities'] },
-            { label: '交付率', ratio: ['delivered', 'locked'] },
-            { group: '入口环节' },
-            { label: '有效线索', key: 'validLeads', unit: '条' },
-            { label: '意向线索', key: 'intentLeads', unit: '条' },
-            { label: '邀约排程', key: 'invites', unit: '次' },
-            { group: '到店环节' },
-            { label: '有效试驾', key: 'testDrives', unit: '人' },
-            { label: '二次回访', key: 'returnVisits', unit: '人' },
-            { group: '结果环节' },
-            { label: '商机量', key: 'opportunities', unit: '个' },
-            { group: '岗位构成 · 线索量（空缺岗位显示 —）' },
-            { label: '店长', post: '店长', unit: '条' },
-            { label: '销售顾问', post: '销售顾问', unit: '条' },
-            { label: '线上直播', post: '线上直播', unit: '条' },
-            { group: '环比（各对象各自对比上一等长周期）' },
-            { label: '线索量环比', mom: 'leads' },
-            { label: '到店量环比', mom: 'arrivals' },
-            { label: '锁单量环比', mom: 'locked' },
-            { label: '交付量环比', mom: 'delivered' }
-        ];
+        function pkRows() {
+            // 动态生成 PK 行：硬编码部分 + 按 POSTS 顺序展开岗位行（空缺岗位显示 —）
+            const rows = [
+                { group: '核心指标' },
+                { label: '线索量', key: 'leads', unit: '条' },
+                { label: '到店量', key: 'arrivals', unit: '人' },
+                { label: '锁单量', key: 'locked', unit: '单' },
+                { label: '交付量', key: 'delivered', unit: '辆' },
+                { label: '积分', key: 'points', unit: '分' },
+                { group: '效率指标（比率按分子 / 分母重算，不做平均）' },
+                { label: '线索到店率', ratio: ['arrivals', 'leads'] },
+                { label: '线索转化率', ratio: ['delivered', 'leads'] },
+                { label: '有效率', ratio: ['validLeads', 'leads'] },
+                { label: '锁单率', ratio: ['locked', 'opportunities'] },
+                { label: '交付率', ratio: ['delivered', 'locked'] },
+                { group: '入口环节' },
+                { label: '有效线索', key: 'validLeads', unit: '条' },
+                { label: '意向线索', key: 'intentLeads', unit: '条' },
+                { label: '邀约排程', key: 'invites', unit: '次' },
+                { group: '到店环节' },
+                { label: '有效试驾', key: 'testDrives', unit: '人' },
+                { label: '试驾点评数', key: 'testReviews', unit: '条' },
+                { label: '二次回访', key: 'returnVisits', unit: '人' },
+                { group: '结果环节' },
+                { label: '商机量', key: 'opportunities', unit: '个' },
+                { group: '岗位构成 · 线索量（空缺岗位显示 —）' }
+            ];
+            POSTS.forEach(function (p) {
+                rows.push({ label: p.name, post: p.key, unit: '条' });
+            });
+            rows.push({ group: '环比（各对象各自对比上一等长周期）' });
+            rows.push({ label: '线索量环比', mom: 'leads' });
+            rows.push({ label: '到店量环比', mom: 'arrivals' });
+            rows.push({ label: '锁单量环比', mom: 'locked' });
+            rows.push({ label: '交付量环比', mom: 'delivered' });
+            return rows;
+        }
         function pkRowValue(node, row, r, pr) {
             const m = metricsOf(node, r[0], r[1]);
             if (row.key) return m[row.key];
@@ -1169,7 +1287,7 @@
             }).join('') + '</tr>';
 
             let body = '';
-            PK_ROWS.forEach(function (row) {
+            pkRows().forEach(function (row) {
                 if (row.group) {
                     body += '<tr class="group-row"><td colspan="' + (nodes.length + 1) + '">' + row.group + '</td></tr>';
                     return;
@@ -1874,6 +1992,318 @@
             }).join('');
         }
 
+        // ==================== PART6：业务执行与闭环看板（积分散点图）====================
+        const CLOSURE_Y_OPTIONS = [
+            { key: 'locked', label: '锁单量', unit: '单', fmtFn: function (v) { return fmt(v); }, isPercent: false },
+            { key: 'testReviewRate', label: '试驾点评率', unit: '%', fmtFn: function (v) { return v.toFixed(1) + '%'; }, isPercent: true },
+            { key: 'testDriveRate', label: '线索试驾率', unit: '%', fmtFn: function (v) { return v.toFixed(1) + '%'; }, isPercent: true }
+        ];
+        const STORE_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#22d3ee', '#fbbf24', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#60a5fa', '#c084fc', '#f87171'];
+        function closureStoreColor(idx) { return STORE_PALETTE[idx % STORE_PALETTE.length]; }
+
+        function closureYValue(p, yMetric) {
+            if (yMetric === 'locked') return p.locked;
+            if (yMetric === 'testReviewRate') return p.testDrives ? (p.testReviews / p.testDrives) * 100 : null;
+            if (yMetric === 'testDriveRate') return p.intentLeads ? (p.testDrives / p.intentLeads) * 100 : null;
+            return 0;
+        }
+        function closureComputePoints() {
+            const allStores = collectLevel(tree, '门店', []);
+            if (!state.closure.storeIds || !state.closure.storeIds.length) {
+                state.closure.storeIds = allStores.length ? [allStores[0].id] : [];
+            }
+            const validIds = new Set(allStores.map(function (s) { return s.id; }));
+            state.closure.storeIds = state.closure.storeIds.filter(function (id) { return validIds.has(id); });
+            if (!state.closure.storeIds.length && allStores.length) state.closure.storeIds = [allStores[0].id];
+            const r = currentIdx();
+            const list = [];
+            state.closure.storeIds.forEach(function (sid) {
+                const sn = nodeById(sid); if (!sn) return;
+                const postNode = (sn.children || []).filter(function (c) { return c.postKey === state.closure.postKey; })[0];
+                if (!postNode) return;
+                postNode.children.forEach(function (p) {
+                    const m = metricsOf(p, r[0], r[1]);
+                    list.push({
+                        name: p.name, storeId: sn.id, storeName: sn.name, postKey: state.closure.postKey,
+                        points: m.points, locked: m.locked, testDrives: m.testDrives,
+                        testReviews: m.testReviews, intentLeads: m.intentLeads,
+                        y: closureYValue(m, state.closure.yMetric)
+                    });
+                });
+            });
+            list.sort(function (a, b) { return b.points - a.points; });
+            return list;
+        }
+        function renderClosure() {
+            const $bc = document.getElementById('boardClosure');
+            if (!$bc) return;
+            const allStores = collectLevel(tree, '门店', []);
+            const post = POSTS_BY_KEY[state.closure.postKey] || POSTS[0];
+            if (!POSTS_BY_KEY[state.closure.postKey]) state.closure.postKey = post.key;
+            const points = closureComputePoints();
+            const storeNodes = state.closure.storeIds.map(function (id) { return nodeById(id); }).filter(Boolean);
+            const personCount = points.length;
+
+            // ---- 摘要 KPI（与上一等长周期对比）----
+            const pr = prevRange();
+            let pCount = 0, pPts = 0, pLock = 0, pTR = 0, pTD = 0, pIL = 0;
+            storeNodes.forEach(function (sn) {
+                const postNode = (sn.children || []).filter(function (c) { return c.postKey === state.closure.postKey; })[0];
+                if (!postNode) return;
+                postNode.children.forEach(function (p) {
+                    const m = metricsOf(p, pr.i0, pr.i1);
+                    pCount++; pPts += m.points; pLock += m.locked;
+                    pTR += m.testReviews; pTD += m.testDrives; pIL += m.intentLeads;
+                });
+            });
+            const sumPts = points.reduce(function (s, x) { return s + x.points; }, 0);
+            const sumLock = points.reduce(function (s, x) { return s + x.locked; }, 0);
+            const sumTD = points.reduce(function (s, x) { return s + x.testDrives; }, 0);
+            const sumTR = points.reduce(function (s, x) { return s + x.testReviews; }, 0);
+            const sumIL = points.reduce(function (s, x) { return s + x.intentLeads; }, 0);
+            const avgPts = personCount ? sumPts / personCount : 0;
+            const avgLock = personCount ? sumLock / personCount : 0;
+            const tReviewRate = sumTD ? (sumTR / sumTD) * 100 : 0;
+            const tDriveRate = sumIL ? (sumTD / sumIL) * 100 : 0;
+            const prevAvgPts = pCount ? pPts / pCount : 0;
+            const prevAvgLock = pCount ? pLock / pCount : 0;
+            const prevTRR = pTD ? (pTR / pTD) * 100 : 0;
+            const prevTDR = pIL ? (pTD / pIL) * 100 : 0;
+            const kpis = [
+                { label: '在岗人数', value: fmt(personCount) + ' <span class="text-slate-400 text-sm">人</span>', deltaText: '人数固定', deltaUp: null, color: post.color },
+                { label: '积分合计', value: fmt(sumPts) + ' <span class="text-slate-400 text-sm">分</span>', deltaText: arrowPct(pct(sumPts, pPts)), deltaUp: sumPts >= pPts, color: '#f59e0b' },
+                { label: '人均积分', value: Math.round(avgPts) + ' <span class="text-slate-400 text-sm">分</span>', deltaText: arrowPct(pct(avgPts, prevAvgPts)), deltaUp: avgPts >= prevAvgPts, color: '#a78bfa' },
+                { label: '人均锁单', value: avgLock.toFixed(1) + ' <span class="text-slate-400 text-sm">单</span>', deltaText: arrowPct(pct(avgLock, prevAvgLock)), deltaUp: avgLock >= prevAvgLock, color: '#10b981' },
+                { label: '线索试驾率', value: tDriveRate.toFixed(1) + '%', deltaText: fmtSigned(tDriveRate - prevTDR, 1) + 'pt', deltaUp: tDriveRate >= prevTDR, color: '#06b6d4' },
+                { label: '试驾点评率', value: tReviewRate.toFixed(1) + '%', deltaText: fmtSigned(tReviewRate - prevTRR, 1) + 'pt', deltaUp: tReviewRate >= prevTRR, color: '#22d3ee' }
+            ];
+            function arrowPct(d) { return (d >= 0 ? '↑ ' : '↓ ') + Math.abs(d).toFixed(1) + '%'; }
+            const kpiHtml = '<div class="closure-grid-6">' + kpis.map(function (k) {
+                const deltaCls = k.deltaUp === null ? 'text-slate-500' : (k.deltaUp ? 'text-emerald-400' : 'text-rose-400');
+                return '<div class="closure-cell" style="--cell-color:' + k.color + '">' +
+                    '<div class="cc-label">' + k.label + '</div>' +
+                    '<div class="cc-value">' + k.value + '</div>' +
+                    '<div class="cc-delta ' + deltaCls + '">' + k.deltaText + '</div>' +
+                    '</div>';
+            }).join('') + '</div>';
+
+            // ---- 岗位 chip（10 个，按 POSTS 顺序）----
+            const postChipsHtml = '<div class="flex flex-wrap gap-2">' + POSTS.map(function (p) {
+                const on = p.key === state.closure.postKey;
+                return '<span class="post-chip' + (on ? ' on' : '') + '" data-post="' + p.key + '" ' +
+                    'style="--chip-color:' + p.color + ';--chip-color-12:' + scaleColor(p.color, 0.16) + ';--chip-color-30:' + scaleColor(p.color, 0.3) + ';--chip-color-50:' + scaleColor(p.color, 0.5) + '">' +
+                    '<span class="pc-dot"></span>' + p.name + '</span>';
+            }).join('') + '</div>';
+
+            // ---- 门店 chip（多选 + 全选 / 清空）----
+            const storeChipHtml = '<div class="store-chip-row">' + allStores.map(function (s, idx) {
+                const on = state.closure.storeIds.indexOf(s.id) >= 0;
+                const c = closureStoreColor(idx);
+                return '<span class="pk-opt' + (on ? ' on' : '') + '" data-store="' + s.id + '" ' +
+                    (on ? 'style="--primary:' + c + ';border-color:' + c + ';background:' + scaleColor(c, 0.16) + ';color:#fff"' : '') +
+                    '><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
+            }).join('') + '</div>' +
+                '<div class="flex items-center gap-2 mt-2 flex-wrap">' +
+                '<button class="quick-btn" data-store-action="all">全部门店</button>' +
+                '<button class="quick-btn" data-store-action="clear">清空</button>' +
+                '<span class="text-xs text-slate-400 ml-auto">已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + allStores.length + ' 家 · 切换岗位会自动剔除空缺门店</span>' +
+                '</div>';
+
+            // ---- Y 轴单选 ----
+            const yOpt = CLOSURE_Y_OPTIONS.filter(function (o) { return o.key === state.closure.yMetric; })[0] || CLOSURE_Y_OPTIONS[0];
+            const yHtml = '<div class="flex flex-wrap gap-2">' + CLOSURE_Y_OPTIONS.map(function (o) {
+                const on = o.key === state.closure.yMetric;
+                return '<span class="y-radio' + (on ? ' on' : '') + '" data-y="' + o.key + '">' + o.label + '</span>';
+            }).join('') + '</div>';
+
+            const avgHtml = '<span class="avg-toggle' + (state.closure.avgLine ? ' on' : '') + '" data-avg="1"><span class="switch-dot"></span>平均参考线</span>';
+            const ctxHtml = '<span class="closure-context">时间 <strong>' + state.start + ' ~ ' + state.end + '</strong> · 岗位 <strong>' + post.name + '</strong> · 门店 <strong>' + state.closure.storeIds.length + '</strong> 家 · 在岗 <strong>' + personCount + '</strong> 人</span>';
+
+            $bc.innerHTML = '<section class="space-y-6">' +
+                // 筛选
+                '<div class="panel p-5 space-y-4">' +
+                    '<div class="flex items-center justify-between gap-3 flex-wrap">' +
+                        '<div>' +
+                            '<div class="panel-title"><span class="dot"></span>岗位 × 门店 筛选</div>' +
+                            '<div class="panel-subtitle">单岗位 × 多门店 · 每个散点代表该岗位在该门店的一名在岗人员</div>' +
+                        '</div>' + ctxHtml +
+                    '</div>' +
+                    '<div><div class="text-xs text-slate-400 mb-2">岗位（单选）</div>' + postChipsHtml + '</div>' +
+                    '<div><div class="text-xs text-slate-400 mb-2 flex items-center gap-2">门店（多选）<span class="text-[11px] text-slate-500">最多 ' + allStores.length + ' 家</span></div>' + storeChipHtml + '</div>' +
+                    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
+                        '<div><div class="text-xs text-slate-400 mb-2">纵坐标指标（单选）</div>' + yHtml + '</div>' +
+                        '<div><div class="text-xs text-slate-400 mb-2">图表辅助</div><div class="flex flex-wrap gap-2">' + avgHtml + '</div></div>' +
+                    '</div>' +
+                '</div>' +
+                // KPI
+                '<div>' + kpiHtml + '</div>' +
+                // 散点图
+                '<div class="panel p-6">' +
+                    '<div class="flex items-start justify-between mb-1 flex-wrap gap-3">' +
+                        '<div>' +
+                            '<div class="panel-title"><span class="dot"></span>人员散点分析</div>' +
+                            '<div class="panel-subtitle">横坐标 = 累计积分 · 纵坐标 = ' + yOpt.label + ' · 按门店分色 · 琥珀虚线为平均值参考线</div>' +
+                        '</div>' +
+                        '<div class="text-xs text-slate-400">每点 = 1 人 · 共 ' + personCount + ' 点</div>' +
+                    '</div>' +
+                    (personCount ?
+                        '<div id="closureScatter" style="height:420px" class="mt-3"></div>' +
+                        '<div class="scatter-legend mt-3" id="closureLegend"></div>'
+                        : '<div class="closure-empty"><div class="ce-icon">○</div><div>所选岗位在这些门店暂无在岗人员</div><div class="text-xs text-slate-500">试试切换其他岗位，或多选几家门店</div></div>'
+                    ) +
+                '</div>' +
+                // 人员明细表
+                '<div class="panel p-6">' +
+                    '<div class="flex items-center justify-between mb-1 flex-wrap gap-3">' +
+                        '<div>' +
+                            '<div class="panel-title"><span class="dot"></span>人员明细</div>' +
+                            '<div class="panel-subtitle">按累计积分降序 · 前三名带金 / 银 / 铜徽章</div>' +
+                        '</div>' +
+                        '<div class="text-xs text-slate-400">共 ' + personCount + ' 人</div>' +
+                    '</div>' +
+                    '<div class="mt-4 max-h-[440px] overflow-auto">' +
+                    (personCount ?
+                        '<table class="w-full text-sm"><thead class="text-xs text-slate-400 sticky top-0" style="background:#111c2f">' +
+                        '<tr><th class="py-2 px-2 text-left font-medium">#</th><th class="py-2 px-2 text-left font-medium">姓名 / 门店 · 岗位</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">累计积分</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">锁单量</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">有效试驾</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">试驾点评率</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">线索试驾率</th></tr></thead>' +
+                        '<tbody id="closureTbody"></tbody></table>'
+                        : '<div class="text-center text-slate-500 py-8">所选条件下无人员</div>'
+                    ) + '</div>' +
+                '</div>' +
+            '</section>';
+
+            // ---- 表格行 ----
+            const $tb = document.getElementById('closureTbody');
+            if ($tb && points.length) {
+                $tb.innerHTML = points.map(function (x, i) {
+                    const trr = x.testDrives ? (x.testReviews / x.testDrives) * 100 : 0;
+                    const tdr = x.intentLeads ? (x.testDrives / x.intentLeads) * 100 : 0;
+                    let badgeCls = 'normal', badgeText = String(i + 1);
+                    if (i === 0) { badgeCls = 'gold'; }
+                    else if (i === 1) { badgeCls = 'silver'; }
+                    else if (i === 2) { badgeCls = 'bronze'; }
+                    return '<tr class="border-b border-slate-700/30 hover:bg-blue-500/5">' +
+                        '<td class="py-2 px-2"><span class="closure-rank-badge ' + badgeCls + '">' + badgeText + '</span></td>' +
+                        '<td class="py-2 px-2">' +
+                            '<div class="font-medium text-slate-100">' + x.name + '</div>' +
+                            '<div class="text-xs text-slate-500">' + x.storeName + ' · ' + (POSTS_BY_KEY[x.postKey] ? POSTS_BY_KEY[x.postKey].name : '') + '</div>' +
+                        '</td>' +
+                        '<td class="py-2 px-2 text-right font-semibold text-amber-400">' + fmt(x.points) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(x.locked) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(x.testDrives) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-400">' + trr.toFixed(1) + '%</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-400">' + tdr.toFixed(1) + '%</td>' +
+                        '</tr>';
+                }).join('');
+            }
+
+            // ---- 散点图 ----
+            if (personCount) {
+                const $scat = document.getElementById('closureScatter');
+                if ($scat) {
+                    // renderClosure 每次 innerHTML 重建，#closureScatter 是新 DOM 节点
+                    // 旧 chart 实例仍绑在已脱离的节点上，必须重建
+                    if (extCharts.closureScatter) {
+                        try { extCharts.closureScatter.dispose(); } catch (_) {}
+                        delete extCharts.closureScatter;
+                    }
+                    const sc = echarts.init($scat);
+                    extCharts.closureScatter = sc;
+                    const series = storeNodes.map(function (sn, sIdx) {
+                        const color = closureStoreColor(sIdx);
+                        const storePts = points.filter(function (p) { return p.storeId === sn.id && p.y !== null && p.y !== undefined; });
+                        return {
+                            name: sn.name,
+                            type: 'scatter',
+                            symbolSize: 14,
+                            itemStyle: {
+                                color: color, opacity: 0.85,
+                                borderColor: 'rgba(255,255,255,0.7)', borderWidth: 1,
+                                shadowBlur: 8, shadowColor: scaleColor(color, 0.4)
+                            },
+                            emphasis: { focus: 'self', scale: 1.4, itemStyle: { opacity: 1, borderColor: '#fff', borderWidth: 2 } },
+                            data: storePts.map(function (p) {
+                                return { name: p.name, value: [p.points, p.y], _meta: { storeName: p.storeName, postName: (POSTS_BY_KEY[p.postKey] || {}).name || '', points: p.points, locked: p.locked } };
+                            })
+                        };
+                    });
+                    const ys = points.map(function (p) { return p.y; }).filter(function (v) { return v !== null && v !== undefined; });
+                    const yMin = ys.length ? Math.max(0, Math.min.apply(null, ys) * 0.92) : 0;
+                    const yMax = ys.length ? Math.max.apply(null, ys) * 1.08 : (yOpt.isPercent ? 100 : 1);
+                    const xs = points.map(function (p) { return p.points; });
+                    const xMin = xs.length ? Math.max(0, Math.min.apply(null, xs) * 0.9) : 0;
+                    const xMax = xs.length ? Math.max.apply(null, xs) * 1.1 : 1;
+
+                    let avgX = 0, avgY = 0;
+                    if (state.closure.avgLine && points.length) {
+                        avgX = xs.reduce(function (s, x) { return s + x; }, 0) / xs.length;
+                        if (ys.length) avgY = ys.reduce(function (s, x) { return s + x; }, 0) / ys.length;
+                    }
+                    const markLines = state.closure.avgLine && avgX && avgY ? {
+                        silent: true, symbol: 'none', animation: false,
+                        data: [
+                            { xAxis: avgX, name: 'X 均值', label: { formatter: 'X 均值 ' + fmt(avgX), color: '#fbbf24', position: 'insideEndTop', fontSize: 11 }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } },
+                            { yAxis: avgY, name: 'Y 均值', label: { formatter: 'Y 均值 ' + yOpt.fmtFn(avgY), color: '#fbbf24', position: 'insideEndTop', fontSize: 11 }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } }
+                        ]
+                    } : undefined;
+
+                    sc.setOption({
+                        animation: false,
+                        tooltip: {
+                            trigger: 'item',
+                            backgroundColor: 'rgba(11,18,32,0.95)',
+                            borderColor: 'rgba(148,163,184,0.2)',
+                            textStyle: { color: '#e2e8f0', fontSize: 12 },
+                            extraCssText: 'box-shadow:0 8px 24px rgba(0,0,0,0.6);',
+                            formatter: function (it) {
+                                const m = it.data._meta;
+                                return '<div style="font-weight:700;margin-bottom:4px">' + it.data.name + '</div>' +
+                                    '<div style="opacity:.7;font-size:11px">' + m.storeName + ' · ' + m.postName + '</div>' +
+                                    '<div style="margin-top:6px">累计积分：<b>' + fmt(m.points) + '</b> 分</div>' +
+                                    '<div>' + yOpt.label + '：<b>' + yOpt.fmtFn(it.value[1]) + '</b></div>' +
+                                    '<div style="opacity:.6;font-size:11px;margin-top:4px">锁单量 ' + fmt(m.locked) + ' 单</div>';
+                            }
+                        },
+                        grid: { left: 60, right: 24, top: 36, bottom: 56 },
+                        xAxis: {
+                            type: 'value', name: '累计积分（分）', nameLocation: 'middle', nameGap: 28,
+                            nameTextStyle: { color: '#94a3b8', fontSize: 12 },
+                            min: xMin, max: xMax,
+                            axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+                            axisTick: { show: false },
+                            axisLabel: { color: '#94a3b8', fontSize: 11 },
+                            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
+                        },
+                        yAxis: {
+                            type: 'value', name: yOpt.label + '（' + yOpt.unit + '）', nameLocation: 'middle', nameGap: 48,
+                            nameTextStyle: { color: '#94a3b8', fontSize: 12 },
+                            min: yMin, max: yMax,
+                            axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+                            axisTick: { show: false },
+                            axisLabel: { color: '#94a3b8', fontSize: 11, formatter: yOpt.isPercent ? '{value}%' : '{value}' },
+                            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
+                        },
+                        series: series.map(function (s) { return Object.assign({}, s, { markLine: markLines }); })
+                    }, true);
+                    // 容器在 innerHTML 重建后可能尚未 layout，强制 resize + 双 rAF 兜底
+                    try { sc.resize(); } catch (_) {}
+                    requestAnimationFrame(function () { try { sc.resize(); } catch (_) {} });
+                    requestAnimationFrame(function () { try { sc.resize(); } catch (_) {} });
+
+                    const $leg = document.getElementById('closureLegend');
+                    if ($leg) {
+                        $leg.innerHTML = storeNodes.map(function (sn, idx) {
+                            return '<span class="sl-item"><span class="sl-dot" style="background:' + closureStoreColor(idx) + '"></span>' + sn.name + '</span>';
+                        }).join('');
+                    }
+                }
+            }
+        }
+
         // ---------- 统一渲染 ----------
         function toggleMode() {
             const single = state.mode === 'single';
@@ -1888,17 +2318,31 @@
             }
         }
         function renderAll() {
-            renderOrgSelectors();
-            toggleMode();
-            if (state.mode === 'single') renderSingleView();
-            renderPkOptions();
-            renderPkView();
-            renderFunnel();
-            renderDrill();
-            renderTrend();
-            renderPoints();
-            renderDetail();
-            const r = currentIdx();
+            // 看板切换：先显隐，再调对应渲染
+            const isOverview = state.board === 'overview';
+            const $bo = document.getElementById('boardOverview');
+            const $bc = document.getElementById('boardClosure');
+            const $oc = document.getElementById('overviewControls');
+            if ($bo) $bo.classList.toggle('hidden', !isOverview);
+            if ($bc) $bc.classList.toggle('hidden', isOverview);
+            if ($oc) $oc.classList.toggle('hidden', !isOverview);
+            document.querySelectorAll('#boardSeg button').forEach(function (b) {
+                b.classList.toggle('active', b.dataset.board === state.board);
+            });
+            if (isOverview) {
+                renderOrgSelectors();
+                toggleMode();
+                if (state.mode === 'single') renderSingleView();
+                renderPkOptions();
+                renderPkView();
+                renderFunnel();
+                renderDrill();
+                renderTrend();
+                renderPoints();
+                renderDetail();
+            } else {
+                renderClosure();
+            }
             $rangeText.textContent = state.start + ' 至 ' + state.end;
         }
 
@@ -1919,6 +2363,54 @@
                 document.querySelectorAll('[data-range]').forEach(function (x) { x.classList.toggle('active', x === b); });
                 setRange(parseInt(b.dataset.range, 10));
             });
+        });
+        // 看板切换器
+        document.querySelectorAll('#boardSeg button').forEach(function (b) {
+            b.addEventListener('click', function () {
+                const next = b.dataset.board;
+                if (next === state.board) return;
+                // 切换前释放当前看板的图表实例（重要：display:none 容器里的图表不应持有）
+                if (state.board === 'overview') {
+                    Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) panelCharts[k].dispose(); delete panelCharts[k]; });
+                    Object.keys(extCharts).forEach(function (k) { if (extCharts[k]) { extCharts[k].dispose(); delete extCharts[k]; } });
+                } else {
+                    if (extCharts.closureScatter) { extCharts.closureScatter.dispose(); delete extCharts.closureScatter; }
+                }
+                state.board = next;
+                renderAll();
+                // 给浏览器一个 layout 周期再 resize 新看板的图
+                requestAnimationFrame(function () {
+                    if (state.board === 'closure') {
+                        const c = extCharts.closureScatter; if (c) c.resize();
+                    } else {
+                        Object.values(extCharts).forEach(function (c) { c.resize(); });
+                    }
+                });
+            });
+        });
+        // 闭环看板交互（事件委托，#boardClosure 内 innerHTML 每次 renderClosure 都替换）
+        document.getElementById('boardClosure').addEventListener('click', function (e) {
+            const postEl = e.target.closest('[data-post]');
+            if (postEl) { state.closure.postKey = postEl.dataset.post; renderClosure(); return; }
+            const storeEl = e.target.closest('[data-store]');
+            if (storeEl) {
+                const id = storeEl.dataset.store;
+                const i = state.closure.storeIds.indexOf(id);
+                if (i >= 0) state.closure.storeIds.splice(i, 1);
+                else state.closure.storeIds.push(id);
+                renderClosure(); return;
+            }
+            const sa = e.target.closest('[data-store-action]');
+            if (sa) {
+                const act = sa.dataset.storeAction;
+                if (act === 'all') state.closure.storeIds = collectLevel(tree, '门店', []).map(function (s) { return s.id; });
+                else if (act === 'clear') state.closure.storeIds = [];
+                renderClosure(); return;
+            }
+            const yEl = e.target.closest('[data-y]');
+            if (yEl) { state.closure.yMetric = yEl.dataset.y; renderClosure(); return; }
+            const aEl = e.target.closest('[data-avg]');
+            if (aEl) { state.closure.avgLine = !state.closure.avgLine; renderClosure(); return; }
         });
         document.getElementById('applyBtn').addEventListener('click', function () {
             if (!$start.value || !$end.value || $start.value > $end.value) return;
@@ -2087,8 +2579,9 @@
         setInterval(updateTime, 1000);
         updateTime();
         window.addEventListener('resize', function () {
-            Object.values(extCharts).forEach(function (c) { c.resize(); });
-            Object.values(panelCharts).forEach(function (c) { c.resize(); });
+            // 跳过不可见容器里的图表（display:none 时 offsetParent 为 null）
+            Object.values(extCharts).forEach(function (c) { if (c && c.getDom && c.getDom() && c.getDom().offsetParent !== null) c.resize(); });
+            Object.values(panelCharts).forEach(function (c) { if (c && c.getDom && c.getDom() && c.getDom().offsetParent !== null) c.resize(); });
         });
 
         // 初始
