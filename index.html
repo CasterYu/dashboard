@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V3.8 · 汽车销售运营中心</title>
+    <title>业务数据看板 V4.0 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -127,6 +127,23 @@
         .org-select { min-width: 118px; max-width: 200px; }
         .org-select:disabled { opacity: .45; cursor: not-allowed; }
         .org-select option:disabled { color: #64748b; }
+        /* v4：显示已停用开关 + 停用节点弱化标识 */
+        .inactive-switch {
+            display: inline-flex; align-items: center; gap: 6px;
+            padding: 5px 10px; border-radius: 8px; font-size: 12px; cursor: pointer;
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(148,163,184,0.15);
+            color: #94a3b8; user-select: none; white-space: nowrap;
+            transition: all .15s;
+        }
+        .inactive-switch:hover { border-color: rgba(148,163,184,0.4); color: #e2e8f0; }
+        .inactive-switch input { width: 13px; height: 13px; margin: 0; cursor: pointer; accent-color: var(--primary); }
+        .inactive-switch.on { color: #fbbf24; border-color: rgba(245,158,11,0.45); background: rgba(245,158,11,0.12); }
+        .org-select option.inactive { color: #64748b; }
+        .crumb.inactive { background: rgba(148,163,184,0.08); color: #64748b; border-color: transparent; border-style: dashed; }
+        .pk-opt.inactive { color: #64748b; border-style: dashed; }
+        .pk-opt.inactive.on { color: #cbd5e1; }
+        .txt-inactive { color: #64748b; }
         .quick-btn {
             padding: 6px 12px; border-radius: 8px; font-size: 12px; cursor: pointer;
             background: rgba(15,23,42,0.6);
@@ -302,7 +319,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V3.8</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.0</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -361,6 +378,10 @@
                     <button id="orgReset" class="quick-btn">重置</button>
                 </div>
                 <div class="flex items-center gap-3 flex-wrap">
+                    <label id="showInactiveWrap" class="inactive-switch hidden" title="打开后组织范围下拉与榜单中显示已停用（离职人员 / 闭店门店）节点；停用只影响可见性，历史指标仍完整保留">
+                        <input type="checkbox" id="showInactive">
+                        <span>显示已停用</span>
+                    </label>
                     <span id="orgSummary" class="text-xs text-slate-400"></span>
                     <div class="seg" id="modeSeg">
                         <button data-mode="single" class="active">单选</button>
@@ -386,6 +407,7 @@
             <div class="org-path">
                 <span class="text-slate-500 whitespace-nowrap">当前范围</span>
                 <div id="orgPath" class="flex items-center gap-1 flex-wrap"></div>
+                <span id="inactiveHint" class="text-[11px] text-amber-400/90 hidden"></span>
             </div>
 
             <div id="pkOptionsWrap" class="hidden">
@@ -512,7 +534,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V3.8 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线
+            业务数据看板 V4.0 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留
         </footer>
     </div>
 
@@ -858,19 +880,43 @@
             })(node);
             return n;
         }
+        // v4：统计已停用节点数量（仅「显示已停用」打开时树里才可能有 status=0 的节点）
+        function countInactive(node) {
+            let n = 0;
+            (function walk(x) {
+                if (x.status === 0) n++;
+                x.children.forEach(walk);
+            })(node);
+            return n;
+        }
         // 层级可跳转规则：全国→大区→小区→门店→岗位→人员
         const NEXT_LEVEL = { '全国': '大区', '大区': '小区', '小区': '门店', '门店': '岗位', '岗位': '人员', '人员': null };
 
-        // ==================== PART2.5：数据源层（v3.8：mock / api 双模式）====================
+        // ==================== PART2.5：数据源层（v4.0：mock / api 双模式）====================
         // 用法：默认 mock 演示模式（无后端可独立运行）；URL 加 ?data=api&api=http://host:port 切换真实数据
+        // v4：API 模式支持「显示已停用」开关（showInactive），仅影响节点可见性
         const DATA_MODE = new URLSearchParams(location.search).get('data') === 'api' ? 'api' : 'mock';
         const API_BASE = (new URLSearchParams(location.search).get('api') || 'http://127.0.0.1:3777').replace(/\/+$/, '');
 
-        const personsSums = new Map();      // 人员区间合计缓存：'n<id>|<from>|<to>' → 已取整的指标对象
-        const personsScopeJobs = new Map(); // 范围级去重：'<scopeId>|<from>|<to>' → Promise
+        // v4：「显示已停用」开关（仅 API 模式有意义；mock 演示数据无停用节点，恒为 false）
+        // 只影响节点可见性（组织树下拉 / 人员榜单 / 节点合计），KPI 与趋势口径不受影响
+        let showInactive = false;
+        function inactiveParam() { return showInactive ? '&inclInactive=1' : ''; }
+        function inactiveSuffix() { return showInactive ? '|ina' : ''; }
+
+        const personsSums = new Map();      // 人员区间合计缓存：'n<id>|<from>|<to>[|ina]' → 已取整的指标对象
+        const personsScopeJobs = new Map(); // 范围级去重：'<scopeId>|<from>|<to>[|ina]' → Promise
         const seriesJobs = new Map();       // 节点级去重：nodeId → Promise（全区间序列只拉一次）
-        const nodeSums = new Map();         // 非人员节点区间合计缓存：'n<id>|<from>|<to>' → 指标对象
-        const nodeSumsJobs = new Map();     // 批量去重：'<ids>|<from>|<to>' → Promise
+        const nodeSums = new Map();         // 非人员节点区间合计缓存：'n<id>|<from>|<to>[|ina]' → 指标对象
+        const nodeSumsJobs = new Map();     // 批量去重：'<ids>|<from>|<to>[|ina]' → Promise
+
+        // 切换「显示已停用」时清空服务端数据缓存（停用可见性会改变 /api/persons、/api/nodesums 的返回内容）
+        function clearApiCaches() {
+            personsSums.clear(); personsScopeJobs.clear();
+            nodeSums.clear(); nodeSumsJobs.clear();
+            seriesJobs.clear();
+            clearMetricCache();
+        }
 
         function fetchJson(url) {
             return fetch(url).then(function (r) {
@@ -907,16 +953,16 @@
         // 拉取某节点子树的人员区间合计（积分榜 / 明细表 / PK / 闭环散点的人员指标来源）
         function ensurePersons(scopeNode, from, to) {
             if (!scopeNode) return Promise.resolve();
-            const key = scopeNode.id + '|' + from + '|' + to;
+            const key = scopeNode.id + '|' + from + '|' + to + inactiveSuffix();
             if (!personsScopeJobs.has(key)) {
-                const job = fetchJson(API_BASE + '/api/persons?node=' + apiNodeId(scopeNode) + '&from=' + from + '&to=' + to)
+                const job = fetchJson(API_BASE + '/api/persons?node=' + apiNodeId(scopeNode) + '&from=' + from + '&to=' + to + inactiveParam())
                     .then(function (d) {
                         if (!d.ok) throw new Error('人员接口返回失败');
                         d.persons.forEach(function (p) {
                             const m = {};
                             METRIC_KEYS.forEach(function (k) { m[k] = Math.round(p.sums[k] || 0); });
                             m.points = Math.round(p.sums.points || 0);
-                            personsSums.set('n' + p.personId + '|' + from + '|' + to, m);
+                            personsSums.set('n' + p.personId + '|' + from + '|' + to + inactiveSuffix(), m);
                         });
                     });
                 job.catch(function () { personsScopeJobs.delete(key); });
@@ -925,16 +971,16 @@
             return personsScopeJobs.get(key);
         }
         function lookupPersonSums(node, i0, i1) {
-            return personsSums.get(node.id + '|' + idxToDate(i0) + '|' + idxToDate(i1)) || null;
+            return personsSums.get(node.id + '|' + idxToDate(i0) + '|' + idxToDate(i1) + inactiveSuffix()) || null;
         }
 
         // 批量拉取非人员节点的区间合计（一次请求覆盖全部下级/榜单/明细节点，避免逐日序列请求风暴）
         function ensureNodeSums(list, from, to) {
-            const need = (list || []).filter(function (n) { return n && n.level !== '人员' && !nodeSums.has(n.id + '|' + from + '|' + to); });
+            const need = (list || []).filter(function (n) { return n && n.level !== '人员' && !nodeSums.has(n.id + '|' + from + '|' + to + inactiveSuffix()); });
             if (!need.length) return Promise.resolve();
-            const key = need.map(function (n) { return n.id; }).join(',') + '|' + from + '|' + to;
+            const key = need.map(function (n) { return n.id; }).join(',') + '|' + from + '|' + to + inactiveSuffix();
             if (!nodeSumsJobs.has(key)) {
-                const job = fetchJson(API_BASE + '/api/nodesums?nodes=' + need.map(apiNodeId).join(',') + '&from=' + from + '&to=' + to)
+                const job = fetchJson(API_BASE + '/api/nodesums?nodes=' + need.map(apiNodeId).join(',') + '&from=' + from + '&to=' + to + inactiveParam())
                     .then(function (d) {
                         if (!d.ok) throw new Error('节点合计接口返回失败');
                         need.forEach(function (n) {
@@ -943,7 +989,7 @@
                             const m = {};
                             METRIC_KEYS.forEach(function (k) { m[k] = Math.round(s[k] || 0); });
                             m.points = Math.round(s.points || 0);
-                            nodeSums.set(n.id + '|' + from + '|' + to, m);
+                            nodeSums.set(n.id + '|' + from + '|' + to + inactiveSuffix(), m);
                         });
                     });
                 job.catch(function () { nodeSumsJobs.delete(key); });
@@ -952,7 +998,7 @@
             return nodeSumsJobs.get(key);
         }
         function lookupNodeSums(node, i0, i1) {
-            return nodeSums.get(node.id + '|' + idxToDate(i0) + '|' + idxToDate(i1)) || null;
+            return nodeSums.get(node.id + '|' + idxToDate(i0) + '|' + idxToDate(i1) + inactiveSuffix()) || null;
         }
 
         // 加载提示（右上角小浮条）
@@ -974,9 +1020,14 @@
         }
 
         // API 组织树 → 前端节点结构（补齐 parent / storeName / postName / postStats 等渲染层依赖字段）
+        // v4：status=0 的节点（离职人员 / 闭店门店等）名称后缀「（已停用）」，仅「显示已停用」打开时才会出现在树里
         function apiTreeToNodes(t, parent) {
+            const inactive = t.status === 0;
             const n = {
-                id: 'n' + t.id, name: t.name, level: t.level, postKey: t.postKey || null,
+                id: 'n' + t.id, name: t.name + (inactive ? '（已停用）' : ''),
+                rawName: t.name, level: t.level, postKey: t.postKey || null,
+                status: t.status == null ? 1 : t.status,
+                deactivatedAt: t.deactivatedAt || null,
                 children: [], series: null, parent: parent,
                 storeName: '', postName: '', postStats: null
             };
@@ -1001,10 +1052,11 @@
             return n;
         }
 
-        // API 模式启动：组织树 + 岗位配置 + 日期范围 → 重建全局常量 → startApp()
-        function bootApi() {
-            apiLoading(true, '正在连接数据服务…');
-            return fetchJson(API_BASE + '/api/org').then(function (d) {
+        let apiOrgInfo = null;   // 服务端组织树附带信息：dataQuality / hiddenNodes / inactiveNodesShown
+
+        // 拉取组织树（含岗位配置）并重建前端树；bootApi 初始化与「显示已停用」开关共用，不重置日期范围
+        function loadOrgTree() {
+            return fetchJson(API_BASE + '/api/org' + (showInactive ? '?inclInactive=1' : '')).then(function (d) {
                 if (!d.ok || !d.tree) throw new Error('服务端组织树为空：请先导入名册或在服务端执行 npm run seed');
                 POSTS.length = 0;
                 Object.keys(POSTS_BY_KEY).forEach(function (k) { delete POSTS_BY_KEY[k]; });
@@ -1013,11 +1065,24 @@
                     POSTS.push(np);
                     POSTS_BY_KEY[p.key] = np;
                 });
+                tree = apiTreeToNodes(d.tree, null);
+                apiOrgInfo = {
+                    dataQuality: d.dataQuality || null,
+                    hiddenNodes: d.hiddenNodes || 0,
+                    inactiveNodesShown: d.inactiveNodesShown || 0
+                };
+                return d;
+            });
+        }
+
+        // API 模式启动：组织树 + 岗位配置 + 日期范围 → 重建全局常量 → startApp()
+        function bootApi() {
+            apiLoading(true, '正在连接数据服务…');
+            return loadOrgTree().then(function (d) {
                 START_DATE = parseDate(d.dateRange.from);
                 const endD = parseDate(d.dateRange.to);
                 DAYS = Math.round((endD - START_DATE) / ONE_DAY) + 1;
                 TODAY = endD;
-                tree = apiTreeToNodes(d.tree, null);
                 apiLoading(false);
                 startApp();
             }).catch(apiError);
@@ -1027,10 +1092,17 @@
 
         function startApp() {
             if (DATA_MODE === 'mock') tree = buildTree();
+            // v4：开关仅在 API 模式下出现；mock 演示模式界面与 v3.8 完全一致
+            const swWrap = document.getElementById('showInactiveWrap');
+            if (swWrap) swWrap.classList.toggle('hidden', DATA_MODE !== 'api');
 
         // ==================== PART3：状态、组织筛选器、单选视图 ====================
         const NODE_BY_ID = new Map();
-        (function indexNode(n) { NODE_BY_ID.set(n.id, n); n.children.forEach(indexNode); })(tree);
+        function reindexTree() {
+            NODE_BY_ID.clear();
+            (function indexNode(n) { NODE_BY_ID.set(n.id, n); n.children.forEach(indexNode); })(tree);
+        }
+        reindexTree();
         function nodeById(id) { return NODE_BY_ID.get(id) || tree; }
 
         const state = {
@@ -1091,7 +1163,9 @@
         function fillSelect(el, list, allLabel, current, placeholder) {
             let html = '<option value="__all__">' + (placeholder || allLabel) + '</option>';
             list.forEach(function (n) {
-                html += '<option value="' + n.id + '"' + (n.disabled ? ' disabled' : '') + '>' + n.name + '</option>';
+                // v4：已停用节点弱化显示（名称本身已带「（已停用）」后缀）
+                html += '<option value="' + n.id + '"' + (n.disabled ? ' disabled' : '') +
+                    (n.status === 0 ? ' class="inactive"' : '') + '>' + n.name + '</option>';
             });
             el.innerHTML = html;
             el.value = current || '__all__';
@@ -1129,7 +1203,7 @@
                 storeNode.children.forEach(function (p) { existKeys[p.postKey] = p; });
                 const posts = POSTS.map(function (p) {
                     const node = existKeys[p.key];
-                    if (node) return { id: node.id, name: p.name };
+                    if (node) return { id: node.id, name: p.name + (node.status === 0 ? '（已停用）' : ''), status: node.status };
                     return { id: '__none__' + p.key, name: p.name + '（本店暂无）', disabled: true };
                 });
                 fillSelect($selPost, posts, '全部岗位', state.sel.post);
@@ -1159,11 +1233,16 @@
             const path = nodePath(node);
             $orgPath.innerHTML = path.map(function (n, i) {
                 const last = i === path.length - 1;
-                return '<span class="crumb' + (last ? '' : ' muted') + '">' + n.name + '</span>' +
+                return '<span class="crumb' + (last ? '' : ' muted') + (n.status === 0 ? ' inactive' : '') + '">' + n.name + '</span>' +
                     (last ? '' : '<span class="text-slate-600">/</span>');
             }).join('');
-            const leafCount = node.level === '人员' ? 1 : countLeaves(node);
             const storeCount = Math.max(1, countStores(node));
+            // v4：区分在岗/已停用人数（「显示已停用」打开时树里含停用节点，摘要需据实描述）
+            const personsInScope = [];
+            if (node.level === '人员') personsInScope.push(node);
+            else collectLevel(node, '人员', personsInScope);
+            const inactivePersons = personsInScope.filter(function (p) { return p.status === 0; }).length;
+            const activePersons = personsInScope.length - inactivePersons;
             // 空岗提示
             const missing = [];
             collectLevel(node, '门店', []).forEach(function (s) {
@@ -1173,15 +1252,33 @@
             });
             let summary;
             if (node.level === '人员') {
-                summary = '所属门店 ' + node.storeName + ' · ' + node.postName + ' · 当前范围 1 人';
+                summary = '所属门店 ' + node.storeName + ' · ' + node.postName + ' · 当前范围 1 人' + (node.status === 0 ? '（已停用）' : '');
             } else if (node.level === '岗位') {
-                summary = node.storeName + ' · ' + node.name + ' · 在岗 ' + node.children.length + ' 人（' +
-                    (node.children.length > 1 ? '一岗多人' : '一岗一人') + '）';
+                const pActive = node.children.filter(function (p) { return p.status !== 0; }).length;
+                const pInactive = node.children.length - pActive;
+                summary = node.storeName + ' · ' + node.name + ' · 在岗 ' + pActive + ' 人（' +
+                    (node.children.length > 1 ? '一岗多人' : '一岗一人') + '）' +
+                    (pInactive ? ' · 另有 ' + pInactive + ' 人已停用' : '');
             } else {
-                summary = '覆盖 ' + storeCount + ' 家门店 / ' + leafCount + ' 名在岗人员';
-                if (missing.length) summary += ' · 其中 ' + missing.join(' / ') + ' 岗位在部分门店空缺';
+                summary = '覆盖 ' + storeCount + ' 家门店 / ' + activePersons + ' 名在岗人员';
+                if (inactivePersons) summary += '（另有 ' + inactivePersons + ' 人已停用）';
+                if (missing.length) {
+                    const missingNames = missing.map(function (pk) { return (POSTS_BY_KEY[pk] || {}).name || pk; });
+                    summary += ' · 其中 ' + missingNames.join(' / ') + ' 岗位在部分门店空缺';
+                }
             }
             $orgSummary.textContent = summary;
+            // v4：显示已停用时给出提示（停用只影响可见性，聚合口径不变，故榜单求和可能小于上级合计）
+            const hintEl = document.getElementById('inactiveHint');
+            if (hintEl) {
+                const shownInactive = showInactive ? countInactive(tree) : 0;
+                if (shownInactive > 0) {
+                    hintEl.textContent = '已显示 ' + shownInactive + ' 个已停用节点：其历史指标仍完整保留并计入上级合计，因此榜单求和可能小于上级合计';
+                    hintEl.classList.remove('hidden');
+                } else {
+                    hintEl.classList.add('hidden');
+                }
+            }
         }
 
         // ---------- PK 候选 ----------
@@ -1199,7 +1296,7 @@
             $pkOptions.innerHTML = list.map(function (n) {
                 const on = state.pkIds.indexOf(n.id) >= 0;
                 const nm = state.pkLevel === '岗位' || state.pkLevel === '人员' ? (n.storeName ? n.storeName + ' · ' + n.name : n.name) : n.name;
-                return '<button class="pk-opt' + (on ? ' on' : '') + '" data-id="' + n.id + '">' + nm + '</button>';
+                return '<button class="pk-opt' + (on ? ' on' : '') + (n.status === 0 ? ' inactive' : '') + '" data-id="' + n.id + '">' + nm + '</button>';
             }).join('');
             // 空缺岗位置灰展示（体现「本店暂无」而非 0）— 按 10 岗位中设置了 blankStores 的岗位动态展示
             if (state.pkLevel === '岗位') {
@@ -1836,7 +1933,7 @@
                 const share = (mv / total) * 100;
                 return '<button data-i="' + i + '" class="w-full text-left px-2 py-2 rounded-lg hover:bg-white/5 transition">' +
                     '<div class="flex items-center justify-between text-xs gap-2">' +
-                    '<span class="text-slate-300 truncate">' + c.name + '<span class="text-slate-600 ml-1">' + c.level + '</span></span>' +
+                    '<span class="text-slate-300 truncate"' + (c.status === 0 ? ' style="color:#64748b"' : '') + '>' + c.name + '<span class="text-slate-600 ml-1">' + c.level + '</span></span>' +
                     '<span class="text-slate-100 font-medium">' + fmt(mv) + '</span></div>' +
                     '<div class="mt-1 h-1 rounded bg-white/5 overflow-hidden">' +
                     '<div style="width:' + share.toFixed(1) + '%;background:' + color + ';height:100%"></div></div></button>';
@@ -2124,7 +2221,8 @@
                     }
                     return '<tr class="border-t border-white/5 hover:bg-white/5 transition">' +
                         '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' +
-                        '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + pkColorOf(row.n) + ';margin-right:6px"></span>' + row.n.name + '</td>' +
+                        '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + pkColorOf(row.n) + ';margin-right:6px"></span>' +
+                        '<span' + (row.n.status === 0 ? ' class="txt-inactive"' : '') + '>' + row.n.name + '</span></td>' +
                         '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.leads) + '</td>' +
                         '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.arrivals) + '</td>' +
                         '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.locked) + '</td>' +
@@ -2152,8 +2250,9 @@
                 const l2a = m.leads ? (m.arrivals / m.leads) * 100 : 0;
                 const conv = m.leads ? (m.delivered / m.leads) * 100 : 0;
                 const nm = level === '人员' && n.storeName ? n.storeName + ' · ' + n.name + '（' + (n.postName || '') + '）' : n.name;
+                const nmHTML = '<span' + (n.status === 0 ? ' class="txt-inactive"' : '') + '>' + nm + '</span>';
                 return '<tr class="border-t border-white/5 hover:bg-white/5 transition">' +
-                    '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' + nm + '</td>' +
+                    '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' + nmHTML + '</td>' +
                     '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.leads) + '</td>' +
                     '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.arrivals) + '</td>' +
                     '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.locked) + '</td>' +
@@ -2675,6 +2774,42 @@
             state.drillIds = [];
             renderAll();
         });
+        // v4：「显示已停用」开关（仅 API 模式）—— 重新拉取组织树后刷新下拉/榜单，保持已选日期区间
+        const $showInactiveWrap = document.getElementById('showInactiveWrap');
+        const $showInactive = document.getElementById('showInactive');
+        // 树结构变化后清理指向已隐藏节点的选中项，避免选中项静默失效
+        function sanitizeSelection() {
+            Object.keys(state.sel).forEach(function (k) {
+                const id = state.sel[k];
+                if (id !== '__all__' && !NODE_BY_ID.has(id)) state.sel[k] = '__all__';
+            });
+            state.pkIds = state.pkIds.filter(function (id) { return NODE_BY_ID.has(id); });
+            if (state.pkBase && !NODE_BY_ID.has(state.pkBase)) state.pkBase = state.pkIds[0] || null;
+            state.drillIds = state.drillIds.filter(function (id) { return NODE_BY_ID.has(id); });
+            const sn = state.sel.store !== '__all__' ? NODE_BY_ID.get(state.sel.store) : null;
+            const pn = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
+            if (pn && (!sn || pn.parent !== sn)) state.sel.post = '__all__';
+            const pn2 = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
+            if (pn2 && state.sel.person !== '__all__') {
+                const pr = NODE_BY_ID.get(state.sel.person);
+                if (!pr || pr.parent !== pn2) state.sel.person = '__all__';
+            }
+        }
+        if ($showInactive) {
+            $showInactive.addEventListener('change', function () {
+                showInactive = !!$showInactive.checked;
+                if ($showInactiveWrap) $showInactiveWrap.classList.toggle('on', showInactive);
+                if (DATA_MODE !== 'api') { renderAll(); return; }   // mock 演示模式无停用节点
+                apiLoading(true, showInactive ? '正在加载已停用节点…' : '正在隐藏已停用节点…');
+                clearApiCaches();
+                loadOrgTree().then(function () {
+                    reindexTree();
+                    sanitizeSelection();
+                    apiLoading(false);
+                    renderAll();
+                }).catch(apiError);
+            });
+        }
         // 单选视图：板块展开 / 收起、指标勾选（至少保留 1 项）
         document.getElementById('singleView').addEventListener('click', function (e) {
             const eb = e.target.closest('[data-expand]');

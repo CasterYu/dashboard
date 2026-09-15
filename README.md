@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v3.8-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v4.0-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,8 +20,9 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v3.8 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **真实数据接入**：新增 Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；URL 加 `?data=api` 切换真实数据，默认仍为演示模式 |
-| **🟡 v3.7 · 历史版** | 👉 同上链接（与 v3.8 同批发布，页面即 v3.8） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
+| **🟢 v4.0 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
+| **🟡 v3.8 · 历史版** | 👉 同上链接（与 v4.0 同批发布，页面即 v4.0） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
+| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.0） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
 | **🟡 v1 · 历史归档** | **👉 [https://casteryu.github.io/dashboard/legacy/v1/](https://casteryu.github.io/dashboard/legacy/v1/)** | 📦 归档 | 白板草图完整模块版：漏斗/积分/下钻/排行榜/雷达 |
 
 > 💡 直接 Ctrl + 点击可在新标签页打开，与当前页同时浏览。
@@ -30,7 +31,7 @@
 
 | 版本 | 文件路径 |
 |:---:|:---|
-| **v3.8 最新版** | `D:\projects\dashboard\index.html` |
+| **v4.0 最新版** | `D:\projects\dashboard\index.html` |
 | **v1 历史版** | `D:\projects\dashboard\legacy\v1\index.html` |
 
 ---
@@ -39,7 +40,8 @@
 
 汽车销售运营场景下的数据看板，单文件 HTML 部署，零构建、零依赖。
 
-- **v3.8（当前）**：真实数据接入。前端双模式：默认演示模式（内嵌模拟数据，零部署可用），URL 加 `?data=api&api=http://后端地址:3777` 切换真实数据；后端 Node.js + Express + SQLite（`server/` 目录），提供组织树/指标聚合/人员汇总 API 与 Excel/CSV 导入接口，数据按需懒加载 + 本地缓存。
+- **v4.0（当前）**：**组织生命周期 + 工号识别**。① 节点停用/恢复（软删除）：人员离职、门店闭店走同一机制，历史指标完整保留、重新出现在名册即自动恢复；② 人员以**工号**为唯一身份（明文存储，不采集身份证），改名不新增人员、调岗不重复计数；③ 任职区间时间切片：历史报表按**当时**门店/岗位归属统计；④ 名册导入支持增量合并（`mode=merge`）与全量快照（`mode=snapshot`），支持预检（`dryRun=1`）与大批量停用拦截（409 + `force=1`）；⑤ 筛选区新增「显示已停用」开关（默认关闭，仅 API 模式可见）。
+- **v3.8（历史）**：真实数据接入。前端双模式：默认演示模式（内嵌模拟数据，零部署可用），URL 加 `?data=api&api=http://后端地址:3777` 切换真实数据；后端 Node.js + Express + SQLite（`server/` 目录），提供组织树/指标聚合/人员汇总 API 与 Excel/CSV 导入接口，数据按需懒加载 + 本地缓存。
 - **v3.7（历史）**：双看板结构。顶栏胶囊切换「**经营总览** / **业务执行与闭环**」。岗位体系扩展至 10，新增试驾点评率 / 线索试驾率；闭环看板人员散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率三选一，按门店分色 + 均值参考线），6 张 KPI 摘要 + 人员明细表。
 - **v3.6（历史）**：底部「经营结果趋势分析」改为指标多选折线图，绝对量指标峰值相差 ≥10 倍时自动归一化。
 - **v3.5（历史）**：趋势分析支持指标多选，最多 4 项；绝对量与转化率分列左右双 Y 轴。
@@ -88,11 +90,11 @@
 ```
 dashboard/
 ├── README.md               ← 本文件
-├── index.html              ← v3.8 当前最新版（前端，双模式：演示/真实数据）
+├── index.html              ← v4.0 当前最新版（前端，双模式：演示/真实数据）
 ├── .gitignore
 ├── .gitattributes
 ├── push-to-github.ps1
-├── server/                 ← v3.8 后端（Node.js + Express + SQLite，详见下方章节）
+├── server/                 ← v4.0 后端（Node.js + Express + SQLite，详见下方章节）
 └── legacy/
     └── v1/
         ├── README.md
@@ -101,7 +103,7 @@ dashboard/
 
 ---
 
-## 🔌 v3.8 后端服务（真实数据接入）
+## 🔌 v4.0 后端服务（真实数据接入 + 组织生命周期）
 
 ### 启动
 
@@ -116,22 +118,44 @@ npm start            # http://127.0.0.1:3777
 
 | 接口 | 说明 |
 |:---|:---|
-| `GET /api/org` | 六级组织树 + 岗位配置（含积分权重）+ 数据日期范围 |
-| `GET /api/metrics?node=&from=&to=` | 节点（含子树）区间逐日 11 指标 + 积分序列（积分按岗位权重现算）；`node=all` 表示全部人员 |
-| `GET /api/persons?node=&from=&to=` | 节点子树人员区间汇总（散点图/积分榜/明细表数据源）；`node=all` 表示全部人员 |
-| `GET /api/nodesums?nodes=&from=&to=` | 多节点区间合计批量查询（下钻/榜单预载） |
-| `POST /api/import/org` | 名册导入（大区/小区/门店/岗位/人员，表头 X-Import-Token） |
-| `POST /api/import/metrics` | 指标导入（同人同日 upsert 覆盖，逐行校验返回失败明细） |
-| `GET /api/import/template?type=` | 下载名册 / 指标 CSV 列模板 |
+| `GET /api/org?inclInactive=` | 六级组织树 + 岗位配置（含积分权重）+ 数据日期范围；默认剪掉已停用子树，`inclInactive=1` 返回并带 `status/deactivatedAt`，附 `dataQuality` 与 `hiddenNodes` 计数 |
+| `GET /api/metrics?node=&from=&to=` | 节点（含子树）区间逐日 11 指标 + 积分序列（积分按岗位权重现算）；`node=all` 表示全部人员；**不受停用影响**（历史数据完整保留） |
+| `GET /api/persons?node=&from=&to=&inclInactive=` | 节点子树人员区间汇总（散点图/积分榜/明细表数据源）；跨店人员按人合并为一行并附 `assignments` 任职明细；默认排除已停用人员 |
+| `GET /api/nodesums?nodes=&from=&to=&inclInactive=` | 多节点区间合计批量查询（下钻/榜单预载） |
+| `POST /api/import/org?mode=&dryRun=&force=` | 名册导入（大区/小区/门店/岗位/人员/**工号**/**生效日期**，请求头 X-Import-Token） |
+| `POST /api/import/metrics` | 指标导入（可选「工号」列优先定位人员；同人同日 upsert 覆盖，逐行校验返回失败明细） |
+| `GET /api/import/template?type=` | 下载名册（7 列）/ 指标 CSV 列模板 |
+| `GET /api/import/logs?limit=` | 导入历史（文件、模式、成功/失败行数、停用/恢复摘要） |
+| `GET /api/admin/data-quality?limit=` | 工号质量：在职缺工号清单、重复工号检测、停用节点统计 |
 
 前端切换：`index.html?data=api&api=http://127.0.0.1:3777`（默认不加参数 = 演示模式）。导入接口需请求头 `X-Import-Token`（环境变量 `IMPORT_TOKEN` 设置，默认 `change-me-import-token`）。
 
 ### 数据导入流程
 
-1. `GET /api/import/template?type=org` 下载名册模板 → 填写大区/小区/门店/岗位/人员 → `POST /api/import/org` 导入（**指标导入前必须先有人员名册**）
-   - 空库开箱可用：10 个岗位配置（含积分权重）建库时已内置，"全国" 根节点在首次导入名册时自动创建
-2. `GET /api/import/template?type=metrics` 下载指标模板 → 按日填写 11 项指标 → `POST /api/import/metrics` 导入
+1. `GET /api/import/template?type=org` 下载名册模板 → 填写 大区/小区/门店/岗位/人员 +（可选）**工号**、**生效日期** → `POST /api/import/org` 导入（**指标导入前必须先有人员名册**）
+   - 空库开箱可用：10 个岗位配置（含积分权重）建库时已内置，"全国" 根节点在首次导入名册时自动创建；旧 5 列名册仍兼容（缺工号的行降级为「岗位/门店 + 姓名」匹配并单独告警）
+   - **工号是人员唯一身份**：工号命中 → 改名则改名、换门店/岗位则按「生效日期」切分任职区间（历史报表仍归当时门店）；工号未命中但存在无工号同名人员 → **认领**（补工号，不新建重复人员）；工号属另一姓名 → 视为改名
+2. `GET /api/import/template?type=metrics` 下载指标模板 → 按日填写 11 项指标（可加「工号」列）→ `POST /api/import/metrics` 导入
 3. 两个接口均返回 `{ ok, rowsOk, rowsFailed:[{row, reason}] }`；未知门店/人员、非数字、日期格式错误逐行拒绝并给出原因，合法行正常入库（同人同日覆盖更新，可重复上传）
+
+### 导入模式与预检
+
+| 参数 | 取值 | 说明 |
+|:---|:---|:---|
+| `mode` | `merge`（默认）/ `snapshot` | `merge` 只新增与调岗，不做离职判定；`snapshot` 以文件中出现的**大区**为范围，名单内没有的 门店/岗位/人员 自动停用、重新出现的自动恢复，未涉及的大区完全不动 |
+| `dryRun` | `1` | 只返回差异报告（将新增 / 将调岗 / 将停用 / 将恢复 / 已认领 / 失败明细），**不写库、不记日志** |
+| `force` | `1` | 跳过安全阀；快照将停用「人员+门店」数量 > 5 且占比 > 20% 时返回 **409 + 待停用清单**，确认后加 `force=1` 重发 |
+
+```bash
+# 全量快照前先预检（不写库）
+curl.exe -H "X-Import-Token: change-me-import-token" `
+  -F "file=@名册.xlsx" "http://127.0.0.1:3777/api/import/org?mode=snapshot&dryRun=1"
+# 确认后正式执行（大批量停用需再带 force=1）
+curl.exe -H "X-Import-Token: change-me-import-token" `
+  -F "file=@名册.xlsx" "http://127.0.0.1:3777/api/import/org?mode=snapshot"
+```
+
+> 停用只影响「可见性」，不改变聚合口径：离职人员/闭店门店的历史指标仍完整保留并计入上级合计，因此打开「显示已停用」后榜单求和可能小于上级合计，页面会给出提示语。
 
 ```bash
 # 示例（Windows PowerShell）
@@ -149,6 +173,7 @@ curl.exe -H "X-Import-Token: change-me-import-token" `
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
+| **v4.0** | 2026-09-15 | **组织生命周期 + 工号识别**：节点停用/恢复（离职、闭店软删除，历史数据保留，重现即恢复）；工号唯一识别（前导零保真、认领去重、改名不新增、同名不同人靠工号区分）；任职区间时间切片（`person_assignments` + `node_paths` 分片，调岗后历史报表按当时门店/岗位归属）；名册导入 merge/snapshot、dryRun 预检、大批量停用 409 安全阀 + force；指标导入支持按工号定位；新增 `GET /api/import/logs`、`GET /api/admin/data-quality`；前端新增「显示已停用」开关与停用标识（mock 模式零改动） |
 | **v3.8** | 2026-09-15 | **真实数据接入**：Node.js + Express + SQLite 后端；组织树/指标聚合/人员汇总 API；Excel/CSV 名册与指标导入（upsert + 逐行校验报告）；前端 mock/API 双模式（`?data=api`），按需懒加载 + 本地缓存 |
 | **v3.7** | 2026-09-15 | **双看板结构**：顶栏胶囊切换「经营总览 / 业务执行与闭环」；岗位体系由 3 扩展至 10；差异化积分权重与岗位空缺机制；新增试驾点评数与**试驾点评率 / 线索试驾率**；闭环看板按门店分色人员散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率）+ 琥珀色均值参考线 + 6 张 KPI 摘要 + 人员明细表 |
 | **v3.6** | 2026-09-15 | 趋势分析自动归一化对比（峰值差 ≥10 倍） |
@@ -203,6 +228,6 @@ git push origin --tags
 
 ✨ **推荐使用 GitHub Pages 在线版访问，无需启动本地服务** ✨
 
-[👉 v3.8 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v3.8 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v3.8/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
+[👉 v4.0 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.0 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.0/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
 
 </div>

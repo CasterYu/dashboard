@@ -1,10 +1,17 @@
 'use strict';
-/** v3.8 后端入口：路由挂载、CORS 白名单、导入 Token 校验、频率限制、错误处理 */
+/**
+ * v4.0 后端入口：路由挂载、CORS 白名单、导入 Token 校验、频率限制、错误处理
+ * v4 变更：组织节点生命周期（停用/恢复）、工号唯一识别、任职区间时间切片聚合
+ */
 const express = require('express');
-const { openDb } = require('./db');
+const { openDb, DB_PATH } = require('./db');
+const { dataQualityCounts } = require('./services/dataQuality');
 const orgRoute = require('./routes/org');
 const metricsRoute = require('./routes/metrics');
 const importRoute = require('./routes/import');
+const adminRoute = require('./routes/admin');
+
+const VERSION = '4.0.0';
 
 const app = express();
 const db = openDb();
@@ -37,10 +44,11 @@ app.use((req, res, next) => {
 });
 
 // ---------- 路由 ----------
-app.get('/api/health', (req, res) => res.json({ ok: true, version: '3.8.0', now: new Date().toISOString() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, version: VERSION, now: new Date().toISOString() }));
 app.use('/api', orgRoute(db));
 app.use('/api', metricsRoute(db));
 app.use('/api/import', importRoute(db));
+app.use('/api', adminRoute(db));
 
 // 404 + 统一错误处理
 app.use((req, res) => res.status(404).json({ ok: false, error: '接口不存在: ' + req.path }));
@@ -51,5 +59,14 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 
 const PORT = process.env.PORT || 3777;
 app.listen(PORT, () => {
-  console.log(`[dashboard-server] v3.8 已启动: http://127.0.0.1:${PORT}  (数据库: ${require('./db').DB_PATH})`);
+  console.log(`[dashboard-server] v${VERSION} 已启动: http://127.0.0.1:${PORT}  (数据库: ${DB_PATH})`);
+  try {
+    const q = dataQualityCounts(db);
+    console.log(`[dashboard-server] 在职人员 ${q.personsActive} 人（已停用 ${q.personsInactive}），门店 ${q.storesActive} 家；`
+      + (q.activeMissingEmpNo
+        ? `其中 ${q.activeMissingEmpNo} 人缺工号——建议导入带「工号」列的全量名册补齐（详见 GET /api/admin/data-quality）`
+        : '工号已全覆盖'));
+  } catch (e) {
+    console.warn('[dashboard-server] 数据质量统计失败：', e.message);
+  }
 });

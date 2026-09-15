@@ -1,6 +1,7 @@
-# v3.8 后端部署指南
+# v4.0 后端部署指南
 
 > 适用：约 1000 名内部用户、读多写少的看板场景。数据库为 SQLite 单文件，无需安装数据库服务。
+> v4.0 相对 v3.8 的运维变化：名册导入支持 `mode=snapshot` 全量快照与 `dryRun` 预检；人员以**工号**识别（名册建议填工号）；离职/闭店通过快照或停用接口处理，**不做物理删除**。升级前请先备份数据库（见第四节）。
 
 ## 一、推荐形态：轻量云服务器（2C4G）
 
@@ -70,6 +71,26 @@ EOF
 
 若服务器未装 sqlite3 CLI：`sudo apt install -y sqlite3`。恢复时停服 → 覆盖 `data/dashboard.db` → 启动即可。
 
+### 升级前备份与回滚（v3.8 → v4.0 必做）
+
+服务启动时会自动执行幂等迁移（`org_nodes` 加 `status/deactivated_at/emp_no`、`node_paths` 重建为任职区间分片、新建 `person_assignments`；旧数据回填为「开放区间 + 在职 + 无工号」，因此**升级后数值与 v3.8 逐值一致**）。迁移前务必留一份可回退的备份：
+
+```bash
+pm2 stop dashboard-api
+sqlite3 /opt/dashboard/server/data/dashboard.db ".backup '/var/backups/dashboard/pre-v4-$(date +%F-%H%M).db'"
+pm2 start dashboard-api        # 启动即自动迁移
+```
+
+回滚：`pm2 stop dashboard-api` → 用备份文件覆盖 `data/dashboard.db`（同时删除 `dashboard.db-wal` / `dashboard.db-shm`）→ 回退到 v3.8 代码 → `pm2 start dashboard-api`。
+
+升级后自检：
+
+```bash
+curl -s localhost:3777/api/health                                  # 应返回 4.0.0
+curl -s localhost:3777/api/admin/data-quality | head -c 400        # 工号覆盖率/重复工号/停用统计
+curl -s 'localhost:3777/api/org' | head -c 300                     # 组织树（默认已剪掉停用节点）
+```
+
 ## 五、内网/容器备选
 
 **纯内网（不暴露公网）**：一台内网服务器跑 Node 服务，前端 `index.html` 也放同机 Nginx，全员访问 `http://内网IP/`。此时 CORS 白名单加内网来源，HTTPS 可省（若需 HTTPS 可用自签证书并让浏览器信任企业根证书）。
@@ -97,14 +118,28 @@ docker run -d --name dashboard-api -p 3777:3777 \
 
 ## 六、日常运维
 
-1. **首次上线**：启动服务 → `GET /api/import/template?type=org` 下载名册模板 → 填好导入 `POST /api/import/org` → 再导指标。
+1. **首次上线**：启动服务 → `GET /api/import/template?type=org` 下载名册模板（7 列，含工号/生效日期）→ 填好导入 `POST /api/import/org` → 再导指标。
 2. **月度报表**：业务侧按模板填 CSV/Excel → 导入指标（同人同日覆盖，可重复上传）→ 查看返回的失败明细并修正。
-3. **积分权重调整**：改 `posts` 表的 `pw_*` 列（或后续管理端），历史积分自动按新权重重算，无需回填。
-4. **升级**：`git pull && npm install --omit=dev && pm2 restart dashboard-api`。
-5. **监控**：`pm2 logs dashboard-api`；`import_logs` 表留全量导入历史（文件名/行数/失败明细 JSON）。
+3. **入职 / 调岗 / 离职**：
+   - 只补新增与调岗 → `POST /api/import/org`（默认 `mode=merge`）；调岗建议填「生效日期」，历史报表仍按当时门店/岗位归属。
+   - 全公司月度全量对账 → 先 `?...&dryRun=1` 看差异清单，确认后 `?mode=snapshot`；若返回 409（大批量停用），核对清单后加 `force=1`。
+   - 离职人员/闭店门店会自动停用（不删数据），重新出现在名册里即自动恢复。
+4. **工号治理**：`GET /api/admin/data-quality` 查在职缺工号清单与重复工号；补齐后重导同一份名册即可自动「认领」（不会产生重复人员）。
+5. **积分权重调整**：改 `posts` 表的 `pw_*` 列（或后续管理端），历史积分自动按新权重重算，无需回填。
+6. **升级**：`git pull && npm install --omit=dev && pm2 restart dashboard-api`（跨大版本先按第四节备份）。
+7. **监控**：`pm2 logs dashboard-api`；`import_logs` 表留全量导入历史（文件名/模式/行数/停用摘要/失败明细 JSON）；`GET /api/import/logs?limit=20` 可直接查看。
+8. **物化路径修复**：如怀疑「任职区间 → 节点路径」不一致（例如手改过库），可全量重建（**幂等，不改变任何聚合数值**，仅重建 `node_paths` 与 `node.store_id`）：
+
+   ```bash
+   cd /opt/dashboard/server
+   DATA_DIR=./data node -e "const d=require('./db');console.log(d.rebuildAllPaths(d.openDb()))"
+   # 输出形如 { persons: 8, paths: 54 }
+   ```
+
+   注意：`node scripts/seed.js --reset` 会清空全部数据，**生产环境禁用**。
 
 ## 七、后续版本
 
-- v3.9：登录鉴权与门店/角色数据隔离，导入权限下沉到门店账号
-- v4.0：手机端响应式与 PWA
+- v4.1：登录鉴权与门店/角色数据隔离，导入权限下沉到门店账号
+- v4.2：手机端响应式与 PWA；新增管理端停用/恢复操作界面（当前停用与恢复只能通过名册导入 `mode=snapshot` 触发，或由维护者直接改库，尚无单节点停用接口）
 - 数据量或并发增长时：`db.js` 换 PostgreSQL 驱动（表结构不变），前端无需改动

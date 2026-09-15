@@ -99,8 +99,9 @@ function main() {
     process.exit(0);
   }
   if (reset) {
-    db.exec('DELETE FROM daily_metrics; DELETE FROM node_paths; DELETE FROM org_nodes; DELETE FROM posts;');
-    console.log('已清空 org_nodes / posts / daily_metrics / node_paths');
+    db.exec(`DELETE FROM daily_metrics; DELETE FROM node_paths; DELETE FROM person_assignments;
+             DELETE FROM org_nodes; DELETE FROM posts;`);
+    console.log('已清空 org_nodes / posts / daily_metrics / node_paths / person_assignments');
   }
 
   const today = new Date(); today.setHours(0, 0, 0, 0);

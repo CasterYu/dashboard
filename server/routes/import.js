@@ -1,8 +1,13 @@
 'use strict';
-/** POST /api/import/org、POST /api/import/metrics（需 X-Import-Token）、GET /api/import/template */
+/**
+ * POST /api/import/org     名册导入（?mode=merge|snapshot & dryRun=1 & force=1，需 X-Import-Token）
+ * POST /api/import/metrics 指标导入（需 X-Import-Token）
+ * GET  /api/import/template?type=org|metrics   下载模板（七列名册 / 带工号指标）
+ * GET  /api/import/logs?limit=                 导入历史（含模式与停用清单摘要）
+ */
 const express = require('express');
 const multer = require('multer');
-const { importOrg, importMetrics, ORG_HEADERS, METRICS_HEADERS } = require('../services/importService');
+const { importOrg, importMetrics, ORG_HEADERS, METRICS_HEADERS, ImportConflict } = require('../services/importService');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -22,8 +27,37 @@ function importGuard(req, res, next) {
   next();
 }
 
-const ORG_TEMPLATE = ORG_HEADERS.join(',') + '\n华东大区,上海一区,上海浦东旗舰店,销售专员,张伟\n';
-const METRICS_TEMPLATE = METRICS_HEADERS.join(',') + '\n2026-09-01,上海浦东旗舰店,张伟,销售专员,58,36,20,16,12,10,7,6,5,3,2\n';
+function truthy(v) {
+  const s = String(v == null ? '' : v).toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes';
+}
+
+const ORG_TEMPLATE = ORG_HEADERS.join(',')
+  + '\n华东大区,上海一区,上海浦东旗舰店,销售专员,张伟,EMP1001,\n'
+  + '华东大区,上海一区,上海浦东旗舰店,产品专家,李娜,EMP1002,\n';
+const METRICS_TEMPLATE = METRICS_HEADERS.join(',')
+  + '\n2026-09-01,上海浦东旗舰店,张伟,销售专员,EMP1001,58,36,20,16,12,10,7,6,5,3,2\n';
+
+/** 报告落库摘要：避免 report_json 过大，只保留计数与已裁剪的清单 */
+function logSummary(type, filename, result, extra) {
+  const report = Object.assign({}, result, extra || {});
+  return {
+    sql: 'INSERT INTO import_logs (type, filename, rows_ok, rows_failed, report_json) VALUES (?, ?, ?, ?, ?)',
+    params: [
+      type, filename, result.rowsOk,
+      result.rowsFailedCount != null ? result.rowsFailedCount : (result.rowsFailed || []).length,
+      JSON.stringify({
+        mode: report.mode || null, dryRun: !!report.dryRun,
+        counts: result.counts || null,
+        rowsFailed: (result.rowsFailed || []).slice(0, 200),
+        deactivated: (result.deactivated || []).slice(0, 200),
+        deactivatePlanned: (result.deactivatePlanned || []).slice(0, 200),
+        warnings: (result.warnings || []).slice(0, 50),
+        storeMismatch: result.storeMismatch || 0
+      })
+    ]
+  };
+}
 
 module.exports = function importRoute(db) {
   const router = express.Router();
@@ -36,28 +70,75 @@ module.exports = function importRoute(db) {
     res.send(csv);
   });
 
+  // 导入历史（不返回完整报告，只给摘要）
+  router.get('/logs', (req, res) => {
+    const limit = Math.max(1, Math.min(Number(req.query.limit) || 20, 200));
+    const rows = db.prepare(
+      'SELECT id, type, filename, uploaded_at, rows_ok, rows_failed, report_json FROM import_logs ORDER BY id DESC LIMIT ?'
+    ).all(limit);
+    const logs = rows.map(r => {
+      let rep = null;
+      try { rep = r.report_json ? JSON.parse(r.report_json) : null; } catch (e) { rep = null; }
+      return {
+        id: r.id, type: r.type, filename: r.filename, uploadedAt: r.uploaded_at,
+        rowsOk: r.rows_ok, rowsFailed: r.rows_failed,
+        mode: rep && rep.mode, dryRun: !!(rep && rep.dryRun),
+        counts: (rep && rep.counts) || null,
+        deactivated: rep && rep.deactivated ? rep.deactivated.length : 0,
+        storeMismatch: (rep && rep.storeMismatch) || 0,
+        failures: (rep && rep.rowsFailed) || []
+      };
+    });
+    res.json({ ok: true, logs });
+  });
+
   router.post('/org', importGuard, upload.single('file'), (req, res) => {
-    handle('org', req, res, buf => importOrg(db, buf, req.file.originalname));
+    if (!req.file) return res.status(400).json({ ok: false, error: '缺少上传文件（表单字段名 file）' });
+    const opts = {
+      mode: req.query.mode === 'snapshot' ? 'snapshot' : 'merge',
+      dryRun: truthy(req.query.dryRun),
+      force: truthy(req.query.force)
+    };
+    let result;
+    try {
+      result = importOrg(db, req.file.buffer, req.file.originalname, opts);
+    } catch (e) {
+      if (e instanceof ImportConflict) {                     // 安全阀拦截：不写库，返回待停用清单
+        return res.status(e.statusCode).json({ ok: false, error: e.message, report: e.report });
+      }
+      return res.status(400).json({ ok: false, error: '文件解析失败：' + e.message });
+    }
+    // dryRun 只出报告不记账（事务已回滚，写了会误导）
+    if (!result.dryRun) {
+      const log = logSummary('org', req.file.originalname, result);
+      db.prepare(log.sql).run(...log.params);
+    }
+    res.json({
+      ok: true, type: 'org', filename: req.file.originalname,
+      mode: result.mode, dryRun: result.dryRun,
+      rowsOk: result.rowsOk, rowsFailedCount: result.counts.failed,
+      rowsFailed: result.rowsFailed.slice(0, 100),
+      report: result
+    });
   });
 
   router.post('/metrics', importGuard, upload.single('file'), (req, res) => {
-    handle('metrics', req, res, buf => importMetrics(db, buf, req.file.originalname));
-  });
-
-  function handle(type, req, res, run) {
     if (!req.file) return res.status(400).json({ ok: false, error: '缺少上传文件（表单字段名 file）' });
     let result;
-    try { result = run(req.file.buffer); }
-    catch (e) { return res.status(400).json({ ok: false, error: '文件解析失败：' + e.message }); }
-    db.prepare('INSERT INTO import_logs (type, filename, rows_ok, rows_failed, report_json) VALUES (?, ?, ?, ?, ?)')
-      .run(type, req.file.originalname, result.rowsOk, result.rowsFailed.length,
-           JSON.stringify(result.rowsFailed.slice(0, 500)));
+    try {
+      result = importMetrics(db, req.file.buffer, req.file.originalname);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: '文件解析失败：' + e.message });
+    }
+    const log = logSummary('metrics', req.file.originalname, result);
+    db.prepare(log.sql).run(...log.params);
     res.json({
-      ok: true, type, filename: req.file.originalname,
+      ok: true, type: 'metrics', filename: req.file.originalname,
       rowsOk: result.rowsOk, rowsFailedCount: result.rowsFailed.length,
-      rowsFailed: result.rowsFailed.slice(0, 100)
+      rowsFailed: result.rowsFailed.slice(0, 100),
+      storeMismatch: result.storeMismatch
     });
-  }
+  });
 
   return router;
 };

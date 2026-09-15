@@ -1,8 +1,8 @@
 {
   "name": "dashboard-server",
-  "version": "3.8.0",
+  "version": "4.0.0",
   "private": true,
-  "description": "汽车销售运营数据看板 v3.8 后端：数据 API + Excel/CSV 导入",
+  "description": "汽车销售运营数据看板 v4.0 后端：数据 API + Excel/CSV 导入 + 组织节点生命周期与工号识别",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

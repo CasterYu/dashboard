@@ -1,9 +1,18 @@
 'use strict';
-/** GET /api/metrics（节点区间日序列）与 GET /api/persons（节点区间人员汇总） */
+/**
+ * GET /api/metrics（节点区间日序列）、/api/persons（节点区间人员汇总）、/api/nodesums（批量节点合计）
+ * v4：/api/persons 与 /api/nodesums 支持 inclInactive=1 包含已停用节点（默认排除）；
+ *     /api/metrics 为 KPI/趋势口径，不受 status 影响（保证升级后数值与 v3.8 一致）
+ */
 const express = require('express');
 const { getDailySeries, getPersonsSummary, getNodesSums } = require('../services/metricsService');
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+function truthy(v) {
+  const s = String(v == null ? '' : v).toLowerCase();
+  return s === '1' || s === 'true' || s === 'yes';
+}
 
 function parseRange(req, res, db) {
   const rawNode = String(req.query.node == null ? '' : req.query.node).trim();
@@ -33,9 +42,10 @@ module.exports = function metricsRoute(db) {
   router.get('/persons', (req, res) => {
     const q = parseRange(req, res, db);
     if (!q) return;
+    const inclInactive = truthy(req.query.inclInactive);
     const t0 = Date.now();
-    const persons = getPersonsSummary(db, q.node, q.from, q.to);
-    res.json({ ok: true, persons, elapsedMs: Date.now() - t0 });
+    const persons = getPersonsSummary(db, q.node, q.from, q.to, inclInactive);
+    res.json({ ok: true, persons, inclInactive, elapsedMs: Date.now() - t0 });
   });
 
   // 批量节点区间合计：?nodes=1,2,3&from=&to= → { sums: { "<nodeId>": {...} } }
@@ -48,9 +58,10 @@ module.exports = function metricsRoute(db) {
     const ids = String(req.query.nodes || '').split(',').map(s => Number(s.trim()))
       .filter(n => Number.isInteger(n) && n > 0).slice(0, 500);
     if (!ids.length) return res.status(400).json({ ok: false, error: '参数 nodes 须为逗号分隔的节点 id' });
+    const inclInactive = truthy(req.query.inclInactive);
     const t0 = Date.now();
-    const sums = getNodesSums(db, ids, from, to);
-    res.json({ ok: true, sums, elapsedMs: Date.now() - t0 });
+    const sums = getNodesSums(db, ids, from, to, inclInactive);
+    res.json({ ok: true, sums, inclInactive, elapsedMs: Date.now() - t0 });
   });
 
   return router;

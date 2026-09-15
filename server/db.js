@@ -5,7 +5,9 @@
  *   六级组织树（全国/大区/小区/门店/岗位/人员）→ org_nodes
  *   10 岗位配置（含差异化积分权重 pw）→ posts
  *   人员 × 日期 × 11 项指标 → daily_metrics（积分不入库，查询时按岗位权重现算）
- *   人员→祖先 物化路径 → node_paths（聚合查询用）
+ *   人员任职记录（岗位/门店/起止区间，调岗真源）→ person_assignments
+ *   人员→祖先 物化路径（带任职区间，聚合查询用）→ node_paths
+ *   v4 起 org_nodes 带 status（1=在职 0=停用，软删除）与 emp_no（工号，人员唯一标识）
  */
 const path = require('path');
 const fs = require('fs');
@@ -14,6 +16,11 @@ const Database = require('better-sqlite3');
 // 数据目录可用环境变量覆盖（容器挂载卷 / 多环境隔离，如 DATA_DIR=/srv/dashboard-data）
 const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : path.join(__dirname, 'data');
 const DB_PATH = path.join(DATA_DIR, 'dashboard.db');
+
+// v4 表结构版本：任职区间为闭区间 [from_date, to_date]，开放段用哨兵日期（TEXT 字典序可直接比较）
+const SCHEMA_VERSION = 4;
+const OPEN_FROM = '1970-01-01';
+const OPEN_TO = '9999-12-31';
 
 // 11 项指标：驼峰（API/前端）↔ 下划线（库表列）
 const METRIC_COLS = {
@@ -94,13 +101,35 @@ function migrate(db) {
     );
     CREATE INDEX IF NOT EXISTS idx_metrics_date ON daily_metrics(date);
 
-    -- 物化路径：人员 → 其所有祖先（含自身），聚合查询按 ancestor_id 一次 JOIN
+    -- 物化路径（v4）：人员 → 其所有祖先（含自身），带任职区间；调岗后历史归属按当时架构
+    -- 同一人员在同一祖先上的区间互不重叠，任何分组求和都不会重复计数
     CREATE TABLE IF NOT EXISTS node_paths (
       person_id   INTEGER NOT NULL,
       ancestor_id INTEGER NOT NULL,
-      PRIMARY KEY (person_id, ancestor_id)
+      from_date   TEXT NOT NULL DEFAULT '1970-01-01',
+      to_date     TEXT NOT NULL DEFAULT '9999-12-31',
+      store_id    INTEGER,                  -- 该段所属门店（当时门店）
+      post_key    TEXT,                     -- 该段所属岗位（决定积分权重）
+      PRIMARY KEY (person_id, ancestor_id, from_date)
     );
+    -- 注意：idx_paths_ancestor_date 不在此处创建——老库的 node_paths 还没有 from_date 列，
+    -- 必须等 upgradePathsToV4() 完成结构升级后再建索引，否则会报 no such column
     CREATE INDEX IF NOT EXISTS idx_paths_ancestor ON node_paths(ancestor_id);
+
+    -- 任职记录（真源）：人员 × 岗位 × 门店 × 起止区间；调岗 = 关旧段 + 开新段
+    CREATE TABLE IF NOT EXISTS person_assignments (
+      id           INTEGER PRIMARY KEY AUTOINCREMENT,
+      person_id    INTEGER NOT NULL,
+      post_key     TEXT NOT NULL,
+      post_node_id INTEGER NOT NULL,
+      store_id     INTEGER NOT NULL DEFAULT 0,
+      from_date    TEXT NOT NULL,
+      to_date      TEXT NOT NULL DEFAULT '9999-12-31',
+      source       TEXT DEFAULT 'import',
+      created_at   TEXT DEFAULT (datetime('now','localtime')),
+      UNIQUE (person_id, from_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_assign_person ON person_assignments(person_id, from_date);
 
     CREATE TABLE IF NOT EXISTS import_logs (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -111,9 +140,25 @@ function migrate(db) {
       rows_failed INTEGER NOT NULL DEFAULT 0,
       report_json TEXT
     );
+
+    -- 元信息（schema 版本等）
+    CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
   `);
-  // 旧库升级：补充 store_id 冗余列（已存在则忽略）
-  try { db.exec('ALTER TABLE org_nodes ADD COLUMN store_id INTEGER'); } catch (e) { /* ignore */ }
+  // 旧库升级：逐列补列（已存在则忽略；CREATE TABLE IF NOT EXISTS 对已有库不生效，必须 ALTER）
+  ['store_id INTEGER', 'status INTEGER NOT NULL DEFAULT 1', 'deactivated_at TEXT', 'emp_no TEXT']
+    .forEach(col => { try { db.exec('ALTER TABLE org_nodes ADD COLUMN ' + col); } catch (e) { /* ignore */ } });
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_org_empno ON org_nodes(emp_no) WHERE emp_no IS NOT NULL AND level = '人员'");
+  db.exec('CREATE INDEX IF NOT EXISTS idx_org_status ON org_nodes(level, status)');
+  // 静态老表 → 带任职区间的分片表（旧行统一写成开放区间，语义等价 v3.8）
+  upgradePathsToV4(db);
+  if (Number(getMeta(db, 'schema_version') || 0) < SCHEMA_VERSION) {
+    const tx = db.transaction(() => {
+      backfillLegacy(db);       // 存量人员补一条开放任职段
+      rebuildAllPaths(db);      // 由任职段派生路径 + 回填 store_id
+      setMeta(db, 'schema_version', String(SCHEMA_VERSION));
+    });
+    tx();
+  }
   seedDefaultPosts(db);
 }
 
@@ -129,18 +174,6 @@ function seedDefaultPosts(db) {
   tx();
 }
 
-/** 查找或创建组织节点，返回节点 id（幂等，导入/seed 共用） */
-function findOrCreateNode(db, name, level, parentId, postKey) {
-  const found = db.prepare(
-    'SELECT id FROM org_nodes WHERE name = ? AND level = ? AND parent_id IS ?'
-  ).get(name, level, parentId === null ? null : parentId);
-  if (found) return found.id;
-  const r = db.prepare(
-    'INSERT INTO org_nodes (name, level, parent_id, post_key) VALUES (?, ?, ?, ?)'
-  ).run(name, level, parentId, postKey || null);
-  return r.lastInsertRowid;
-}
-
 /** 取某节点的祖先链（含自身），自底向上 */
 function ancestorChain(db, nodeId) {
   const chain = [];
@@ -153,44 +186,247 @@ function ancestorChain(db, nodeId) {
   return chain;
 }
 
-/** 为人员节点重建 node_paths（含自身） */
-function refreshPersonPaths(db, personId) {
-  const chain = ancestorChain(db, personId);
-  const tx = db.transaction(() => {
-    db.prepare('DELETE FROM node_paths WHERE person_id = ?').run(personId);
-    const ins = db.prepare('INSERT OR IGNORE INTO node_paths (person_id, ancestor_id) VALUES (?, ?)');
-    chain.forEach(aid => ins.run(personId, aid));
-  });
-  tx();
+/** 在节点自身及其祖先中找到最近的门店节点 id（找不到返回 null） */
+function findStoreIdInChain(db, nodeId) {
+  if (!nodeId) return null;
+  for (const id of ancestorChain(db, nodeId)) {
+    const n = db.prepare('SELECT level FROM org_nodes WHERE id = ?').get(id);
+    if (n && n.level === '门店') return id;
+  }
+  return null;
 }
 
-/** 全量重建 node_paths 与 org_nodes.store_id 冗余列（名册导入后调用一次即可） */
+/** 闭区间端点工具：生效日 → 前一日（用于关闭旧任职段） */
+function prevDate(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// ---------------------------------------------------------------- meta 表
+
+function getMeta(db, key) {
+  const r = db.prepare('SELECT value FROM meta WHERE key = ?').get(key);
+  return r ? r.value : null;
+}
+
+function setMeta(db, key, value) {
+  db.prepare('INSERT INTO meta (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value')
+    .run(key, String(value));
+}
+
+// ------------------------------------------------- 结构迁移（幂等）
+
+/** 静态 node_paths → 带任职区间的分片表（旧行统一写开放区间 '1970-01-01'~'9999-12-31'，语义等价 v3.8） */
+function upgradePathsToV4(db) {
+  const cols = db.prepare('PRAGMA table_info(node_paths)').all();
+  if (!cols.length) return;                     // 表不存在（正常不会发生，DDL 已保证）
+  if (cols.some(c => c.name === 'from_date')) { // 已是 v4 结构
+    db.exec('CREATE INDEX IF NOT EXISTS idx_paths_ancestor_date ON node_paths(ancestor_id, from_date)');
+    return;
+  }
+  const tx = db.transaction(() => {
+    db.exec('DROP TABLE IF EXISTS node_paths_v4');
+    db.exec(`CREATE TABLE node_paths_v4 (
+      person_id   INTEGER NOT NULL,
+      ancestor_id INTEGER NOT NULL,
+      from_date   TEXT NOT NULL DEFAULT '1970-01-01',
+      to_date     TEXT NOT NULL DEFAULT '9999-12-31',
+      store_id    INTEGER,
+      post_key    TEXT,
+      PRIMARY KEY (person_id, ancestor_id, from_date)
+    )`);
+    db.exec(`INSERT OR IGNORE INTO node_paths_v4 (person_id, ancestor_id, from_date, to_date, store_id, post_key)
+             SELECT np.person_id, np.ancestor_id, '1970-01-01', '9999-12-31', pn.store_id, pn.post_key
+             FROM node_paths np LEFT JOIN org_nodes pn ON pn.id = np.person_id`);
+    db.exec('DROP TABLE node_paths');
+    db.exec('ALTER TABLE node_paths_v4 RENAME TO node_paths');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_paths_ancestor_date ON node_paths(ancestor_id, from_date)');
+  });
+  tx();
+  console.log('[db] node_paths 已升级为带任职区间的分片结构');
+}
+
+/** 存量回填：为尚无任职记录的人员补一条开放任职段（幂等，仅缺记录者处理） */
+function backfillLegacy(db) {
+  const persons = db.prepare("SELECT id, post_key, store_id, parent_id FROM org_nodes WHERE level = '人员'").all();
+  const hasAny = db.prepare('SELECT 1 AS x FROM person_assignments WHERE person_id = ? LIMIT 1');
+  const ins = db.prepare(`INSERT OR IGNORE INTO person_assignments
+    (person_id, post_key, post_node_id, store_id, from_date, to_date, source)
+    VALUES (?, ?, ?, ?, ?, ?, 'legacy')`);
+  let n = 0;
+  const tx = db.transaction(() => {
+    for (const p of persons) {
+      if (hasAny.get(p.id)) continue;
+      if (!p.parent_id) continue;                       // 无岗位父节点，无法建路径
+      const storeId = p.store_id || findStoreIdInChain(db, p.parent_id) || 0;
+      ins.run(p.id, p.post_key || '', p.parent_id, storeId, OPEN_FROM, OPEN_TO);
+      n++;
+    }
+  });
+  tx();
+  if (n) console.log(`[db] 已为 ${n} 名存量人员回填开放任职段`);
+  return n;
+}
+
+// ------------------------------------------------- 节点状态与工号
+
+/** 停用/恢复节点（软删除：只改状态，不删数据） */
+function setNodeStatus(db, nodeId, status, when) {
+  const st = status ? 1 : 0;
+  const at = st ? null : (when || new Date().toISOString().slice(0, 10));
+  db.prepare('UPDATE org_nodes SET status = ?, deactivated_at = ? WHERE id = ?').run(st, at, nodeId);
+  return { nodeId, status: st, deactivatedAt: at };
+}
+
+/** 按工号查人员节点（工号唯一索引保证最多一条） */
+function findPersonByEmpNo(db, empNo) {
+  if (!empNo) return undefined;
+  return db.prepare("SELECT * FROM org_nodes WHERE level = '人员' AND emp_no = ?").get(empNo);
+}
+
+function setPersonEmpNo(db, personId, empNo) {
+  db.prepare("UPDATE org_nodes SET emp_no = ? WHERE id = ? AND level = '人员'").run(empNo || null, personId);
+}
+
+// ------------------------------------------------- 任职记录
+
+/** 新增一条开放任职段（同 from_date 已存在时覆盖，保证 UNIQUE(person_id, from_date) 不冲突） */
+function createAssignment(db, { personId, postKey, postNodeId, storeId, fromDate, source }) {
+  db.prepare(`INSERT OR REPLACE INTO person_assignments
+    (person_id, post_key, post_node_id, store_id, from_date, to_date, source)
+    VALUES (?, ?, ?, ?, ?, ?, ?)`)
+    .run(personId, postKey || '', postNodeId, storeId || 0, fromDate || OPEN_FROM, OPEN_TO, source || 'import');
+}
+
+/** 取该人当前开放段（to_date = 哨兵） */
+function openAssignment(db, personId) {
+  return db.prepare('SELECT * FROM person_assignments WHERE person_id = ? AND to_date = ? ORDER BY from_date DESC LIMIT 1')
+    .get(personId, OPEN_TO);
+}
+
+/** 取该人最新任职段（不论是否已关闭） */
+function latestAssignment(db, personId) {
+  return db.prepare('SELECT * FROM person_assignments WHERE person_id = ? ORDER BY from_date DESC LIMIT 1').get(personId);
+}
+
+function personAssignments(db, personId) {
+  return db.prepare('SELECT * FROM person_assignments WHERE person_id = ? ORDER BY from_date').all(personId);
+}
+
+/** 关闭开放段到 endDate（含）；若闭合日早于起始日则删除该空段，避免区间倒挂 */
+function closeAssignmentAt(db, personId, endDate) {
+  const open = openAssignment(db, personId);
+  if (!open) return null;
+  if (endDate < open.from_date) {
+    db.prepare('DELETE FROM person_assignments WHERE id = ?').run(open.id);
+    return { deleted: true, id: open.id };
+  }
+  db.prepare('UPDATE person_assignments SET to_date = ? WHERE id = ?').run(endDate, open.id);
+  return { closed: true, id: open.id, toDate: endDate };
+}
+
+/** 迁移人员节点到新岗位/门店（不关闭任职段，调用方负责切段） */
+function movePersonNode(db, personId, { postNodeId, postKey, storeId }) {
+  db.prepare('UPDATE org_nodes SET parent_id = ?, post_key = ?, store_id = ?, status = 1, deactivated_at = NULL WHERE id = ?')
+    .run(postNodeId, postKey || null, storeId === undefined ? null : storeId, personId);
+}
+
+/** 调岗：关闭旧段（生效日前一日）+ 开新段 + 迁移节点 + 重建路径，返回变更摘要 */
+function transferPerson(db, { personId, postNodeId, postKey, storeId, fromDate, source }) {
+  const summary = { personId, fromDate, from: null, to: { postKey, storeId } };
+  closeAssignmentAt(db, personId, prevDate(fromDate));
+  createAssignment(db, { personId, postKey, postNodeId, storeId, fromDate, source });
+  movePersonNode(db, personId, { postNodeId, postKey, storeId });
+  buildPersonPaths(db, personId);
+  return summary;
+}
+
+// ------------------------------------------------- 物化路径（由任职段派生）
+
+/** 按任职段重建某人的 node_paths（含自身行；每段携带当时门店/岗位） */
+function buildPersonPaths(db, personId) {
+  const segs = personAssignments(db, personId);
+  db.prepare('DELETE FROM node_paths WHERE person_id = ?').run(personId);
+  const ins = db.prepare(`INSERT OR REPLACE INTO node_paths
+    (person_id, ancestor_id, from_date, to_date, store_id, post_key) VALUES (?, ?, ?, ?, ?, ?)`);
+  let rows = 0;
+  for (const s of segs) {
+    ins.run(personId, personId, s.from_date, s.to_date, s.store_id, s.post_key); rows++;
+    for (const aid of ancestorChain(db, s.post_node_id)) {
+      ins.run(personId, aid, s.from_date, s.to_date, s.store_id, s.post_key); rows++;
+    }
+  }
+  return { segments: segs.length, rows };
+}
+
+/**
+ * 查找或创建组织节点，返回节点 id（幂等，导入/seed 共用）
+ * 人员节点新建时自动补一条开放任职段（父节点即岗位节点）
+ */
+function findOrCreateNode(db, name, level, parentId, postKey) {
+  const found = db.prepare(
+    'SELECT id FROM org_nodes WHERE name = ? AND level = ? AND parent_id IS ?'
+  ).get(name, level, parentId === null ? null : parentId);
+  if (found) return found.id;
+  const r = db.prepare(
+    'INSERT INTO org_nodes (name, level, parent_id, post_key, status) VALUES (?, ?, ?, ?, 1)'
+  ).run(name, level, parentId, postKey || null);
+  const id = r.lastInsertRowid;
+  if (level === '人员' && parentId) {
+    const storeId = findStoreIdInChain(db, parentId) || 0;
+    createAssignment(db, { personId: id, postKey, postNodeId: parentId, storeId, fromDate: OPEN_FROM, source: 'auto' });
+  }
+  return id;
+}
+
+/**
+ * 强制新建人员节点：不做同名复用（工号权威场景专用）
+ *
+ * 用于「同一门店同一岗位存在同名但工号不同的两个人」——此时按姓名复用节点会把两人
+ * 静默合并、并覆盖前者的工号，造成身份与历史数据错乱。有工号且库中无该工号时一律新建。
+ * 同时补一条开放任职段，与 findOrCreateNode 保持一致。
+ */
+function createPersonNode(db, name, parentId, postKey, storeId) {
+  const sid = storeId || findStoreIdInChain(db, parentId) || 0;
+  const r = db.prepare(
+    'INSERT INTO org_nodes (name, level, parent_id, post_key, status, store_id) VALUES (?, ?, ?, ?, 1, ?)'
+  ).run(name, '人员', parentId, postKey || null, sid || null);
+  const id = r.lastInsertRowid;
+  createAssignment(db, { personId: id, postKey, postNodeId: parentId, storeId: sid, fromDate: OPEN_FROM, source: 'import' });
+  return id;
+}
+
+/** 全量重建 node_paths 与 org_nodes.store_id（迁移/修复用；日常增量请用 refreshPersonPaths） */
 function rebuildAllPaths(db) {
   const persons = db.prepare("SELECT id FROM org_nodes WHERE level = '人员'").all();
   const levelById = new Map(db.prepare('SELECT id, level FROM org_nodes').all().map(r => [r.id, r.level]));
+  const setStore = db.prepare('UPDATE org_nodes SET store_id = ? WHERE id = ?');
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM node_paths').run();
-    const ins = db.prepare('INSERT OR IGNORE INTO node_paths (person_id, ancestor_id) VALUES (?, ?)');
-    const setStore = db.prepare('UPDATE org_nodes SET store_id = ? WHERE id = ?');
     for (const p of persons) {
-      const chain = ancestorChain(db, p.id);
-      chain.forEach(aid => ins.run(p.id, aid));
-      const storeId = chain.find(aid => levelById.get(aid) === '门店') || null;
-      setStore.run(storeId, p.id);
+      buildPersonPaths(db, p.id);
+      const seg = latestAssignment(db, p.id);
+      setStore.run(seg ? seg.store_id : (findStoreIdInChain(db, p.id) || null), p.id);
     }
     // 岗位节点同样回填 store_id（其子节点即人员）
     const posts = db.prepare("SELECT id FROM org_nodes WHERE level = '岗位'").all();
     for (const pn of posts) {
       const chain = ancestorChain(db, pn.id);
-      const storeId = chain.find(aid => levelById.get(aid) === '门店') || null;
-      setStore.run(storeId, pn.id);
+      setStore.run(chain.find(aid => levelById.get(aid) === '门店') || null, pn.id);
     }
   });
   tx();
-  return persons.length;
+  const rows = db.prepare('SELECT COUNT(*) AS c FROM node_paths').get().c;
+  return { persons: persons.length, paths: rows };
 }
 
 module.exports = {
   DB_PATH, DATA_DIR, METRIC_COLS, METRIC_KEYS, DEFAULT_PW, DEFAULT_POSTS,
-  openDb, findOrCreateNode, ancestorChain, refreshPersonPaths, rebuildAllPaths
+  SCHEMA_VERSION, OPEN_FROM, OPEN_TO,
+  openDb, findOrCreateNode, ancestorChain, findStoreIdInChain, prevDate,
+  refreshPersonPaths: buildPersonPaths, buildPersonPaths, rebuildAllPaths,
+  getMeta, setMeta,
+  setNodeStatus, findPersonByEmpNo, setPersonEmpNo, createPersonNode,
+  createAssignment, openAssignment, latestAssignment, personAssignments, closeAssignmentAt, movePersonNode, transferPerson
 };
