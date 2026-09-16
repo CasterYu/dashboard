@@ -555,7 +555,10 @@
                     <p class="text-xs text-slate-400">V4.2 · 工号密码登录</p>
                 </div>
             </div>
-            <p class="text-xs text-slate-400 mt-3 mb-5 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
+            <p class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
+            <div id="demoHint" class="hidden mb-4 px-3 py-2 rounded-md text-[11px] leading-relaxed" style="background: rgba(6,182,212,0.10); border: 1px solid rgba(6,182,212,0.28); color: #a5f3fc;">
+                演示模式内置账号：<code class="font-mono text-white">demo</code> / <code class="font-mono text-white">demo123</code>（纯前端校验，无需后端）
+            </div>
             <div class="space-y-3">
                 <div>
                     <label class="text-xs text-slate-400 mb-1 block">工号</label>
@@ -1037,10 +1040,16 @@
             roleEl.className = 'text-[11px] px-2 py-0.5 rounded-md font-medium ' + m.cls;
         }
 
+        // v4.2 演示账号（仅 mock 模式生效，纯前端校验，不请求后端）
+        const DEMO_ACCOUNT = { emp: 'demo', pwd: 'demo123', name: '演示模式', role: 'hq', scopeName: '全国（全树）' };
+
         function showLogin(msg) {
             const ov = document.getElementById('loginOverlay');
             const err = document.getElementById('loginError');
             if (err) err.textContent = msg || '';
+            // 演示账号提示仅在 mock 模式出现（API 模式为真实后端账号）
+            const hint = document.getElementById('demoHint');
+            if (hint) hint.classList.toggle('hidden', DATA_MODE !== 'mock');
             if (ov) { ov.classList.remove('hidden'); }
             setTimeout(function () { const i = document.getElementById('loginEmpNo'); if (i) i.focus(); }, 50);
         }
@@ -1082,6 +1091,16 @@
                 const emp = (document.getElementById('loginEmpNo').value || '').trim();
                 const pwd = document.getElementById('loginPwd').value || '';
                 if (!emp || !pwd) { document.getElementById('loginError').textContent = '请输入工号与密码'; return; }
+                // mock 模式：内置演示账号纯前端校验（线上 Pages 无后端也能走通登录 → 看板流程）
+                if (DATA_MODE === 'mock') {
+                    if (emp === DEMO_ACCOUNT.emp && pwd === DEMO_ACCOUNT.pwd) {
+                        document.getElementById('loginError').textContent = '';
+                        window.__v42.skipToDemo();
+                    } else {
+                        document.getElementById('loginError').textContent = '演示模式请使用内置账号 demo / demo123，或点下方按钮直接进入';
+                    }
+                    return;
+                }
                 const btn = document.getElementById('loginSubmit');
                 btn.disabled = true; btn.textContent = '登录中…';
                 loginApi(emp, pwd).then(function (r) {
@@ -1128,7 +1147,7 @@
                 // mock 模式跳过登录：以「演示模式（总部）」身份直接渲染看板
                 if (DATA_MODE !== 'mock') return;
                 hideLogin();
-                cachedUser = { emp_no: 'demo', name: '演示模式', role: 'hq', scopeName: '全国（全树）' };
+                cachedUser = { emp_no: DEMO_ACCOUNT.emp, name: DEMO_ACCOUNT.name, role: DEMO_ACCOUNT.role, scopeName: DEMO_ACCOUNT.scopeName };
                 applyUserToTopbar(cachedUser);
                 startApp();
             }
@@ -3203,7 +3222,7 @@
         if (DATA_MODE === 'mock') {
             // mock 演示模式：先弹登录浮层，浮层内提供「以演示模式（总部）继续」按钮
             // —— 既让业务方第一时间看到登录入口，又保留无后端时的演示便利
-            showLogin('请使用工号与密码登录（演示模式：可点下方按钮跳过）');
+            showLogin('请使用工号与密码登录（演示模式可用 demo / demo123）');
         } else bootApi();
 
         // ===== v4.2 登录/改密/登出事件绑定 =====

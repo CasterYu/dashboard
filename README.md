@@ -20,7 +20,7 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v4.2 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **身份权限校验**：5 角色（HQ / 大区 / 小区 / 店长 / 员工）+ 工号密码自管；JWT（HS256，8h）；scope 子树 CTE 过滤，HQ 看全量、非 HQ 仅看其负责范围；首登强制改密；mock 模式自动渲染为「演示模式（总部）」 |
+| **🟢 v4.2 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **身份权限校验**：5 角色（HQ / 大区 / 小区 / 店长 / 员工）+ 工号密码自管；JWT（HS256，8h）；scope 子树 CTE 过滤，HQ 看全量、非 HQ 仅看其负责范围；首登强制改密；mock 模式自动渲染为「演示模式（总部）」<br>🔑 **在线演示账号：`demo` / `demo123`**（详见 [测试账号](#-测试账号与登录验证)） |
 | **🟡 v4.1 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名，消除人数规模优势；tooltip 同时展示人均 / 总分 / 人数 |
 | **🟡 v4.0 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
 | **🟡 v3.8 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
@@ -201,6 +201,51 @@ curl.exe -H "X-Import-Token: change-me-import-token" `
 ### 部署
 
 生产部署（PM2 + Nginx + HTTPS、备份 cron、Docker/内网备选、运维流程、**v4.2 账号管理与 JWT_SECRET 生成**）见 **[server/DEPLOY.md](server/DEPLOY.md)**。
+
+---
+
+## 🧪 测试账号与登录验证
+
+### 方式一：线上演示（无需后端，看 UI 最快）
+
+打开 **[https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)**，登录浮层输入内置演示账号：
+
+| 工号 | 密码 | 说明 |
+|:---|:---|:---|
+| `demo` | `demo123` | **纯前端校验**，直接以「演示模式（总部）」身份进入看板，不需要后端 |
+
+> 也可以不输账号，直接点浮层底部「**以演示模式（总部）继续 →**」按钮跳过。
+
+### 方式二：本地真实后端（验证 5 角色权限隔离）
+
+```bash
+cd server
+npm install
+node scripts/seed.js      # 首次：生成演示数据入库（已有数据可跳过）
+node scripts/create-user.js list    # 查看账号
+npm start                 # http://127.0.0.1:3777
+```
+
+前端访问：`index.html?data=api&api=http://127.0.0.1:3777`
+
+| 工号 | 密码 | 角色 | 可见范围 | 可见节点数 |
+|:---|:---|:---|:---|:---:|
+| `E90001` | `Demo@2026` | regional_lead 大区负责人 | 华东大区 | 108 |
+| `E90002` | `Demo@2026` | area_lead 小区负责人 | 上海一区 | 55 |
+| `E90003` | `Demo@2026` | store_lead 店长 | 上海浦东旗舰店 | 30 |
+| `E90004` | `Demo@2026` | employee 员工 | 仅本人（沈敏） | 6 |
+
+> 4 个账号**首次登录均会强制改密**（正好验证「首登改密」功能），新密码 ≥ 6 位且不能与原密码相同；改密后重登即可看到按角色收窄的数据范围（同一时间区间对比 4 个账号，数字逐级变小即为 scope 生效）。
+
+**重建测试账号**（账号丢失/忘记密码时）：
+
+```bash
+node scripts/create-user.js reset E90001 --password Demo@2026   # 重置为已知密码
+node scripts/create-user.js add <工号> <role> --password <密码>  # 新增账号
+node scripts/create-user.js import users.csv                    # 批量导入（emp_no,role,note）
+```
+
+> ⚠️ 上述密码仅为**本地演示数据**使用，请勿用于生产环境；生产账号请用随机密码并通过线下渠道分发。
 
 ---
 
