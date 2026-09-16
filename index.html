@@ -397,18 +397,21 @@
                 </div>
             </div>
 
-            <!-- PK 模式：同级多选 -->
+            <!-- PK 模式：同级多选（v4.3：层级仅 门店 / 岗位 / 人员；岗位层级附带岗位二级选项卡，用于跨店同岗对比） -->
             <div id="pkBar" class="hidden items-center gap-3 flex-wrap">
                 <span class="text-xs text-slate-400 whitespace-nowrap">PK 层级</span>
                 <select id="pkLevel" class="org-select" style="min-width:96px">
                     <option value="门店" selected>门店</option>
-                    <option value="大区">大区</option>
-                    <option value="小区">小区</option>
                     <option value="岗位">岗位</option>
                     <option value="人员">人员</option>
                 </select>
                 <span class="text-[11px] text-slate-500 whitespace-nowrap">最多 6 个 · 同级比较</span>
                 <button id="pkClear" class="quick-btn">清空</button>
+            </div>
+            <!-- PK 层级=岗位 时的岗位二级选项卡（跨店同岗对比：候选为各门店的该岗位） -->
+            <div id="pkPostBar" class="hidden items-center gap-2 flex-wrap">
+                <span class="text-xs text-slate-400 whitespace-nowrap">对比岗位</span>
+                <div id="pkPostTabs" class="flex flex-wrap gap-1.5"></div>
             </div>
 
             <div class="org-path">
@@ -1367,6 +1370,7 @@
             mode: 'single',
             sel: { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' },
             pkLevel: '门店',
+            pkPost: POSTS[0].key,              // PK 层级=岗位 时的二级岗位选择
             pkIds: [],
             pkBase: null,
             drillIds: [],
@@ -1378,7 +1382,7 @@
             expanded: [false, false, false],   // 三大板块各自的展开状态
             panelSel: {},                      // 各板块勾选的指标 key
             // 业务执行与闭环看板状态
-            closure: { postKey: 'productExpert', storeIds: null, yMetric: 'locked', avgLine: true }
+            closure: { postKey: 'productExpert', regionId: null, areaId: null, storeIds: null, yMetric: 'locked', avgLine: true }
         };
         const panelCharts = {};                // 板块展开态折线图实例
 
@@ -1538,14 +1542,34 @@
         }
 
         // ---------- PK 候选 ----------
+        // v4.3：候选严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；
+        // 岗位层级 = 跨店同岗对比：候选为范围内各门店的「同一岗位」节点（如 上海浦东旗舰店 · 销售店长）
         function pkCandidates() {
-            let list = collectLevel(currentNode(), state.pkLevel, []);
-            if (list.length < 2) list = collectLevel(tree, state.pkLevel, []);
+            let list;
+            if (state.pkLevel === '岗位') {
+                list = collectLevel(currentNode(), '岗位', []).filter(function (n) { return n.postKey === state.pkPost; });
+            } else {
+                list = collectLevel(currentNode(), state.pkLevel, []);
+            }
             return list.slice().sort(function (a, b) {
                 const ma = metricsOf(a, currentIdx()[0], currentIdx()[1]);
                 const mb = metricsOf(b, currentIdx()[0], currentIdx()[1]);
                 return (mb ? mb.leads : 0) - (ma ? ma.leads : 0);
             });
+        }
+        function renderPkPostTabs() {
+            const $bar = document.getElementById('pkPostBar');
+            const $tabs = document.getElementById('pkPostTabs');
+            if (!$bar || !$tabs) return;
+            const on = state.mode === 'pk' && state.pkLevel === '岗位';
+            $bar.classList.toggle('hidden', !on);
+            $bar.classList.toggle('flex', on);
+            if (!on) return;
+            if (!POSTS_BY_KEY[state.pkPost]) state.pkPost = POSTS[0].key;
+            $tabs.innerHTML = POSTS.map(function (p) {
+                return '<button class="quick-btn' + (p.key === state.pkPost ? ' active' : '') + '" data-pk-post="' + p.key + '"' +
+                    ' style="' + (p.key === state.pkPost ? 'border-color:' + p.color + ';color:' + p.color : '') + '">' + p.name + '</button>';
+            }).join('');
         }
         function renderPkOptions() {
             const list = pkCandidates();
@@ -1554,18 +1578,22 @@
                 const nm = state.pkLevel === '岗位' || state.pkLevel === '人员' ? (n.storeName ? n.storeName + ' · ' + n.name : n.name) : n.name;
                 return '<button class="pk-opt' + (on ? ' on' : '') + (n.status === 0 ? ' inactive' : '') + '" data-id="' + n.id + '">' + nm + '</button>';
             }).join('');
-            // 空缺岗位置灰展示（体现「本店暂无」而非 0）— 按 10 岗位中设置了 blankStores 的岗位动态展示
+            if (!list.length) {
+                $pkOptions.innerHTML = '<span class="text-xs text-slate-500 py-2">当前组织范围下没有该层级的可比对象 —— 请在上方「组织范围」放宽筛选（如选回上级大区 / 小区）</span>';
+            }
+            // 空缺岗位置灰展示（体现「本店暂无」而非 0）— 仅针对当前选中的对比岗位
             if (state.pkLevel === '岗位') {
-                const storeNodes = collectLevel(currentNode().level === '门店' ? currentNode().parent : currentNode(), '门店', []);
-                const blankPostKeys = POSTS.filter(function (p) { return Array.isArray(p.blankStores); }).map(function (p) { return p.key; });
-                blankPostKeys.forEach(function (pk) {
-                    const missing = storeNodes.filter(function (s) { return (s.postStats.missing || []).indexOf(pk) >= 0; });
-                    if (!missing.length) return;
-                    const postName = POSTS_BY_KEY[pk].name;
-                    $pkOptions.innerHTML += missing.map(function (s) {
-                        return '<span class="pk-opt empty">' + s.name + ' · ' + postName + '（暂无）</span>';
-                    }).join('');
-                });
+                const postDef = POSTS_BY_KEY[state.pkPost];
+                if (postDef && Array.isArray(postDef.blankStores)) {
+                    const scopeRoot = currentNode().level === '门店' ? currentNode().parent : currentNode();
+                    const storeNodes = collectLevel(scopeRoot, '门店', []);
+                    const missing = storeNodes.filter(function (s) { return (s.postStats.missing || []).indexOf(state.pkPost) >= 0; });
+                    if (missing.length) {
+                        $pkOptions.innerHTML += missing.map(function (s) {
+                            return '<span class="pk-opt empty">' + s.name + ' · ' + postDef.name + '（暂无）</span>';
+                        }).join('');
+                    }
+                }
             }
             $pkOptions.querySelectorAll('button[data-id]').forEach(function (b) {
                 b.addEventListener('click', function () {
@@ -2408,8 +2436,8 @@
             }
             const node = currentNode();
             const level = state.pointsDim;
-            let cands = collectLevel(node, level, []);
-            if (!cands.length) cands = collectLevel(tree, level, []);
+            // v4.3：候选严格按当前范围收集，不再回退全树（避免范围外条目出现）
+            const cands = collectLevel(node, level, []);
             // 门店维度按人均口径：总积分 ÷ 该门店在职人数（树内人员节点数），排序同样按人均降序
             const perStore = level === '门店';
             const hcCache = new Map();
@@ -2510,8 +2538,8 @@
 
             const node = currentNode();
             const level = state.tableDim;
-            let rows = collectLevel(node, level, []);
-            if (!rows.length) rows = collectLevel(tree, level, []);
+            // v4.3：行严格按当前范围收集，不再回退全树（避免范围外条目出现）
+            const rows = collectLevel(node, level, []);
             rows = rows.slice().sort(function (a, b) { return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points; });
             sub.textContent = level + '维度 · 范围：' + node.name + ' · 按积分降序 · 共 ' + rows.length + ' 条';
             const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', '积分'];
@@ -2551,8 +2579,21 @@
             if (yMetric === 'testDriveRate') return p.intentLeads ? (p.testDrives / p.intentLeads) * 100 : null;
             return 0;
         }
+        // v4.3：业务执行页「层级筛选」—— 门店列表由 全国→大区→小区 逐级收窄得到
+        function closureScopeStores() {
+            let base = tree;
+            if (state.closure.regionId) {
+                const r = nodeById(state.closure.regionId);
+                if (r && r.level === '大区') base = r; else state.closure.regionId = null;
+            }
+            if (state.closure.areaId) {
+                const a = nodeById(state.closure.areaId);
+                if (a && a.level === '小区') base = a; else state.closure.areaId = null;
+            }
+            return collectLevel(base, '门店', []);
+        }
         function closureComputePoints() {
-            const allStores = collectLevel(tree, '门店', []);
+            const allStores = closureScopeStores();
             if (!state.closure.storeIds || !state.closure.storeIds.length) {
                 state.closure.storeIds = allStores.length ? [allStores[0].id] : [];
             }
@@ -2589,7 +2630,6 @@
         function renderClosureSync() {
             const $bc = document.getElementById('boardClosure');
             if (!$bc) return;
-            const allStores = collectLevel(tree, '门店', []);
             const post = POSTS_BY_KEY[state.closure.postKey] || POSTS[0];
             if (!POSTS_BY_KEY[state.closure.postKey]) state.closure.postKey = post.key;
             const points = closureComputePoints();
@@ -2647,19 +2687,47 @@
                     '<span class="pc-dot"></span>' + p.name + '</span>';
             }).join('') + '</div>';
 
-            // ---- 门店 chip（多选 + 全选 / 清空）----
-            const storeChipHtml = '<div class="store-chip-row">' + allStores.map(function (s, idx) {
+            // ---- 门店筛选（v4.3 层级：大区 → 小区 → 门店）----
+            const regionList = collectLevel(tree, '大区', []);
+            let areaBase = tree;
+            if (state.closure.regionId) {
+                const rn = nodeById(state.closure.regionId);
+                if (rn) areaBase = rn;
+            }
+            const areaList = state.closure.regionId ? collectLevel(areaBase, '小区', []) : [];
+            const scopeStores = closureScopeStores();
+
+            const regionChipHtml = '<div class="flex flex-wrap gap-2">' +
+                '<button class="quick-btn' + (!state.closure.regionId ? ' active' : '') + '" data-closure-region="">全国</button>' +
+                regionList.map(function (rg) {
+                    return '<button class="quick-btn' + (state.closure.regionId === rg.id ? ' active' : '') + '" data-closure-region="' + rg.id + '">' + rg.name + '</button>';
+                }).join('') + '</div>';
+
+            const areaChipHtml = !state.closure.regionId ? '' :
+                '<div class="mt-2"><div class="text-[11px] text-slate-500 mb-1.5">小区（选填，可进一步收窄）</div>' +
+                '<div class="flex flex-wrap gap-2">' +
+                '<button class="quick-btn' + (!state.closure.areaId ? ' active' : '') + '" data-closure-area="">全部小区</button>' +
+                areaList.map(function (ar) {
+                    return '<button class="quick-btn' + (state.closure.areaId === ar.id ? ' active' : '') + '" data-closure-area="' + ar.id + '">' + ar.name + '</button>';
+                }).join('') + '</div></div>';
+
+            const storeChipHtml = '<div class="store-chip-row">' + scopeStores.map(function (s, idx) {
                 const on = state.closure.storeIds.indexOf(s.id) >= 0;
                 const c = closureStoreColor(idx);
                 return '<span class="pk-opt' + (on ? ' on' : '') + '" data-store="' + s.id + '" ' +
                     (on ? 'style="--primary:' + c + ';border-color:' + c + ';background:' + scaleColor(c, 0.16) + ';color:#fff"' : '') +
                     '><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
-            }).join('') + '</div>' +
+            }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无门店</span>' : '') + '</div>' +
                 '<div class="flex items-center gap-2 mt-2 flex-wrap">' +
-                '<button class="quick-btn" data-store-action="all">全部门店</button>' +
+                '<button class="quick-btn" data-store-action="all">全选当前范围</button>' +
                 '<button class="quick-btn" data-store-action="clear">清空</button>' +
-                '<span class="text-xs text-slate-400 ml-auto">已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + allStores.length + ' 家 · 切换岗位会自动剔除空缺门店</span>' +
+                '<span class="text-xs text-slate-400 ml-auto">已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + scopeStores.length + ' 家 · 切换岗位会自动剔除空缺门店</span>' +
                 '</div>';
+
+            const storeScopeHtml =
+                '<div><div class="text-xs text-slate-400 mb-2">大区（按层级收窄门店范围）</div>' + regionChipHtml + '</div>' +
+                areaChipHtml +
+                '<div class="mt-2"><div class="text-xs text-slate-400 mb-2 flex items-center gap-2">门店（多选）<span class="text-[11px] text-slate-500">当前范围 ' + scopeStores.length + ' 家</span></div>' + storeChipHtml + '</div>';
 
             // ---- Y 轴单选 ----
             const yOpt = CLOSURE_Y_OPTIONS.filter(function (o) { return o.key === state.closure.yMetric; })[0] || CLOSURE_Y_OPTIONS[0];
@@ -2681,7 +2749,7 @@
                         '</div>' + ctxHtml +
                     '</div>' +
                     '<div><div class="text-xs text-slate-400 mb-2">岗位（单选）</div>' + postChipsHtml + '</div>' +
-                    '<div><div class="text-xs text-slate-400 mb-2 flex items-center gap-2">门店（多选）<span class="text-[11px] text-slate-500">最多 ' + allStores.length + ' 家</span></div>' + storeChipHtml + '</div>' +
+                    storeScopeHtml +
                     '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
                         '<div><div class="text-xs text-slate-400 mb-2">纵坐标指标（单选）</div>' + yHtml + '</div>' +
                         '<div><div class="text-xs text-slate-400 mb-2">图表辅助</div><div class="flex flex-wrap gap-2">' + avgHtml + '</div></div>' +
@@ -2928,6 +2996,7 @@
                 renderOrgSelectors();
                 toggleMode();
                 if (state.mode === 'single') renderSingleView();
+                renderPkPostTabs();
                 renderPkOptions();
                 renderPkView();
                 renderFunnel();
@@ -2995,10 +3064,26 @@
                 else state.closure.storeIds.push(id);
                 renderClosure(); return;
             }
+            // v4.3：层级筛选——切换大区/小区后，已选门店保留仍可见的，其余剔除（不自动全选）
+            const cr = e.target.closest('[data-closure-region]');
+            if (cr) {
+                const rid = cr.dataset.closureRegion || null;
+                if (rid !== state.closure.regionId) {
+                    state.closure.regionId = rid;
+                    state.closure.areaId = null;
+                }
+                renderClosure(); return;
+            }
+            const ca = e.target.closest('[data-closure-area]');
+            if (ca) {
+                const aid = ca.dataset.closureArea || null;
+                if (aid !== state.closure.areaId) state.closure.areaId = aid;
+                renderClosure(); return;
+            }
             const sa = e.target.closest('[data-store-action]');
             if (sa) {
                 const act = sa.dataset.storeAction;
-                if (act === 'all') state.closure.storeIds = collectLevel(tree, '门店', []).map(function (s) { return s.id; });
+                if (act === 'all') state.closure.storeIds = closureScopeStores().map(function (s) { return s.id; });
                 else if (act === 'clear') state.closure.storeIds = [];
                 renderClosure(); return;
             }
@@ -3018,17 +3103,20 @@
         $selRegion.addEventListener('change', function () {
             state.sel.region = $selRegion.value; state.sel.area = '__all__'; state.sel.store = '__all__';
             state.sel.post = '__all__'; state.sel.person = '__all__';
-            state.drillIds = []; renderAll();
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;   // v4.3：范围变化清空 PK 已选，避免跨范围残留
+            renderAll();
         });
         $selArea.addEventListener('change', function () {
             state.sel.area = $selArea.value; state.sel.store = '__all__';
             state.sel.post = '__all__'; state.sel.person = '__all__';
-            state.drillIds = []; renderAll();
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;
+            renderAll();
         });
         $selStore.addEventListener('change', function () {
             state.sel.store = $selStore.value;
             state.sel.post = '__all__'; state.sel.person = '__all__';
             state.drillIds = [];
+            state.pkIds = []; state.pkBase = null;
             // 空岗容错：门店切换后若原岗位在目标门店不存在，给出提示
             renderAll();
         });
@@ -3036,15 +3124,18 @@
             if ($selPost.value.indexOf('__none__') === 0) { $selPost.value = '__all__'; }
             state.sel.post = $selPost.value;
             state.sel.person = '__all__';
-            state.drillIds = []; renderAll();
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;
+            renderAll();
         });
         $selPerson.addEventListener('change', function () {
             state.sel.person = $selPerson.value;
-            state.drillIds = []; renderAll();
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;
+            renderAll();
         });
         document.getElementById('orgReset').addEventListener('click', function () {
             state.sel = { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' };
             state.drillIds = [];
+            state.pkIds = []; state.pkBase = null;
             renderAll();
         });
         // v4：「显示已停用」开关（仅 API 模式）—— 重新拉取组织树后刷新下拉/榜单，保持已选日期区间
@@ -3122,9 +3213,8 @@
                 if (state.mode === 'single') {
                     state.drillIds = [];
                 } else if (!state.pkIds.length) {
-                    // 进入 PK 模式时，默认预选当前单选节点所属层级的子节点
-                    const base = currentNode();
-                    const list = collectLevel(base.level === '门店' ? base.parent : base, state.pkLevel, []);
+                    // 进入 PK 模式时，默认预选当前范围内该层级的前 2 个候选（岗位层级=当前对比岗位在各门店）
+                    const list = pkCandidates();
                     state.pkIds = list.slice(0, 2).map(function (n) { return n.id; });
                     state.pkBase = state.pkIds[0] || null;
                 }
@@ -3133,6 +3223,15 @@
         });
         document.getElementById('pkLevel').addEventListener('change', function (e) {
             state.pkLevel = e.target.value;
+            state.pkIds = [];
+            state.pkBase = null;
+            renderAll();
+        });
+        // v4.3：岗位 PK 的二级岗位选项卡（跨店同岗对比）
+        document.getElementById('pkPostTabs').addEventListener('click', function (e) {
+            const b = e.target.closest('[data-pk-post]');
+            if (!b || b.dataset.pkPost === state.pkPost) return;
+            state.pkPost = b.dataset.pkPost;
             state.pkIds = [];
             state.pkBase = null;
             renderAll();
