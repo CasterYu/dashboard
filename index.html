@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V4.3 · 汽车销售运营中心</title>
+    <title>业务数据看板 V4.4 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -319,7 +319,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.3</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.4</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -374,54 +374,60 @@
 
         <!-- 组织树筛选（仅经营总览使用，闭环看板自带岗位 × 门店筛选） -->
         <div id="overviewControls" class="max-w-[1600px] mx-auto px-6 pb-3 space-y-2">
-            <div class="flex items-center justify-between gap-3 flex-wrap">
-                <div class="flex items-center gap-2 flex-wrap">
-                    <span class="text-xs text-slate-400 whitespace-nowrap">组织范围</span>
-                    <select id="orgRegion" class="org-select"></select>
-                    <select id="orgArea" class="org-select"></select>
-                    <select id="orgStore" class="org-select"></select>
-                    <select id="orgPost" class="org-select"></select>
-                    <select id="orgPerson" class="org-select"></select>
-                    <button id="orgReset" class="quick-btn">重置</button>
-                </div>
-                <div class="flex items-center gap-3 flex-wrap">
-                    <label id="showInactiveWrap" class="inactive-switch hidden" title="打开后组织范围下拉与榜单中显示已停用（离职人员 / 闭店门店）节点；停用只影响可见性，历史指标仍完整保留">
-                        <input type="checkbox" id="showInactive">
-                        <span>显示已停用</span>
-                    </label>
-                    <span id="orgSummary" class="text-xs text-slate-400"></span>
-                    <div class="seg" id="modeSeg">
-                        <button data-mode="single" class="active">单选</button>
-                        <button data-mode="pk">PK 模式</button>
+            <!-- v4.4：常驻顶栏，可一键收起/展开下方全部筛选区 -->
+            <div id="filterHead" class="flex items-center justify-between gap-3 flex-wrap">
+                <span id="orgSummary" class="text-xs text-slate-400"></span>
+                <button id="filterToggle" class="quick-btn" title="收起/展开筛选区（状态会记忆）"><span id="filterToggleText">收起筛选 ▴</span></button>
+            </div>
+            <div id="filterBody" class="space-y-2">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-xs text-slate-400 whitespace-nowrap">组织范围</span>
+                        <select id="orgRegion" class="org-select"></select>
+                        <select id="orgArea" class="org-select"></select>
+                        <select id="orgStore" class="org-select"></select>
+                        <select id="orgPost" class="org-select"></select>
+                        <select id="orgPerson" class="org-select"></select>
+                        <button id="orgReset" class="quick-btn">重置</button>
+                    </div>
+                    <div class="flex items-center gap-3 flex-wrap">
+                        <label id="showInactiveWrap" class="inactive-switch hidden" title="打开后组织范围下拉与榜单中显示已停用（离职人员 / 闭店门店）节点；停用只影响可见性，历史指标仍完整保留">
+                            <input type="checkbox" id="showInactive">
+                            <span>显示已停用</span>
+                        </label>
+                        <div class="seg" id="modeSeg">
+                            <button data-mode="single" class="active">单选</button>
+                            <button data-mode="pk">PK 模式</button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            <!-- PK 模式：同级多选（v4.3：层级仅 门店 / 岗位 / 人员；岗位层级附带岗位二级选项卡，用于跨店同岗对比） -->
-            <div id="pkBar" class="hidden items-center gap-3 flex-wrap">
-                <span class="text-xs text-slate-400 whitespace-nowrap">PK 层级</span>
-                <select id="pkLevel" class="org-select" style="min-width:96px">
-                    <option value="门店" selected>门店</option>
-                    <option value="岗位">岗位</option>
-                    <option value="人员">人员</option>
-                </select>
-                <span class="text-[11px] text-slate-500 whitespace-nowrap">最多 6 个 · 同级比较</span>
-                <button id="pkClear" class="quick-btn">清空</button>
-            </div>
-            <!-- PK 层级=岗位 时的岗位二级选项卡（跨店同岗对比：候选为各门店的该岗位） -->
-            <div id="pkPostBar" class="hidden items-center gap-2 flex-wrap">
-                <span class="text-xs text-slate-400 whitespace-nowrap">对比岗位</span>
-                <div id="pkPostTabs" class="flex flex-wrap gap-1.5"></div>
-            </div>
+                <!-- PK 模式：同级多选（v4.3：层级仅 门店 / 岗位 / 人员；岗位层级附带岗位二级选项卡，用于跨店同岗对比） -->
+                <div id="pkBar" class="hidden items-center gap-3 flex-wrap">
+                    <span class="text-xs text-slate-400 whitespace-nowrap">PK 层级</span>
+                    <select id="pkLevel" class="org-select" style="min-width:96px">
+                        <option value="门店" selected>门店</option>
+                        <option value="岗位">岗位</option>
+                        <option value="人员">人员</option>
+                    </select>
+                    <span class="text-[11px] text-slate-500 whitespace-nowrap">最多 6 个 · 同级比较</span>
+                    <button id="pkClear" class="quick-btn">清空</button>
+                </div>
+                <!-- PK 层级=岗位 时的岗位二级选项卡（跨店同岗对比：候选为各门店的该岗位） -->
+                <div id="pkPostBar" class="hidden items-center gap-2 flex-wrap">
+                    <span class="text-xs text-slate-400 whitespace-nowrap">对比岗位</span>
+                    <div id="pkPostTabs" class="flex flex-wrap gap-1.5"></div>
+                </div>
 
-            <div class="org-path">
-                <span class="text-slate-500 whitespace-nowrap">当前范围</span>
-                <div id="orgPath" class="flex items-center gap-1 flex-wrap"></div>
-                <span id="inactiveHint" class="text-[11px] text-amber-400/90 hidden"></span>
-            </div>
+                <div class="org-path">
+                    <span class="text-slate-500 whitespace-nowrap">当前范围</span>
+                    <div id="orgPath" class="flex items-center gap-1 flex-wrap"></div>
+                    <span id="inactiveHint" class="text-[11px] text-amber-400/90 hidden"></span>
+                </div>
 
-            <div id="pkOptionsWrap" class="hidden">
-                <div id="pkOptions" class="pk-options"></div>
+                <div id="pkOptionsWrap" class="hidden">
+                    <div id="pkOptions" class="pk-options"></div>
+                </div>
             </div>
         </div>
     </header>
@@ -492,13 +498,12 @@
             <div class="panel p-6">
                 <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
                     <div>
-                        <div class="panel-title"><span class="dot"></span>积分排行榜</div>
-                        <div class="panel-subtitle" id="pointsSubtitle">TOP 10 · 按所选维度排序</div>
+                        <div class="panel-title"><span class="dot"></span>积分/销量排行榜</div>
+                        <div class="panel-subtitle" id="pointsSubtitle">TOP 10 · 跟随页面组织范围</div>
                     </div>
                     <div class="flex items-center gap-1">
-                        <button class="quick-btn active" data-points="门店">门店</button>
-                        <button class="quick-btn" data-points="岗位">岗位</button>
-                        <button class="quick-btn" data-points="人员">人员</button>
+                        <button class="quick-btn active" data-rank="sales">销量优先</button>
+                        <button class="quick-btn" data-rank="points">积分优先</button>
                     </div>
                 </div>
                 <div id="pointsRankChart" style="height:372px" class="mt-2"></div>
@@ -544,7 +549,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V4.3 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
+            业务数据看板 V4.4 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
         </footer>
     </div>
 
@@ -555,7 +560,7 @@
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
                 <div>
                     <h2 class="text-lg font-bold text-white">业务数据看板</h2>
-                    <p class="text-xs text-slate-400">V4.3 · 工号密码登录</p>
+                    <p class="text-xs text-slate-400">V4.4 · 工号密码登录</p>
                 </div>
             </div>
             <p class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
@@ -1377,7 +1382,8 @@
             trendMode: 'day',
             trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营总览趋势分析默认指标
             trendNorm: null,   // 绝对量归一化：null=自动, true=强制, false=强制关闭
-            pointsDim: '门店',
+            pointsDim: '门店',   // 兼容字段，v4.4 起由 autoRankDim 自动推导，保留旧值以防外部引用
+            pointsRank: 'sales',  // v4.4：积分/销量排行榜排序优先级（'sales' 销量优先 / 'points' 积分优先）
             tableDim: '门店',
             expanded: [false, false, false],   // 三大板块各自的展开状态
             panelSel: {},                      // 各板块勾选的指标 key
@@ -2435,32 +2441,44 @@
                 return;
             }
             const node = currentNode();
-            const level = state.pointsDim;
+            // v4.4：维度跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员）
+            const level = autoRankDim();
             // v4.3：候选严格按当前范围收集，不再回退全树（避免范围外条目出现）
             const cands = collectLevel(node, level, []);
-            // 门店维度按人均口径：总积分 ÷ 该门店在职人数（树内人员节点数），排序同样按人均降序
-            const perStore = level === '门店';
+            // 全部维度人均口径：人均销量 / 人均积分 = 总量 ÷ 该节点子树在职人数（人员节点数）
             const hcCache = new Map();
             function headcountOf(n) {
                 if (!hcCache.has(n.id)) hcCache.set(n.id, collectLevel(n, '人员', []).length);
                 return hcCache.get(n.id);
             }
+            const rankKey = state.pointsRank === 'points' ? 'points' : 'sales';
             const rows = cands.map(function (n) {
-                const points = metricsOf(n, r[0], r[1]).points;
-                const hc = perStore ? headcountOf(n) : 0;
-                return { n: n, name: (n.storeName && level === '人员' ? n.storeName + ' · ' : '') + n.name, points: points, hc: hc, avg: perStore ? (hc > 0 ? points / hc : 0) : 0 };
-            }).sort(function (a, b) { return perStore ? b.avg - a.avg : b.points - a.points; }).slice(0, 10);
-            sub.textContent = level + '维度' + (perStore ? ' · 人均积分（总积分 ÷ 在职人数）' : '') + ' · TOP ' + rows.length + ' · 范围：' + node.name;
+                const m = metricsOf(n, r[0], r[1]);
+                const hc = headcountOf(n);
+                const points = m.points || 0;
+                const delivered = m.delivered || 0;
+                const avgPoints = hc > 0 ? points / hc : 0;
+                const avgDelivered = hc > 0 ? delivered / hc : 0;
+                return {
+                    n: n,
+                    name: (n.storeName && level === '人员' ? n.storeName + ' · ' : '') + n.name,
+                    points: points, delivered: delivered, hc: hc,
+                    avgPoints: avgPoints, avgDelivered: avgDelivered
+                };
+            }).sort(function (a, b) {
+                return rankKey === 'sales' ? (b.avgDelivered - a.avgDelivered) : (b.avgPoints - a.avgPoints);
+            }).slice(0, 10);
+            sub.textContent = level + '维度 · 人均销量 + 人均积分 · ' + (rankKey === 'sales' ? '销量优先' : '积分优先') + ' · TOP ' + rows.length + ' · 范围：' + node.name;
             c.setOption({
-                grid: { left: 10, right: 64, top: 12, bottom: 10, containLabel: true },
+                grid: { left: 10, right: 160, top: 12, bottom: 10, containLabel: true },
                 tooltip: {
                     trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE,
                     formatter: function (p) {
                         const it = rows[rows.length - 1 - p[0].dataIndex];
-                        if (perStore && it) {
-                            return it.n.name + '<br/><b style="color:#f59e0b">人均积分：' + (Math.round(it.avg * 10) / 10).toFixed(1) + '</b>（总积分 ' + fmt(it.points) + ' ÷ ' + it.hc + ' 人）';
-                        }
-                        return p[0].name + '<br/><b style="color:#f59e0b">积分：' + fmt(p[0].value) + '</b>';
+                        if (!it) return '';
+                        return '<b>' + it.n.name + '</b><br/>' +
+                            '<span style="color:#ec4899">人均销量：' + it.avgDelivered.toFixed(1) + ' 辆</span>（总销量 ' + fmt(it.delivered) + ' ÷ ' + it.hc + ' 人）<br/>' +
+                            '<span style="color:#f59e0b">人均积分：' + it.avgPoints.toFixed(1) + ' 分</span>（总积分 ' + fmt(it.points) + ' ÷ ' + it.hc + ' 人）';
                     }
                 },
                 xAxis: { type: 'value', ...AXIS_STYLE },
@@ -2472,16 +2490,37 @@
                 },
                 series: [{
                     type: 'bar', barMaxWidth: 16,
-                    data: rows.map(function (it) { return perStore ? it.avg : it.points; }).reverse(),
-                    itemStyle: {
-                        borderRadius: [0, 6, 6, 0],
-                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-                            { offset: 0, color: '#3b82f6' }, { offset: 1, color: '#f59e0b' }
-                        ])
-                    },
-                    label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return perStore ? (Math.round(p.value * 10) / 10).toFixed(1) : fmt(p.value); } }
+                    data: rows.map(function (it) {
+                        const val = rankKey === 'sales' ? it.avgDelivered : it.avgPoints;
+                        return {
+                            value: val,
+                            itemStyle: {
+                                borderRadius: [0, 6, 6, 0],
+                                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                    { offset: 0, color: rankKey === 'sales' ? '#3b82f6' : '#f59e0b' },
+                                    { offset: 1, color: rankKey === 'sales' ? '#ec4899' : '#a78bfa' }
+                                ])
+                            }
+                        };
+                    }).reverse(),
+                    label: {
+                        show: true, position: 'right', color: '#cbd5e1', fontSize: 11,
+                        formatter: function (p) {
+                            const it = rows[rows.length - 1 - p.dataIndex];
+                            if (!it) return '';
+                            return '销量 ' + it.avgDelivered.toFixed(1) + ' · 积分 ' + it.avgPoints.toFixed(1);
+                        }
+                    }
                 }]
             }, true);
+        }
+
+        // v4.4：排行榜维度跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员、否则→人员）
+        function autoRankDim() {
+            const t = (currentNode() || {}).type;
+            if (t === '门店') return '岗位';
+            if (t === '岗位') return '人员';
+            return '门店';
         }
 
         // ---------- 明细数据表 ----------
@@ -2719,20 +2758,26 @@
                 return '<span class="pk-opt' + (on ? ' on' : '') + '" data-store="' + s.id + '" ' +
                     (on ? 'style="--primary:' + c + ';border-color:' + c + ';background:' + scaleColor(c, 0.16) + ';color:#fff"' : '') +
                     '><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
-            }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无门店</span>' : '') + '</div>' +
-                '<div class="flex items-center gap-2 mt-2 flex-wrap">' +
-                '<button class="quick-btn' + (storeMulti ? ' active' : '') + '" data-store-action="multi">' + (storeMulti ? '☑ 多选（已开启）' : '☐ 多选') + '</button>' +
+            }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无门店</span>' : '') + '</div>';
+            // v4.4：多选/全选/清空按钮并入门店标题行（中间位置），右侧放提示
+            const storeActionHtml = '<button class="quick-btn' + (storeMulti ? ' active' : '') + '" data-store-action="multi">' + (storeMulti ? '☑ 多选（已开启）' : '☐ 多选') + '</button>' +
                 '<button class="quick-btn" data-store-action="all">全选当前范围</button>' +
-                '<button class="quick-btn" data-store-action="clear">清空</button>' +
-                '<span class="text-xs text-slate-400 ml-auto">' + (storeMulti
-                    ? '已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + scopeStores.length + ' 家 · 点击门店勾选/取消，可多选'
-                    : '单选模式 · 点击门店即选中，开启「多选」可勾选多家') + ' · 切换岗位会自动剔除空缺门店</span>' +
-                '</div>';
+                '<button class="quick-btn" data-store-action="clear">清空</button>';
+            const storeHint = (storeMulti
+                ? '已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + scopeStores.length + ' 家 · 点击门店勾选/取消，可多选'
+                : '单选模式 · 点击门店即选中，开启「多选」可勾选多家') + ' · 切换岗位会自动剔除空缺门店';
 
             const storeScopeHtml =
                 '<div><div class="text-xs text-slate-400 mb-2">大区（按层级收窄门店范围）</div>' + regionChipHtml + '</div>' +
                 areaChipHtml +
-                '<div class="mt-2"><div class="text-xs text-slate-400 mb-2 flex items-center gap-2">门店（默认单选，可开启多选）<span class="text-[11px] text-slate-500">当前范围 ' + scopeStores.length + ' 家</span></div>' + storeChipHtml + '</div>';
+                '<div class="mt-2">' +
+                    '<div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-2 mb-2">' +
+                        '<div class="text-xs text-slate-400 whitespace-nowrap">门店（默认单选，可开启多选）<span class="text-[11px] text-slate-500 ml-1">当前范围 ' + scopeStores.length + ' 家</span></div>' +
+                        '<div class="flex items-center gap-2 flex-wrap justify-self-center">' + storeActionHtml + '</div>' +
+                        '<span class="text-xs text-slate-400 justify-self-end text-right">' + storeHint + '</span>' +
+                    '</div>' +
+                    storeChipHtml +
+                '</div>';
 
             // ---- Y 轴单选 ----
             const yOpt = CLOSURE_Y_OPTIONS.filter(function (o) { return o.key === state.closure.yMetric; })[0] || CLOSURE_Y_OPTIONS[0];
@@ -2753,8 +2798,8 @@
                             '<div class="panel-subtitle">单岗位 × 多门店 · 每个散点代表该岗位在该门店的一名在岗人员</div>' +
                         '</div>' + ctxHtml +
                     '</div>' +
-                    '<div><div class="text-xs text-slate-400 mb-2">岗位（单选）</div>' + postChipsHtml + '</div>' +
-                    storeScopeHtml +
+                    '<div>' + storeScopeHtml + '</div>' +
+                    '<div class="mt-2"><div class="text-xs text-slate-400 mb-2">岗位（单选）</div>' + postChipsHtml + '</div>' +
                     '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
                         '<div><div class="text-xs text-slate-400 mb-2">纵坐标指标（单选）</div>' + yHtml + '</div>' +
                         '<div><div class="text-xs text-slate-400 mb-2">图表辅助</div><div class="flex flex-wrap gap-2">' + avgHtml + '</div></div>' +
@@ -2957,7 +3002,8 @@
                 addDaily(cur);
                 collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
                 collectLevel(tree, state.pkLevel, []).forEach(addSum);
-                collectLevel(tree, state.pointsDim, []).forEach(addSum);
+                // v4.4：排行榜维度由 autoRankDim 跟随当前组织筛选节点，无法静态预知，预热门店/岗位/人员三层
+                ['门店', '岗位', '人员'].forEach(function (lv) { collectLevel(tree, lv, []).forEach(addSum); });
                 collectLevel(tree, state.tableDim, []).forEach(addSum);
                 state.drillIds.forEach(function (id) {
                     const n = nodeById(id);
@@ -3294,13 +3340,34 @@
             state.trendMetrics = cur;
             renderTrend();
         });
-        document.querySelectorAll('[data-points]').forEach(function (b) {
+        document.querySelectorAll('[data-rank]').forEach(function (b) {
             b.addEventListener('click', function () {
-                state.pointsDim = b.dataset.points;
-                document.querySelectorAll('[data-points]').forEach(function (x) { x.classList.toggle('active', x === b); });
+                state.pointsRank = b.dataset.rank;
+                document.querySelectorAll('[data-rank]').forEach(function (x) { x.classList.toggle('active', x === b); });
                 renderPoints();
             });
         });
+
+        // v4.4：顶栏筛选区可一键收起/展开（折叠状态持久化）
+        (function initFilterToggle() {
+            const $body = document.getElementById('filterBody');
+            const $btn = document.getElementById('filterToggle');
+            const $txt = document.getElementById('filterToggleText');
+            if (!$body || !$btn || !$txt) return;
+            const KEY = 'dash_filter_collapsed';
+            let collapsed = false;
+            try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) { /* 隐私模式忽略 */ }
+            function apply() {
+                $body.classList.toggle('hidden', collapsed);
+                $txt.textContent = collapsed ? '展开筛选 ▾' : '收起筛选 ▴';
+            }
+            $btn.addEventListener('click', function () {
+                collapsed = !collapsed;
+                try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+                apply();
+            });
+            apply();
+        })();
         document.querySelectorAll('[data-table]').forEach(function (b) {
             b.addEventListener('click', function () {
                 state.tableDim = b.dataset.table;
