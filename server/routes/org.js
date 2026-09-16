@@ -3,9 +3,12 @@
  * GET /api/org —— 六级组织树 + 岗位配置（颜色/编制/积分权重）
  * v4：节点带 status / deactivatedAt；**默认只返回在职节点（停用节点整棵子树剪掉）**，
  *     inclInactive=1 时返回全量（前端「显示已停用」开关用），并附带人员工号质量计数
+ * v4.2：先 authRequired + scope，再按 req.scopeNodeIds 裁剪可见节点；越权节点不返回
  */
 const express = require('express');
 const { dataQualityCounts } = require('../services/dataQuality');
+const authRequired = require('../middleware/authRequired');
+const scopeMiddleware = require('../middleware/scope');
 
 function truthy(v) {
   const s = String(v == null ? '' : v).toLowerCase();
@@ -14,9 +17,12 @@ function truthy(v) {
 
 module.exports = function orgRoute(db) {
   const router = express.Router();
+  router.use(authRequired(db));
+  router.use(scopeMiddleware(db));
 
   router.get('/org', (req, res) => {
     const inclInactive = truthy(req.query.inclInactive);
+    const scopeSet = req.scopeNodeIds && req.scopeNodeIds.length ? new Set(req.scopeNodeIds) : null;
     const nodes = db.prepare(
       'SELECT id, name, level, parent_id, post_key, status, deactivated_at FROM org_nodes ORDER BY id'
     ).all();
@@ -32,7 +38,7 @@ module.exports = function orgRoute(db) {
 
     const dr = db.prepare('SELECT MIN(date) AS min, MAX(date) AS max FROM daily_metrics').get();
     const dateRange = dr.min ? { from: dr.min, to: dr.max } : null;
-    if (!nodes.length) return res.json({ ok: true, tree: null, posts, dateRange, dataQuality, hiddenNodes: 0 });
+    if (!nodes.length) return res.json({ ok: true, tree: null, posts, dateRange, dataQuality, hiddenNodes: 0, scopeRootId: req.user.scope_root_id });
 
     const rawById = new Map(nodes.map(n => [n.id, n]));
     const childrenOf = new Map();
@@ -42,21 +48,45 @@ module.exports = function orgRoute(db) {
       childrenOf.get(n.parent_id).push(n);
     });
 
-    // 自上而下判定可见性：自身在职且父节点可见（停用节点整棵子树剪掉）
+    // 自上而下判定可见性：自身在职 且 父节点可见 且 在用户「scope ∪ 祖先」内
+    // 起始队列：根节点 / 父链断裂 / 父节点不在用户可见集（这些应作为可见"子树根"）
+    // 把每个 scope 节点的祖先链加入可见集——便于前端组织树结构完整（数据访问仍按 scope 严格过滤）
+    let visibleSet = scopeSet;          // null = hq 全树
+    if (scopeSet !== null) {
+      visibleSet = new Set(scopeSet);
+      const ids = Array.from(scopeSet);
+      const ancRows = db.prepare(
+        `WITH RECURSIVE up(id, parent_id) AS (
+            SELECT id, parent_id FROM org_nodes WHERE id IN (${ids.map(() => '?').join(',')})
+            UNION ALL
+            SELECT n.id, n.parent_id FROM org_nodes n JOIN up u ON n.id = u.parent_id
+          ) SELECT DISTINCT id FROM up`
+      ).all(...ids);
+      ancRows.forEach(function (r) { visibleSet.add(r.id); });
+    }
     const visibleIds = new Set();
     const reached = new Set();
-    const queue = nodes.filter(n => n.parent_id == null || !rawById.has(n.parent_id));
+    const queue = nodes.filter(function (n) {
+      if (n.parent_id == null || !rawById.has(n.parent_id)) return true;
+      if (visibleSet !== null && !visibleSet.has(n.parent_id)) return true;   // 父不在可见集：本节点作为可见根
+      return false;
+    });
     while (queue.length) {
       const n = queue.shift();
       if (reached.has(n.id)) continue;
       reached.add(n.id);
-      if (inclInactive || n.status === 1) {
+      const canShow = visibleSet === null || visibleSet.has(n.id);
+      if (canShow && (inclInactive || n.status === 1)) {
         visibleIds.add(n.id);
         (childrenOf.get(n.id) || []).forEach(c => queue.push(c));
       }
     }
-    // 兜底：父链成环等异常导致未遍历到的节点，按自身状态单独判定，避免整支消失
-    nodes.forEach(n => { if (!reached.has(n.id) && (inclInactive || n.status === 1)) visibleIds.add(n.id); });
+    // 兜底：异常父链（环/缺失）未遍历到的节点，按自身状态单独判定
+    nodes.forEach(n => {
+      if (reached.has(n.id)) return;
+      const inScope = scopeSet === null || scopeSet.has(n.id);
+      if (inScope && (inclInactive || n.status === 1)) visibleIds.add(n.id);
+    });
 
     // 组装嵌套树（父节点不可见时降级为顶层，保证不丢分支）
     const byId = new Map();
@@ -82,8 +112,9 @@ module.exports = function orgRoute(db) {
 
     res.json({
       ok: true, tree: root, posts, dateRange, inclInactive, dataQuality,
-      hiddenNodes: nodes.length - visibleIds.size,          // 被「默认隐藏」剪掉的节点数（含子树）
-      inactiveNodesShown: inclInactive ? dataQuality.nodesInactive : 0
+      hiddenNodes: nodes.length - visibleIds.size,
+      inactiveNodesShown: inclInactive ? dataQuality.nodesInactive : 0,
+      scopeRootId: req.user.scope_root_id
     });
   });
 

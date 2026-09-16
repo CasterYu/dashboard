@@ -141,6 +141,24 @@ function migrate(db) {
       report_json TEXT
     );
 
+    -- v4.2 登录账号（与人员节点 emp_no 1:1 绑定；scope 按人员当前位置派生）
+    CREATE TABLE IF NOT EXISTS users (
+      id                     INTEGER PRIMARY KEY AUTOINCREMENT,
+      emp_no                 TEXT NOT NULL UNIQUE,
+      password_hash          TEXT NOT NULL,
+      role                   TEXT NOT NULL,         -- hq / regional_lead / area_lead / store_lead / employee
+      must_change_password   INTEGER NOT NULL DEFAULT 1,
+      password_changed_at    TEXT,
+      last_login_at          TEXT,
+      failed_attempts        INTEGER NOT NULL DEFAULT 0,
+      locked_until           TEXT,
+      status                 TEXT NOT NULL DEFAULT 'active',   -- active / locked / disabled
+      created_at             TEXT DEFAULT (datetime('now','localtime')),
+      created_by             TEXT                       -- 创建者标识（CLI 账号或脚本名）
+    );
+    CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
+    CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
+
     -- 元信息（schema 版本等）
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
   `);

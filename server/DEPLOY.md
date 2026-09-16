@@ -1,7 +1,8 @@
-# v4.0 后端部署指南
+# v4.2 后端部署指南
 
 > 适用：约 1000 名内部用户、读多写少的看板场景。数据库为 SQLite 单文件，无需安装数据库服务。
 > v4.0 相对 v3.8 的运维变化：名册导入支持 `mode=snapshot` 全量快照与 `dryRun` 预检；人员以**工号**识别（名册建议填工号）；离职/闭店通过快照或停用接口处理，**不做物理删除**。升级前请先备份数据库（见第四节）。
+> **v4.2 新增**：5 角色登录鉴权（HQ / 大区 / 小区 / 店长 / 员工）+ 工号密码自管 + JWT 8h + scope 子树过滤。所有业务接口 `/api/org` `/api/persons` `/api/nodesums` `/api/metrics` `/api/admin/*` 均需 `Authorization: Bearer <token>`；导入 `/api/import/*` 仍走 `X-Import-Token`，与登录体系并存。
 
 ## 一、推荐形态：轻量云服务器（2C4G）
 
@@ -12,7 +13,11 @@ sudo apt install -y nginx && sudo npm i -g pm2
 cd /opt && git clone <仓库> dashboard && cd dashboard/server
 npm install --registry=https://registry.npmmirror.com
 node scripts/seed.js        # 首次用演示数据；生产改为导入真实名册+指标
-IMPORT_TOKEN=<强随机串> pm2 start index.js --name dashboard-api
+# 生成强随机 JWT 密钥（务必设置，未设置启动会每次重启作废所有 token）
+JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(48).toString('hex'))")
+IMPORT_TOKEN=<强随机串> \
+JWT_SECRET=$JWT_SECRET \
+pm2 start index.js --name dashboard-api
 pm2 save && pm2 startup
 ```
 
@@ -138,8 +143,54 @@ docker run -d --name dashboard-api -p 3777:3777 \
 
    注意：`node scripts/seed.js --reset` 会清空全部数据，**生产环境禁用**。
 
-## 七、后续版本
+## 七、账号管理（v4.2）
 
-- v4.1：登录鉴权与门店/角色数据隔离，导入权限下沉到门店账号
-- v4.2：手机端响应式与 PWA；新增管理端停用/恢复操作界面（当前停用与恢复只能通过名册导入 `mode=snapshot` 触发，或由维护者直接改库，尚无单节点停用接口）
+### 角色与数据范围
+
+| role | 绑定人员 level | 数据范围 |
+| --- | --- | --- |
+| `hq` | — | 全树（授予运维/老板） |
+| `regional_lead` | 大区 | 本大区子树 |
+| `area_lead` | 小区 | 本小区子树 |
+| `store_lead` | 门店 | 本店子树 |
+| `employee` | 人员 | 仅自己 |
+
+调岗/晋升后**下次登录即生效**（scope 按人员当前位置实时计算）。
+
+### CLI 建账号
+
+```bash
+cd /opt/dashboard/server
+
+# 单建：自动生成 10 位随机密码（仅此次显示，请线下安全分发）
+node scripts/create-user.js add admin001 hq --note "老板主账号"
+
+# 单建：员工（角色自动按人员节点 level 推断）
+node scripts/create-user.js add E10086
+
+# 重置密码（清失败计数与锁定）
+node scripts/create-user.js reset admin001
+
+# 批量导入（CSV：emp_no,role,note）
+node scripts/create-user.js import ./users.csv
+
+# 列出全部账号（不含密码明文）
+node scripts/create-user.js list
+
+# 停用 / 启用
+node scripts/create-user.js disable E10086
+node scripts/create-user.js enable  E10086
+```
+
+### 登录与 token
+
+- 登录：`POST /api/auth/login { emp_no, password }` → 返回 `{ token, user, mustChangePassword }`
+- 前端将 token 存 localStorage，调用 `Authorization: Bearer <token>` 头
+- 默认 JWT 有效期 8 小时，到期后前端 401 → 自动跳登录页
+- 首次登录 `mustChangePassword=true`，前端强制改密后方可进入看板
+- 安全要点：JWT 部署前**务必设置** `JWT_SECRET`（强随机串），未设置会随机生成一次性值并打印警告——重启后所有 token 失效
+
+## 八、后续版本
+
+- v4.3：手机端响应式与 PWA；新增管理端停用/恢复操作界面（当前停用与恢复只能通过名册导入 `mode=snapshot` 触发，或由维护者直接改库，尚无单节点停用接口）
 - 数据量或并发增长时：`db.js` 换 PostgreSQL 驱动（表结构不变），前端无需改动

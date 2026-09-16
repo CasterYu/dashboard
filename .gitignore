@@ -32,3 +32,7 @@ backups/
 server/data/
 *.db-wal
 *.db-shm
+
+# playwright-cli 临时页签/控制台输出
+.playwright-cli/
+server/.playwright-cli/

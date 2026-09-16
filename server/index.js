@@ -1,17 +1,20 @@
 'use strict';
 /**
- * v4.0 后端入口：路由挂载、CORS 白名单、导入 Token 校验、频率限制、错误处理
+ * v4.2 后端入口：路由挂载、CORS 白名单、导入 Token 校验、频率限制、错误处理、JWT 鉴权挂载
  * v4 变更：组织节点生命周期（停用/恢复）、工号唯一识别、任职区间时间切片聚合
+ * v4.2 变更：身份权限校验（5 角色 + 工号密码 + JWT 8h + scope 子树过滤）
  */
+require('dotenv').config();   // 加载 .env；若未提供则维持 process.env 原值
 const express = require('express');
 const { openDb, DB_PATH } = require('./db');
 const { dataQualityCounts } = require('./services/dataQuality');
+const authRoute = require('./routes/auth');
 const orgRoute = require('./routes/org');
 const metricsRoute = require('./routes/metrics');
 const importRoute = require('./routes/import');
 const adminRoute = require('./routes/admin');
 
-const VERSION = '4.0.0';
+const VERSION = '4.2.0';
 
 const app = express();
 const db = openDb();
@@ -36,7 +39,7 @@ app.use((req, res, next) => {
     res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,X-Import-Token');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,X-Import-Token,Authorization');
     res.setHeader('Access-Control-Max-Age', '600');
   }
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -45,6 +48,7 @@ app.use((req, res, next) => {
 
 // ---------- 路由 ----------
 app.get('/api/health', (req, res) => res.json({ ok: true, version: VERSION, now: new Date().toISOString() }));
+app.use('/api', authRoute(db));
 app.use('/api', orgRoute(db));
 app.use('/api', metricsRoute(db));
 app.use('/api/import', importRoute(db));

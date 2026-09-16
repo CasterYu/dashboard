@@ -352,6 +352,13 @@
                     <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span id="current-time">--:--:--</span>
                 </div>
+                <!-- v4.2 用户身份区：mock 自动以「总部」身份渲染；API 模式登录后显示姓名 + 角色徽章 + 登出 -->
+                <div id="userBadge" class="hidden items-center gap-2 pl-3 ml-1 border-l border-slate-700/60">
+                    <span id="userName" class="text-sm text-slate-100 font-medium"></span>
+                    <span id="userRole" class="text-[11px] px-2 py-0.5 rounded-md font-medium"></span>
+                    <button id="logoutBtn" class="text-xs text-slate-300 hover:text-white px-2 py-1 rounded border border-slate-600 hover:border-slate-400 transition" title="登出">登出</button>
+                </div>
+                <div id="mockBadge" class="hidden text-[11px] px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 border border-amber-400/30 font-medium" title="演示模式：数据为前端内置 mock，不连接真实服务">演示模式（数据为模拟）</div>
             </div>
         </div>
 
@@ -536,6 +543,57 @@
         <footer class="text-center text-xs text-slate-500 py-4">
             业务数据看板 V4.1 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势
         </footer>
+    </div>
+
+    <!-- v4.2 登录覆盖层（API 模式未登录时显示；mock 模式永不显示） -->
+    <div id="loginOverlay" class="fixed inset-0 z-[100] flex items-center justify-center hidden" style="background: radial-gradient(1200px 600px at 50% 50%, rgba(15,23,42,0.92), rgba(2,6,23,0.96)); backdrop-filter: blur(6px);">
+        <div class="panel w-[400px] max-w-[92vw] p-8 mx-auto" style="background: linear-gradient(180deg, rgba(27,41,64,0.96), rgba(17,28,47,0.96));">
+            <div class="flex items-center gap-3 mb-1">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
+                <div>
+                    <h2 class="text-lg font-bold text-white">业务数据看板</h2>
+                    <p class="text-xs text-slate-400">V4.2 · 工号密码登录</p>
+                </div>
+            </div>
+            <p class="text-xs text-slate-400 mt-3 mb-5 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">工号</label>
+                    <input id="loginEmpNo" type="text" autocomplete="username" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none" placeholder="请输入工号">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">密码</label>
+                    <input id="loginPwd" type="password" autocomplete="current-password" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none" placeholder="请输入密码">
+                </div>
+                <div id="loginError" class="text-xs text-red-400 min-h-[18px]"></div>
+                <button id="loginSubmit" class="w-full mt-2 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 transition">登录</button>
+            </div>
+            <p class="text-[11px] text-slate-500 mt-4 leading-relaxed">忘记密码请联系管理员重置（CLI：<code class="text-slate-400">node scripts/create-user.js reset &lt;工号&gt;</code>）。</p>
+        </div>
+    </div>
+
+    <!-- v4.2 强制改密弹窗（首次登录 / 重置后必须改密才能进入看板） -->
+    <div id="changePwdModal" class="fixed inset-0 z-[101] flex items-center justify-center hidden" style="background: rgba(2,6,23,0.75); backdrop-filter: blur(4px);">
+        <div class="panel w-[400px] max-w-[92vw] p-8 mx-auto" style="background: linear-gradient(180deg, rgba(27,41,64,0.96), rgba(17,28,47,0.96));">
+            <h2 class="text-lg font-bold text-white mb-1">修改密码</h2>
+            <p class="text-xs text-amber-300 mb-4 leading-relaxed">首次登录或密码被管理员重置后必须修改默认密码，新密码长度至少 6 位。</p>
+            <div class="space-y-3">
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">原密码</label>
+                    <input id="cpOld" type="password" autocomplete="current-password" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">新密码（至少 6 位）</label>
+                    <input id="cpNew" type="password" autocomplete="new-password" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="text-xs text-slate-400 mb-1 block">再次输入新密码</label>
+                    <input id="cpNew2" type="password" autocomplete="new-password" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none">
+                </div>
+                <div id="cpError" class="text-xs text-red-400 min-h-[18px]"></div>
+                <button id="cpSubmit" class="w-full mt-2 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 transition">确认修改</button>
+            </div>
+        </div>
     </div>
 
     <!-- 业务执行与闭环看板 -->
@@ -918,11 +976,163 @@
             clearMetricCache();
         }
 
-        function fetchJson(url) {
-            return fetch(url).then(function (r) {
+        function fetchJson(url, opts) {
+            opts = opts || {};
+            const headers = Object.assign({}, opts.headers || {});
+            const t = getToken();
+            if (t && !opts.skipAuth) headers['Authorization'] = 'Bearer ' + t;
+            const fetchOpts = Object.assign({}, opts, { headers: headers });
+            return fetch(url, fetchOpts).then(function (r) {
+                if (r.status === 401) {
+                    // 401：清 token + 显示登录页（登录接口本身 401 不弹窗）
+                    if (!/auth\/login/.test(url)) {
+                        clearToken();
+                        if (DATA_MODE === 'api') showLogin('会话已过期，请重新登录');
+                    }
+                    throw new Error('HTTP 401 - ' + url);
+                }
                 if (!r.ok) throw new Error('HTTP ' + r.status + ' - ' + url);
                 return r.json();
             });
+        }
+
+        // ============ v4.2 鉴权：token 存取 + 登录/登出/改密/当前用户 ============
+        const TOKEN_KEY = 'dash_token_v4';
+        function getToken() { try { return localStorage.getItem(TOKEN_KEY); } catch (e) { return null; } }
+        function setToken(t) { try { localStorage.setItem(TOKEN_KEY, t); } catch (e) {} }
+        function clearToken() { try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} }
+        // 登录响应里挂的 user 信息（缓存供 topbar / 后续 /api/auth/me 失败时降级用）
+        var cachedUser = null;
+
+        function applyUserToTopbar(user) {
+            const ub = document.getElementById('userBadge');
+            const mb = document.getElementById('mockBadge');
+            if (DATA_MODE === 'mock') {
+                if (ub) ub.classList.add('hidden');
+                if (mb) mb.classList.remove('hidden');
+                return;
+            }
+            if (mb) mb.classList.add('hidden');
+            if (!ub) return;
+            if (!user) { ub.classList.add('hidden'); return; }
+            ub.classList.remove('hidden');
+            ub.classList.add('flex');
+            document.getElementById('userName').textContent = user.name || user.emp_no;
+            const roleEl = document.getElementById('userRole');
+            const map = {
+                hq: { text: '总部', cls: 'bg-purple-500/20 text-purple-200 border border-purple-400/30' },
+                regional_lead: { text: '大区负责人', cls: 'bg-blue-500/20 text-blue-200 border border-blue-400/30' },
+                area_lead: { text: '小区负责人', cls: 'bg-cyan-500/20 text-cyan-200 border border-cyan-400/30' },
+                store_lead: { text: '店长', cls: 'bg-emerald-500/20 text-emerald-200 border border-emerald-400/30' },
+                employee: { text: '员工', cls: 'bg-slate-500/20 text-slate-200 border border-slate-400/30' }
+            };
+            const m = map[user.role] || { text: user.role || '-', cls: 'bg-slate-500/20 text-slate-200 border border-slate-400/30' };
+            roleEl.textContent = m.text;
+            roleEl.className = 'text-[11px] px-2 py-0.5 rounded-md font-medium ' + m.cls;
+        }
+
+        function showLogin(msg) {
+            const ov = document.getElementById('loginOverlay');
+            const err = document.getElementById('loginError');
+            if (err) err.textContent = msg || '';
+            if (ov) { ov.classList.remove('hidden'); }
+            setTimeout(function () { const i = document.getElementById('loginEmpNo'); if (i) i.focus(); }, 50);
+        }
+        function hideLogin() { const ov = document.getElementById('loginOverlay'); if (ov) ov.classList.add('hidden'); }
+        function showChangePwd() { const m = document.getElementById('changePwdModal'); if (m) m.classList.remove('hidden'); }
+        function hideChangePwd() { const m = document.getElementById('changePwdModal'); if (m) m.classList.add('hidden'); }
+
+        // 直接 fetch（不走 fetchJson，避免 401 循环触发跳登录）
+        async function loginApi(empNo, pwd) {
+            const r = await fetch(API_BASE + '/api/auth/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ emp_no: empNo, password: pwd })
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok) throw new Error(data.error || ('登录失败：HTTP ' + r.status));
+            return data;
+        }
+        async function meApi() {
+            return fetchJson(API_BASE + '/api/auth/me');
+        }
+        async function changePwdApi(oldP, newP) {
+            const r = await fetch(API_BASE + '/api/auth/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + (getToken() || '') },
+                body: JSON.stringify({ oldPassword: oldP, newPassword: newP })
+            });
+            const data = await r.json().catch(function () { return {}; });
+            if (!r.ok) throw new Error(data.error || ('改密失败：HTTP ' + r.status));
+            return data;
+        }
+        function logoutApi() {
+            // 服务端无状态（仅返回 ok），客户端清 token + 跳登录
+            fetch(API_BASE + '/api/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + (getToken() || '') } }).catch(function () {});
+        }
+
+        // 暴露给 inline 事件
+        window.__v42 = {
+            doLogin: function () {
+                const emp = (document.getElementById('loginEmpNo').value || '').trim();
+                const pwd = document.getElementById('loginPwd').value || '';
+                if (!emp || !pwd) { document.getElementById('loginError').textContent = '请输入工号与密码'; return; }
+                const btn = document.getElementById('loginSubmit');
+                btn.disabled = true; btn.textContent = '登录中…';
+                loginApi(emp, pwd).then(function (r) {
+                    setToken(r.token); cachedUser = r.user;
+                    applyUserToTopbar(r.user);
+                    hideLogin();
+                    if (r.mustChangePassword) { showChangePwd(); return; }
+                    // 登录成功且无需改密 → 重启 boot 流程
+                    bootApiAfterLogin();
+                }).catch(function (e) {
+                    document.getElementById('loginError').textContent = e.message || '登录失败';
+                    btn.disabled = false; btn.textContent = '登录';
+                    document.getElementById('loginPwd').value = '';
+                });
+            },
+            doLogout: function () {
+                logoutApi();
+                clearToken(); cachedUser = null;
+                applyUserToTopbar(null);
+                // 刷新页面以便 bootApi 重走「未登录 → 弹登录」分支
+                location.reload();
+            },
+            doChangePwd: function () {
+                const oldP = document.getElementById('cpOld').value || '';
+                const newP = document.getElementById('cpNew').value || '';
+                const newP2 = document.getElementById('cpNew2').value || '';
+                const errEl = document.getElementById('cpError');
+                if (!oldP || !newP) { errEl.textContent = '请填写原密码与新密码'; return; }
+                if (newP.length < 6) { errEl.textContent = '新密码至少 6 位'; return; }
+                if (newP !== newP2) { errEl.textContent = '两次新密码不一致'; return; }
+                if (newP === oldP) { errEl.textContent = '新密码不能与原密码相同'; return; }
+                const btn = document.getElementById('cpSubmit');
+                btn.disabled = true; btn.textContent = '提交中…';
+                changePwdApi(oldP, newP).then(function (r) {
+                    setToken(r.token);
+                    hideChangePwd();
+                    bootApiAfterLogin();
+                }).catch(function (e) {
+                    errEl.textContent = e.message || '改密失败';
+                    btn.disabled = false; btn.textContent = '确认修改';
+                });
+            }
+        };
+        // 登录成功 / 改密成功后重启 boot 流程（不刷新页面，保留已选日期等状态）
+        function bootApiAfterLogin() {
+            apiLoading(true, '正在连接数据服务…');
+            meApi().then(function (d) {
+                cachedUser = d.user; applyUserToTopbar(d.user);
+                return loadOrgTree();
+            }).then(function (d) {
+                START_DATE = parseDate(d.dateRange.from);
+                const endD = parseDate(d.dateRange.to);
+                DAYS = Math.round((endD - START_DATE) / ONE_DAY) + 1;
+                TODAY = endD;
+                apiLoading(false);
+                startApp();
+            }).catch(apiError);
         }
         function idxToDate(i) { return dateStr(addDays(START_DATE, i)); }
         // 节点 id → 接口参数；根节点（服务端未落「全国」节点）无 id 时用 all，表示全网口径
@@ -1075,10 +1285,23 @@
             });
         }
 
-        // API 模式启动：组织树 + 岗位配置 + 日期范围 → 重建全局常量 → startApp()
+        // API 模式启动：v4.2 先校验登录态（有 token → /api/auth/me → 加载树；无 token → 弹登录）
         function bootApi() {
-            apiLoading(true, '正在连接数据服务…');
-            return loadOrgTree().then(function (d) {
+            if (!getToken()) {
+                showLogin('请使用工号与密码登录');
+                return Promise.reject(new Error('未登录'));
+            }
+            apiLoading(true, '正在校验登录态…');
+            return meApi().then(function (d) {
+                cachedUser = d.user; applyUserToTopbar(d.user);
+                if (d.user.mustChangePassword) {
+                    apiLoading(false);
+                    showChangePwd();
+                    return null;
+                }
+                return loadOrgTree();
+            }).then(function (d) {
+                if (!d) return;
                 START_DATE = parseDate(d.dateRange.from);
                 const endD = parseDate(d.dateRange.to);
                 DAYS = Math.round((endD - START_DATE) / ONE_DAY) + 1;
@@ -2963,8 +3186,23 @@
         setRange(7);
         } // ---- end startApp ----
 
-        if (DATA_MODE === 'mock') startApp();
-        else bootApi();
+        if (DATA_MODE === 'mock') {
+            // mock 演示模式：自动以「总部」身份渲染，不调任何登录接口
+            cachedUser = { emp_no: 'demo', name: '演示模式', role: 'hq', scopeName: '全国（全树）' };
+            applyUserToTopbar(cachedUser);
+            startApp();
+        } else bootApi();
+
+        // ===== v4.2 登录/改密/登出事件绑定 =====
+        document.getElementById('loginSubmit').addEventListener('click', window.__v42.doLogin);
+        document.getElementById('logoutBtn').addEventListener('click', window.__v42.doLogout);
+        document.getElementById('cpSubmit').addEventListener('click', window.__v42.doChangePwd);
+        ['loginEmpNo', 'loginPwd'].forEach(function (id) {
+            document.getElementById(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') window.__v42.doLogin(); });
+        });
+        ['cpOld', 'cpNew', 'cpNew2'].forEach(function (id) {
+            document.getElementById(id).addEventListener('keydown', function (e) { if (e.key === 'Enter') window.__v42.doChangePwd(); });
+        });
     </script>
 </body>
 </html>
