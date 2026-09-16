@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v4.1-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v4.2-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,10 +20,11 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v4.1 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名，消除人数规模优势；tooltip 同时展示人均 / 总分 / 人数 |
-| **🟡 v4.0 · 历史版** | 👉 同上链接（与 v4.1 同批发布，页面即 v4.1） | 📦 归档 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
-| **🟡 v3.8 · 历史版** | 👉 同上链接（页面即 v4.1） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
-| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.1） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
+| **🟢 v4.2 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **身份权限校验**：5 角色（HQ / 大区 / 小区 / 店长 / 员工）+ 工号密码自管；JWT（HS256，8h）；scope 子树 CTE 过滤，HQ 看全量、非 HQ 仅看其负责范围；首登强制改密；mock 模式自动渲染为「演示模式（总部）」 |
+| **🟡 v4.1 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名，消除人数规模优势；tooltip 同时展示人均 / 总分 / 人数 |
+| **🟡 v4.0 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
+| **🟡 v3.8 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
+| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.2） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
 | **🟡 v1 · 历史归档** | **👉 [https://casteryu.github.io/dashboard/legacy/v1/](https://casteryu.github.io/dashboard/legacy/v1/)** | 📦 归档 | 白板草图完整模块版：漏斗/积分/下钻/排行榜/雷达 |
 
 > 💡 直接 Ctrl + 点击可在新标签页打开，与当前页同时浏览。
@@ -32,7 +33,7 @@
 
 | 版本 | 文件路径 |
 |:---:|:---|
-| **v4.1 最新版** | `D:\projects\dashboard\index.html` |
+| **v4.2 最新版** | `D:\projects\dashboard\index.html` |
 | **v1 历史版** | `D:\projects\dashboard\legacy\v1\index.html` |
 
 ---
@@ -41,7 +42,8 @@
 
 汽车销售运营场景下的数据看板，单文件 HTML 部署，零构建、零依赖。
 
-- **v4.1（当前）**：**积分排行榜门店人均口径**。门店维度按「总积分 ÷ 在职人数」的人均积分排名（人数 = 树内该门店人员节点数，打开「显示已停用」时含停用人员），消除人数规模优势；tooltip 三要素：人均积分 / 总积分 / 人数；条形标签保留 1 位小数；副标题标注口径。岗位 / 人员维度与 PK 模式维持总积分口径不变。
+- **v4.2（当前）**：**身份权限校验**。① 5 角色：`hq` / `regional_lead` / `area_lead` / `store_lead` / `employee`，覆盖总部、大区、小区、门店、员工五层；② **工号密码自管**：CLI `node server/scripts/create-user.js add <工号> <初始密码> <role>` 一行建账号，`reset/list/import/disable/enable` 子命令齐全；③ **JWT（HS256，8h）** 颁发 token，前端 `fetchJson` 自动注入 Bearer，401 自动跳登录浮层；④ **scope 子树过滤**（递归 CTE）：员工仅看自己；店长看门店；小区长看小区；大区长看大区；HQ 看全量；非 HQ 用户额外纳入祖先链，保留树结构；调岗后下次登录生效（动态计算，不缓存）；⑤ **首登强制改密**：服务端 `must_change_password` 标志 + 客户端拦截双保险；⑥ **mock 模式（演示数据）自动渲染为「演示模式（总部）」徽章**，无需登录；⑦ 账号管理 CLI、token 配置、JWT_SECRET 生成详见 `server/DEPLOY.md §7`。
+- **v4.1（历史）**：**积分排行榜门店人均口径**。门店维度按「总积分 ÷ 在职人数」的人均积分排名（人数 = 树内该门店人员节点数，打开「显示已停用」时含停用人员），消除人数规模优势；tooltip 三要素：人均积分 / 总积分 / 人数；条形标签保留 1 位小数；副标题标注口径。岗位 / 人员维度与 PK 模式维持总积分口径不变。
 - **v4.0（历史）**：**组织生命周期 + 工号识别**。① 节点停用/恢复（软删除）：人员离职、门店闭店走同一机制，历史指标完整保留、重新出现在名册即自动恢复；② 人员以**工号**为唯一身份（明文存储，不采集身份证），改名不新增人员、调岗不重复计数；③ 任职区间时间切片：历史报表按**当时**门店/岗位归属统计；④ 名册导入支持增量合并（`mode=merge`）与全量快照（`mode=snapshot`），支持预检（`dryRun=1`）与大批量停用拦截（409 + `force=1`）；⑤ 筛选区新增「显示已停用」开关（默认关闭，仅 API 模式可见）。
 - **v3.8（历史）**：真实数据接入。前端双模式：默认演示模式（内嵌模拟数据，零部署可用），URL 加 `?data=api&api=http://后端地址:3777` 切换真实数据；后端 Node.js + Express + SQLite（`server/` 目录），提供组织树/指标聚合/人员汇总 API 与 Excel/CSV 导入接口，数据按需懒加载 + 本地缓存。
 - **v3.7（历史）**：双看板结构。顶栏胶囊切换「**经营总览** / **业务执行与闭环**」。岗位体系扩展至 10，新增试驾点评率 / 线索试驾率；闭环看板人员散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率三选一，按门店分色 + 均值参考线），6 张 KPI 摘要 + 人员明细表。
@@ -92,11 +94,18 @@
 ```
 dashboard/
 ├── README.md               ← 本文件
-├── index.html              ← v4.1 当前最新版（前端，双模式：演示/真实数据）
+├── index.html              ← v4.2 当前最新版（前端，双模式：演示/真实数据，含登录浮层）
 ├── .gitignore
 ├── .gitattributes
 ├── push-to-github.ps1
-├── server/                 ← v4.0 后端（Node.js + Express + SQLite，详见下方章节）
+├── server/                 ← v4.2 后端（Node.js + Express + SQLite，含 5 角色鉴权，详见下方章节）
+│   ├── services/auth.js    ←   密码哈希/JWT/scope 推导
+│   ├── middleware/         ←   authRequired + scope（CTE 子树过滤）
+│   ├── routes/auth.js      ←   /login /me /change-password /logout
+│   ├── scripts/create-user.js ←  CLI 账号管理（add/reset/list/import/disable/enable）
+│   └── ...
+├── docs/
+│   └── 项目进度报告.html
 └── legacy/
     └── v1/
         ├── README.md
@@ -105,32 +114,56 @@ dashboard/
 
 ---
 
-## 🔌 v4.0 后端服务（真实数据接入 + 组织生命周期）
+## 🔌 v4.2 后端服务（真实数据接入 + 组织生命周期 + 身份权限）
 
 ### 启动
 
 ```bash
 cd server
-npm install          # 首次
-node scripts/seed.js # 可选：生成一年演示数据入库（自动自验）
-npm start            # http://127.0.0.1:3777
+npm install                       # 首次
+node scripts/seed.js              # 可选：生成一年演示数据入库（自动自验）
+node scripts/create-user.js add <工号> <初始密码> <role>   # 建账号（至少 1 个 hq 角色）
+npm start                         # http://127.0.0.1:3777
 ```
 
-### API 简表
+> 环境变量 `.env`：`JWT_SECRET=...`（必填，CLI 启动会校验）、`IMPORT_TOKEN=...`（导入接口用）。
 
-| 接口 | 说明 |
-|:---|:---|
-| `GET /api/org?inclInactive=` | 六级组织树 + 岗位配置（含积分权重）+ 数据日期范围；默认剪掉已停用子树，`inclInactive=1` 返回并带 `status/deactivatedAt`，附 `dataQuality` 与 `hiddenNodes` 计数 |
-| `GET /api/metrics?node=&from=&to=` | 节点（含子树）区间逐日 11 指标 + 积分序列（积分按岗位权重现算）；`node=all` 表示全部人员；**不受停用影响**（历史数据完整保留） |
-| `GET /api/persons?node=&from=&to=&inclInactive=` | 节点子树人员区间汇总（散点图/积分榜/明细表数据源）；跨店人员按人合并为一行并附 `assignments` 任职明细；默认排除已停用人员 |
-| `GET /api/nodesums?nodes=&from=&to=&inclInactive=` | 多节点区间合计批量查询（下钻/榜单预载） |
-| `POST /api/import/org?mode=&dryRun=&force=` | 名册导入（大区/小区/门店/岗位/人员/**工号**/**生效日期**，请求头 X-Import-Token） |
-| `POST /api/import/metrics` | 指标导入（可选「工号」列优先定位人员；同人同日 upsert 覆盖，逐行校验返回失败明细） |
-| `GET /api/import/template?type=` | 下载名册（7 列）/ 指标 CSV 列模板 |
-| `GET /api/import/logs?limit=` | 导入历史（文件、模式、成功/失败行数、停用/恢复摘要） |
-| `GET /api/admin/data-quality?limit=` | 工号质量：在职缺工号清单、重复工号检测、停用节点统计 |
+### 角色与权限（v4.2）
 
-前端切换：`index.html?data=api&api=http://127.0.0.1:3777`（默认不加参数 = 演示模式）。导入接口需请求头 `X-Import-Token`（环境变量 `IMPORT_TOKEN` 设置，默认 `change-me-import-token`）。
+| 角色 | scope 范围 | 备注 |
+|:---|:---|:---|
+| `hq` | 全量（无过滤） | 默认管理员；可调用 `/api/admin/*` |
+| `regional_lead` | 所属大区子树 | 动态计算（按人员节点向上查找「大区」级祖先） |
+| `area_lead` | 所属小区子树 | 动态计算（按人员节点向上查找「小区」级祖先） |
+| `store_lead` | 所属门店子树 | 动态计算（按人员节点向上查找「门店」级祖先） |
+| `employee` | 仅自身 | 个人只读 |
+
+> 调岗后**下次登录**生效（scope 在签发 JWT 时计算，不写入 token）；非 HQ 用户额外纳入祖先链，保留树结构（看到上级但下钻子树只到授权范围）。
+
+### 鉴权接口
+
+| 接口 | 鉴权 | 说明 |
+|:---|:---:|:---|
+| `POST /api/auth/login` | 否 | 入参 `{empNo, password}`，返回 `{token, mustChangePassword, me}`；错误密码 5 次锁 15 分钟 |
+| `GET /api/auth/me` | Bearer | 返回当前用户 `{empNo, name, role, mustChangePassword, scopeNodeIds}` |
+| `POST /api/auth/change-password` | Bearer | 入参 `{oldPassword, newPassword}`，新密码 ≥ 6 位 |
+| `POST /api/auth/logout` | Bearer | 仅前端清 token，服务端无状态 |
+
+### 数据接口（scope 过滤）
+
+| 接口 | 鉴权 | 说明 |
+|:---|:---:|:---|
+| `GET /api/org?inclInactive=` | Bearer | 六级组织树 + 岗位配置 + 数据日期范围；**按 scope 过滤可见节点**，`inclInactive=1` 返回并带 `status/deactivatedAt` |
+| `GET /api/metrics?node=&from=&to=` | Bearer | 节点（含子树）区间逐日 11 指标 + 积分序列；`node=all` 表示全部人员；**不受停用影响**（历史数据完整保留）；scope 外节点返回空 |
+| `GET /api/persons?node=&from=&to=&inclInactive=` | Bearer | 节点子树人员区间汇总；scope 外人员自动排除 |
+| `GET /api/nodesums?nodes=&from=&to=&inclInactive=` | Bearer | 多节点区间合计批量查询；scope 外节点自动剔除 |
+| `POST /api/import/org?mode=&dryRun=&force=` | X-Import-Token | 名册导入；与登录鉴权并存 |
+| `POST /api/import/metrics` | X-Import-Token | 指标导入 |
+| `GET /api/import/template?type=` | X-Import-Token | 名册（7 列）/ 指标 CSV 列模板 |
+| `GET /api/import/logs?limit=` | Bearer (hq) | 导入历史 |
+| `GET /api/admin/data-quality?limit=` | Bearer (hq) | 工号质量：在职缺工号清单、重复工号检测、停用节点统计 |
+
+前端切换：`index.html?data=api&api=http://127.0.0.1:3777`（默认不加参数 = 演示模式，**自动渲染为「演示模式（总部）」徽章**）。登录接口需请求头 `Content-Type: application/json`；其他数据接口需请求头 `Authorization: Bearer <token>`。
 
 ### 数据导入流程
 
@@ -167,7 +200,7 @@ curl.exe -H "X-Import-Token: change-me-import-token" `
 
 ### 部署
 
-生产部署（PM2 + Nginx + HTTPS、备份 cron、Docker/内网备选、运维流程）见 **[server/DEPLOY.md](server/DEPLOY.md)**。
+生产部署（PM2 + Nginx + HTTPS、备份 cron、Docker/内网备选、运维流程、**v4.2 账号管理与 JWT_SECRET 生成**）见 **[server/DEPLOY.md](server/DEPLOY.md)**。
 
 ---
 
@@ -175,6 +208,7 @@ curl.exe -H "X-Import-Token: change-me-import-token" `
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
+| **v4.2** | 2026-09-16 | **身份权限校验**：5 角色（hq/regional_lead/area_lead/store_lead/employee）+ 工号密码自管；bcryptjs 哈希 + JWT（HS256，8h）；递归 CTE scope 子树过滤（员工→自身、店长→门店、小区长→小区、大区长→大区、HQ→全量），非 HQ 额外纳入祖先链保留树结构；前端登录浮层 + 首登强制改密弹窗 + 顶栏用户徽章 + mock 模式「演示模式（总部）」徽章 + `fetchJson` 自动注入 Bearer + 401 跳转登录；新增 `users` 表、`server/services/auth.js`、`middleware/authRequired.js`、`middleware/scope.js`、`routes/auth.js`、`scripts/create-user.js` CLI（add/reset/list/import/disable/enable）；`server/DEPLOY.md §7` 账号管理；`.env.example` 含 `JWT_SECRET` 占位 |
 | **v4.1** | 2026-09-15 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名（人数 = 门店子树人员节点数，含「显示已停用」开关影响），消除人数规模优势；tooltip 展示「人均积分 / 总积分 / 人数」三要素；条形标签保留 1 位小数；岗位 / 人员 / PK 维度口径不变 |
 | **v4.0** | 2026-09-15 | **组织生命周期 + 工号识别**：节点停用/恢复（离职、闭店软删除，历史数据保留，重现即恢复）；工号唯一识别（前导零保真、认领去重、改名不新增、同名不同人靠工号区分）；任职区间时间切片（`person_assignments` + `node_paths` 分片，调岗后历史报表按当时门店/岗位归属）；名册导入 merge/snapshot、dryRun 预检、大批量停用 409 安全阀 + force；指标导入支持按工号定位；新增 `GET /api/import/logs`、`GET /api/admin/data-quality`；前端新增「显示已停用」开关与停用标识（mock 模式零改动） |
 | **v3.8** | 2026-09-15 | **真实数据接入**：Node.js + Express + SQLite 后端；组织树/指标聚合/人员汇总 API；Excel/CSV 名册与指标导入（upsert + 逐行校验报告）；前端 mock/API 双模式（`?data=api`），按需懒加载 + 本地缓存 |
@@ -196,6 +230,7 @@ curl.exe -H "X-Import-Token: change-me-import-token" `
 - **单文件 HTML**（无需构建工具）
 - **Tailwind CSS**（CDN 引入）
 - **ECharts 5.4**（CDN 引入，折线 / 柱状 / 横向条形 / 散点）
+- 后端：Node.js + Express + SQLite（better-sqlite3）+ bcryptjs + jsonwebtoken（v4.2 起）
 - 零依赖、零安装、零编译
 
 ---
@@ -208,6 +243,8 @@ python -m http.server 8080
 ```
 
 访问：http://localhost:8080/index.html
+
+> 后端另起：`cd server && npm start`（默认 `http://127.0.0.1:3777`），前端 URL 加 `?data=api&api=http://127.0.0.1:3777` 走真实数据 + 登录。
 
 ---
 
@@ -231,6 +268,6 @@ git push origin --tags
 
 ✨ **推荐使用 GitHub Pages 在线版访问，无需启动本地服务** ✨
 
-[👉 v4.1 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.1 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.1/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
+[👉 v4.2 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.2 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.2/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
 
 </div>
