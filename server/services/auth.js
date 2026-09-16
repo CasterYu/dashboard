@@ -105,6 +105,14 @@ function verifyToken(token) {
   try { return jwt.verify(token, JWT_SECRET); } catch (e) { return null; }
 }
 
+/** 数据范围展示名（login 与 /api/auth/me 共用，避免两处口径不一致）：hq=全国（全树）；其余取 scope 根节点名 */
+function scopeLabelOf(db, role, scopeRootId) {
+  if (role === 'hq') return '全国（全树）';
+  if (scopeRootId === null || scopeRootId === undefined) return '（人员未导入）';
+  const n = db.prepare('SELECT name, level FROM org_nodes WHERE id = ?').get(scopeRootId);
+  return n ? (n.name + (n.level === role ? '' : '（' + n.level + '）')) : '（未知节点）';
+}
+
 /**
  * 登录：bcrypt 比对密码 → 加载人员 → 派生 scope_root_id → 签发 JWT
  * 统一错误：账号不存在/密码错误均抛 AUTH_INVALID（防枚举）
@@ -136,7 +144,7 @@ async function login(db, empNo, password) {
       emp_no: user.emp_no,
       name: person ? person.name : user.emp_no,
       role: user.role,
-      scopeName: person ? person.name : '总部（全树）',
+      scopeName: scopeLabelOf(db, user.role, scopeRootId),
       scopeRootId: scopeRootId
     },
     mustChangePassword: !!user.must_change_password
@@ -165,13 +173,7 @@ function meOf(db, payload) {
   if (!user) return null;
   const person = findPersonByEmpNo(db, user.emp_no);
   const scopeRootId = scopeRootForRole(db, person, user.role);
-  // scope 名称：hq 写死「全国（全树）」；员工取祖先节点名（如「华东大区」）；员工=本人
-  let scopeName;
-  if (user.role === 'hq') scopeName = '全国（全树）';
-  else if (scopeRootId !== null) {
-    const n = db.prepare('SELECT name, level FROM org_nodes WHERE id = ?').get(scopeRootId);
-    scopeName = n ? (n.name + (n.level === user.role ? '' : '（' + n.level + '）')) : '（未知节点）';
-  } else scopeName = '（人员未导入）';
+  const scopeName = scopeLabelOf(db, user.role, scopeRootId);
   return {
     id: user.id,
     emp_no: user.emp_no,
