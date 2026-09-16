@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V4.2 · 汽车销售运营中心</title>
+    <title>业务数据看板 V4.3 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -319,7 +319,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.1</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.3</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -544,7 +544,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V4.1 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势
+            业务数据看板 V4.3 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
         </footer>
     </div>
 
@@ -555,7 +555,7 @@
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
                 <div>
                     <h2 class="text-lg font-bold text-white">业务数据看板</h2>
-                    <p class="text-xs text-slate-400">V4.2 · 工号密码登录</p>
+                    <p class="text-xs text-slate-400">V4.3 · 工号密码登录</p>
                 </div>
             </div>
             <p class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
@@ -1382,7 +1382,7 @@
             expanded: [false, false, false],   // 三大板块各自的展开状态
             panelSel: {},                      // 各板块勾选的指标 key
             // 业务执行与闭环看板状态
-            closure: { postKey: 'productExpert', regionId: null, areaId: null, storeIds: null, yMetric: 'locked', avgLine: true }
+            closure: { postKey: 'productExpert', regionId: null, areaId: null, storeIds: null, storeMulti: false, yMetric: 'locked', avgLine: true }
         };
         const panelCharts = {};                // 板块展开态折线图实例
 
@@ -1568,7 +1568,7 @@
             if (!POSTS_BY_KEY[state.pkPost]) state.pkPost = POSTS[0].key;
             $tabs.innerHTML = POSTS.map(function (p) {
                 return '<button class="quick-btn' + (p.key === state.pkPost ? ' active' : '') + '" data-pk-post="' + p.key + '"' +
-                    ' style="' + (p.key === state.pkPost ? 'border-color:' + p.color + ';color:' + p.color : '') + '">' + p.name + '</button>';
+                    ' style="' + (p.key === state.pkPost ? 'background:' + p.color + ';border-color:' + p.color + ';color:#fff;font-weight:600' : '') + '">' + p.name + '</button>';
             }).join('');
         }
         function renderPkOptions() {
@@ -2711,6 +2711,8 @@
                     return '<button class="quick-btn' + (state.closure.areaId === ar.id ? ' active' : '') + '" data-closure-area="' + ar.id + '">' + ar.name + '</button>';
                 }).join('') + '</div></div>';
 
+            // v4.3.1：门店筛选默认单选（点击即选中该门店），开启「多选」后可勾选多家
+            const storeMulti = !!state.closure.storeMulti;
             const storeChipHtml = '<div class="store-chip-row">' + scopeStores.map(function (s, idx) {
                 const on = state.closure.storeIds.indexOf(s.id) >= 0;
                 const c = closureStoreColor(idx);
@@ -2719,15 +2721,18 @@
                     '><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
             }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无门店</span>' : '') + '</div>' +
                 '<div class="flex items-center gap-2 mt-2 flex-wrap">' +
+                '<button class="quick-btn' + (storeMulti ? ' active' : '') + '" data-store-action="multi">' + (storeMulti ? '☑ 多选（已开启）' : '☐ 多选') + '</button>' +
                 '<button class="quick-btn" data-store-action="all">全选当前范围</button>' +
                 '<button class="quick-btn" data-store-action="clear">清空</button>' +
-                '<span class="text-xs text-slate-400 ml-auto">已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + scopeStores.length + ' 家 · 切换岗位会自动剔除空缺门店</span>' +
+                '<span class="text-xs text-slate-400 ml-auto">' + (storeMulti
+                    ? '已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + scopeStores.length + ' 家 · 点击门店勾选/取消，可多选'
+                    : '单选模式 · 点击门店即选中，开启「多选」可勾选多家') + ' · 切换岗位会自动剔除空缺门店</span>' +
                 '</div>';
 
             const storeScopeHtml =
                 '<div><div class="text-xs text-slate-400 mb-2">大区（按层级收窄门店范围）</div>' + regionChipHtml + '</div>' +
                 areaChipHtml +
-                '<div class="mt-2"><div class="text-xs text-slate-400 mb-2 flex items-center gap-2">门店（多选）<span class="text-[11px] text-slate-500">当前范围 ' + scopeStores.length + ' 家</span></div>' + storeChipHtml + '</div>';
+                '<div class="mt-2"><div class="text-xs text-slate-400 mb-2 flex items-center gap-2">门店（默认单选，可开启多选）<span class="text-[11px] text-slate-500">当前范围 ' + scopeStores.length + ' 家</span></div>' + storeChipHtml + '</div>';
 
             // ---- Y 轴单选 ----
             const yOpt = CLOSURE_Y_OPTIONS.filter(function (o) { return o.key === state.closure.yMetric; })[0] || CLOSURE_Y_OPTIONS[0];
@@ -3059,9 +3064,15 @@
             const storeEl = e.target.closest('[data-store]');
             if (storeEl) {
                 const id = storeEl.dataset.store;
-                const i = state.closure.storeIds.indexOf(id);
-                if (i >= 0) state.closure.storeIds.splice(i, 1);
-                else state.closure.storeIds.push(id);
+                if (state.closure.storeMulti) {
+                    // 多选模式：点击勾选/取消
+                    const i = state.closure.storeIds.indexOf(id);
+                    if (i >= 0) state.closure.storeIds.splice(i, 1);
+                    else state.closure.storeIds.push(id);
+                } else {
+                    // 默认单选：点击即只选中该门店
+                    state.closure.storeIds = [id];
+                }
                 renderClosure(); return;
             }
             // v4.3：层级筛选——切换大区/小区后，已选门店保留仍可见的，其余剔除（不自动全选）
@@ -3083,7 +3094,14 @@
             const sa = e.target.closest('[data-store-action]');
             if (sa) {
                 const act = sa.dataset.storeAction;
-                if (act === 'all') state.closure.storeIds = closureScopeStores().map(function (s) { return s.id; });
+                if (act === 'multi') {
+                    // 切换多选模式；关闭时若已选多家则保留第一个，回到单选语义
+                    state.closure.storeMulti = !state.closure.storeMulti;
+                    if (!state.closure.storeMulti && state.closure.storeIds.length > 1) {
+                        state.closure.storeIds = [state.closure.storeIds[0]];
+                    }
+                }
+                else if (act === 'all') state.closure.storeIds = closureScopeStores().map(function (s) { return s.id; });
                 else if (act === 'clear') state.closure.storeIds = [];
                 renderClosure(); return;
             }
