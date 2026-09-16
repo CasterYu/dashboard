@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V4.1 · 汽车销售运营中心</title>
+    <title>业务数据看板 V4.2 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -545,7 +545,7 @@
         </footer>
     </div>
 
-    <!-- v4.2 登录覆盖层（API 模式未登录时显示；mock 模式永不显示） -->
+    <!-- v4.2 登录覆盖层（API 模式未登录时显示；mock 模式先弹登录浮层，浮层内可点「以演示模式（总部）继续」跳过） -->
     <div id="loginOverlay" class="fixed inset-0 z-[100] flex items-center justify-center hidden" style="background: radial-gradient(1200px 600px at 50% 50%, rgba(15,23,42,0.92), rgba(2,6,23,0.96)); backdrop-filter: blur(6px);">
         <div class="panel w-[400px] max-w-[92vw] p-8 mx-auto" style="background: linear-gradient(180deg, rgba(27,41,64,0.96), rgba(17,28,47,0.96));">
             <div class="flex items-center gap-3 mb-1">
@@ -568,7 +568,13 @@
                 <div id="loginError" class="text-xs text-red-400 min-h-[18px]"></div>
                 <button id="loginSubmit" class="w-full mt-2 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 transition">登录</button>
             </div>
-            <p class="text-[11px] text-slate-500 mt-4 leading-relaxed">忘记密码请联系管理员重置（CLI：<code class="text-slate-400">node scripts/create-user.js reset &lt;工号&gt;</code>）。</p>
+            <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">忘记密码请联系管理员重置（CLI：<code class="text-slate-400">node scripts/create-user.js reset &lt;工号&gt;</code>）。</p>
+            <div class="mt-4 pt-4 border-t border-slate-700/60">
+                <button id="demoSkipBtn" onclick="window.__v42.skipToDemo()" class="w-full py-2 rounded-md border border-slate-600 text-slate-300 hover:border-cyan-400 hover:text-white text-sm transition">
+                    以演示模式（总部）继续 →
+                </button>
+                <p class="text-[11px] text-slate-500 mt-2 leading-relaxed">演示模式为内置模拟数据，无需后端，适合功能演示与界面预览。</p>
+            </div>
         </div>
     </div>
 
@@ -1117,6 +1123,14 @@
                     errEl.textContent = e.message || '改密失败';
                     btn.disabled = false; btn.textContent = '确认修改';
                 });
+            },
+            skipToDemo: function () {
+                // mock 模式跳过登录：以「演示模式（总部）」身份直接渲染看板
+                if (DATA_MODE !== 'mock') return;
+                hideLogin();
+                cachedUser = { emp_no: 'demo', name: '演示模式', role: 'hq', scopeName: '全国（全树）' };
+                applyUserToTopbar(cachedUser);
+                startApp();
             }
         };
         // 登录成功 / 改密成功后重启 boot 流程（不刷新页面，保留已选日期等状态）
@@ -3187,10 +3201,9 @@
         } // ---- end startApp ----
 
         if (DATA_MODE === 'mock') {
-            // mock 演示模式：自动以「总部」身份渲染，不调任何登录接口
-            cachedUser = { emp_no: 'demo', name: '演示模式', role: 'hq', scopeName: '全国（全树）' };
-            applyUserToTopbar(cachedUser);
-            startApp();
+            // mock 演示模式：先弹登录浮层，浮层内提供「以演示模式（总部）继续」按钮
+            // —— 既让业务方第一时间看到登录入口，又保留无后端时的演示便利
+            showLogin('请使用工号与密码登录（演示模式：可点下方按钮跳过）');
         } else bootApi();
 
         // ===== v4.2 登录/改密/登出事件绑定 =====
