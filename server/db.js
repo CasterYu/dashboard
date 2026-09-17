@@ -18,7 +18,7 @@ const DATA_DIR = process.env.DATA_DIR ? path.resolve(process.env.DATA_DIR) : pat
 const DB_PATH = path.join(DATA_DIR, 'dashboard.db');
 
 // v4 表结构版本：任职区间为闭区间 [from_date, to_date]，开放段用哨兵日期（TEXT 字典序可直接比较）
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const OPEN_FROM = '1970-01-01';
 const OPEN_TO = '9999-12-31';
 
@@ -162,6 +162,7 @@ function migrate(db) {
     -- 元信息（schema 版本等）
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
   `);
+  require('./services/actionScoring_v4.6').migrateScoring(db);   // v5 三表（懒引用避免循环依赖）
   // 旧库升级：逐列补列（已存在则忽略；CREATE TABLE IF NOT EXISTS 对已有库不生效，必须 ALTER）
   ['store_id INTEGER', 'status INTEGER NOT NULL DEFAULT 1', 'deactivated_at TEXT', 'emp_no TEXT']
     .forEach(col => { try { db.exec('ALTER TABLE org_nodes ADD COLUMN ' + col); } catch (e) { /* ignore */ } });

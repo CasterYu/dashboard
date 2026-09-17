@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v4.4-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v4.6-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,13 +20,14 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v4.4 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **闭环筛选重排 + 积分/销量排行榜 + 顶栏可折叠**：闭环面板顺序改为大区→门店[多选开关同行]→岗位；排行榜升级为积分/销量双指标（维度跟随页面筛选、销量/积分优先可切换、默认销量优先、移除维度 tabs）；顶栏筛选区可一键收起展开（状态记忆）<br>🔑 **在线演示账号：`demo` / `demo123`**（详见 [测试账号](#-测试账号与登录验证)） |
-| **🟡 v4.3 · 历史版** | 👉 同上链接（页面即 v4.4） | 📦 归档 | **PK 岗位层级 + 闭环层级筛选**：PK 模式支持岗位层级（跨店同岗对比）；闭环看板大区→小区→门店逐级收窄；筛选候选严格限定当前范围；门店筛选默认单选、可开多选勾选 |
-| **🟡 v4.2 · 历史版** | 👉 同上链接（页面即 v4.4） | 📦 归档 | **身份权限校验**：5 角色（HQ / 大区 / 小区 / 店长 / 员工）+ 工号密码自管；JWT（HS256，8h）；scope 子树 CTE 过滤，HQ 看全量、非 HQ 仅看其负责范围；首登强制改密；mock 模式自动渲染为「演示模式（总部）」 |
-| **🟡 v4.1 · 历史版** | 👉 同上链接（页面即 v4.4） | 📦 归档 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名，消除人数规模优势；tooltip 同时展示人均 / 总分 / 人数 |
-| **🟡 v4.0 · 历史版** | 👉 同上链接（页面即 v4.4） | 📦 归档 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
-| **🟡 v3.8 · 历史版** | 👉 同上链接（页面即 v4.4） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
-| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.4） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
+| **🟢 v4.6 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **灯塔真实积分接入（动作执行度闭环）**：内置 9 岗位日积分规则主数据 + 2026-05-22 真实评分（交付专员 733 条明细 / 566 条汇总、交付店长 542 / 316，覆盖 393 家专营店、674 人）；「人员 × 拿分项」得分热力图（拿分项 = 规则项，非模拟维度）；积分×销量四象限；积分排名表（名次/姓名/专营店/岗位/当日积分/评估满分/扣分单数/状态）；诊断抽屉新增 **AI 证据链时间线**（分派→首访→最晚时限→判定→订单号）；新增「岗位动作规则视图」（拿分项/单次分值/封顶/拿分必须做到/判断逻辑/不计分情况/凭证来源 + 已接入/待接入标注）；真实门店按大区/小区分层 + 门店搜索多选；后端新增 `action_rules/action_scores/action_daily_sums` 三表与评分导入、查询接口<br>🔑 **在线演示账号：`demo` / `demo123`**（详见 [测试账号](#-测试账号与登录验证)） |
+| **🟡 v4.5 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **闭环看板过程管理三件套（深色主题）**：岗位选择器独立为滚动吸顶固定栏；6 维动作积分热力图（分低偏红，行红=个体问题、列红=流程/培训问题）；四象限图重定义（X=日均积分、Y=销量，均值分象限，右上标杆/左下待辅导）；人员明细表按交付量降序（最弱维度/主要扣分项/扣分模式/归因标签/状态），点击行弹出诊断抽屉（六维雷达 + 周扣分分布 + 扣分明细 TOP3） |
+| **🟡 v4.3 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **PK 岗位层级 + 闭环层级筛选**：PK 模式支持岗位层级（跨店同岗对比）；闭环看板大区→小区→门店逐级收窄；筛选候选严格限定当前范围；门店筛选默认单选、可开多选勾选 |
+| **🟡 v4.2 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **身份权限校验**：5 角色（HQ / 大区 / 小区 / 店长 / 员工）+ 工号密码自管；JWT（HS256，8h）；scope 子树 CTE 过滤，HQ 看全量、非 HQ 仅看其负责范围；首登强制改密；mock 模式自动渲染为「演示模式（总部）」 |
+| **🟡 v4.1 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **积分排行榜门店人均口径**：门店维度改为「总积分 ÷ 在职人数」的人均积分排名，消除人数规模优势；tooltip 同时展示人均 / 总分 / 人数 |
+| **🟡 v4.0 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **组织生命周期 + 工号识别**：人员离职/门店闭店可停用与自动恢复、工号唯一识别（改名不新增、调岗按当时架构统计）、名册增量合并与全量快照、导入预检与误操作拦截；新增「显示已停用」开关 |
+| **🟡 v3.8 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | 真实数据接入：Node.js + Express + SQLite 后端（`server/`），数据 API + Excel/CSV 导入；`?data=api` 切换真实数据 |
+| **🟡 v3.7 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | 双看板结构（经营总览 + 业务执行与闭环）；岗位体系 10 个；闭环看板人员散点图 |
 | **🟡 v1 · 历史归档** | **👉 [https://casteryu.github.io/dashboard/legacy/v1/](https://casteryu.github.io/dashboard/legacy/v1/)** | 📦 归档 | 白板草图完整模块版：漏斗/积分/下钻/排行榜/雷达 |
 
 > 💡 直接 Ctrl + 点击可在新标签页打开，与当前页同时浏览。
@@ -35,8 +36,38 @@
 
 | 版本 | 文件路径 |
 |:---:|:---|
-| **v4.4 最新版** | `D:\projects\dashboard\index.html` |
+| **v4.6 最新版** | `D:\projects\dashboard\index.html` |
+| **v4.5 历史快照** | `D:\projects\dashboard\legacy\index_v4.5.html` |
+| **v4.4 历史快照** | `D:\projects\dashboard\legacy\index_v4.4.html` |
 | **v1 历史版** | `D:\projects\dashboard\legacy\v1\index.html` |
+
+---
+
+### 🗂️ 本地版本快照工作流
+
+> **目的**：每次 `index.html` 跨版本升级前自动保存一份副本到 `legacy/`，实现本地历史回滚，**不破坏 GitHub Pages 入口路径**。
+
+| 项目 | 规则 |
+|:---|:---|
+| **触发** | 仅版本号跨版本时（如 v4.4 → v4.5），由 AI 在修改 `index.html` 之前复制 |
+| **命名** | `legacy/index_v<X>.<Y>.html`，遵循项目文件命名规则（带 `_vX.Y` 后缀） |
+| **位置** | 顶层 `legacy/`（`legacy/v1/` 历史归档目录不参与自动归档逻辑） |
+| **保留上限** | `legacy/` 最多保留 5 份 `index_v*.html`，超出按 `LastWriteTime` 升序移到 `legacy/_archive/` |
+| **幂等性** | 同版本快照已存在且大小一致时跳过复制 |
+| **不入 Git** | 快照文件不进版本控制（仓库内仅保留 `index.html` 与 `legacy/v1/`） |
+
+**手动执行命令**：
+
+```powershell
+# 1) 拍快照（幂等：已存在则跳过）
+Copy-Item -Force index.html legacy\index_v4.4.html
+
+# 2) 容量保护（>5 份时把最旧一份移到 _archive）
+Get-ChildItem legacy\index_v*.html | Sort-Object LastWriteTime |
+    Select-Object -First 1 | Move-Item -Destination legacy\_archive\
+```
+
+**关联规则**：本工作流已写入 AI 记忆（memory_id: 79846251），跨会话自动生效，未来每次跨版本修改 `index.html` 前 AI 会先复制快照。
 
 ---
 
@@ -44,7 +75,8 @@
 
 汽车销售运营场景下的数据看板，单文件 HTML 部署，零构建、零依赖。
 
-- **v4.4（当前）**：**闭环筛选面板重排 + 积分/销量排行榜 + 顶栏可折叠**。① 闭环「岗位 × 门店筛选」面板顺序改为大区 →（小区，选了大区才显示）→ 门店（☐多选 / 全选当前范围 / 清空按钮并入门店标题行、居中显示，门店 chips 在下）→ 岗位（单选）；② 积分排行榜升级为「**积分/销量排行榜**」，维度自动跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员），每个对象同时展示「人均销量 + 人均积分」（均按在职人数取平均），条形主值为排序指标（销量/积分优先可切换，**默认销量优先**），右侧标签与 tooltip 同时给出两个口径；移除原门店/岗位/人员维度 tabs；③ 顶栏筛选区可一键收起/展开（折叠状态通过 `localStorage` 持久化，刷新后保持），常驻条显示当前范围摘要 + 收起/展开按钮。
+- **v4.5（当前）**：**闭环看板过程管理三件套（深色主题，与全局配色一致）**。① 岗位选择器从筛选面板独立为 `.cl-post-sticky` 滚动吸顶固定栏：深色渐变毛玻璃底 + 蓝边，`top` 偏移在渲染后按 `.topbar` 实际高度运行时计算（不硬编码），页面下滑时始终可见；② 新增「**人员 × 维度积分热力图**」（`clRenderHeat`）：6 维动作分（接待规范/线索跟进/试驾执行/DMS录入/交车流程/培训考试），分数越低越红（红→橙→黄→绿→蓝 visualMap），行整体偏红=个体问题、列整体偏红=流程/培训问题，>14 人自动出 Y 轴滑块，单元格深色描边分隔；③ **四象限图重定义**（`clRenderQuad`）：X=日均积分（累计积分÷天数）、Y=销量（交付），双均值虚线分象限 + markArea 高亮——右上「标杆·高积分高销量」（绿）、左下「存在问题·重点辅导」（红），另两象限灰字标注（流程找卡点/动作待复制）；原纵轴三选一（yMetric）与平均线开关移除，口径固定；④ **人员明细与动作诊断表**：按交付量降序，列 = 销量 / 月度积分（六维动作分百分制）/ 最弱维度 / 主要扣分项 / 扣分模式（高频小额·月度集中·逐周收敛·全维度持续·全月均匀）/ 归因标签 / 状态徽章（标杆≥90·达标≥82·达标边缘≥75·需辅导≥65·重点辅导<65）；⑤ **诊断抽屉**（`#clDrawer`，点击明细行/热力图/散点打开）：深色浮层，头部三 KPI 卡 + 六维雷达（个人实线 vs 团队均值虚线）+ 周扣分分布柱状图 + 扣分明细 TOP3 表（维度/扣分项/次数/单次/累计/典型场景），遮罩/✕/Esc 关闭；⑥ 数据层 `clBuildAction`：以人员姓名+门店+周期为种子的确定性模拟（同人同周期恒定，切换筛选不闪变），动作分由积分分位驱动（高分人员维度整体偏高），扣分明细与弱项联动；新增深色组件 CSS：`.cl-kpi` / `.cl-status`（五档状态徽章）/ `.cl-tag` / `.cl-table` / `.cl-post-sticky` / `.cl-chart-title` 等，图表统一样式走 `clChartAxis()` / `clChartTooltip()`。
+- **v4.4（历史）**：**闭环筛选面板重排 + 积分/销量排行榜 + 顶栏可折叠**。① 闭环「岗位 × 门店筛选」面板顺序改为大区 →（小区，选了大区才显示）→ 门店（☐多选 / 全选当前范围 / 清空按钮并入门店标题行、居中显示，门店 chips 在下）→ 岗位（单选）；② 积分排行榜升级为「**积分/销量排行榜**」，维度自动跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员），每个对象同时展示「人均销量 + 人均积分」（均按在职人数取平均），条形主值为排序指标（销量/积分优先可切换，**默认销量优先**），右侧标签与 tooltip 同时给出两个口径；移除原门店/岗位/人员维度 tabs；③ 顶栏筛选区可一键收起/展开（折叠状态通过 `localStorage` 持久化，刷新后保持），常驻条显示当前范围摘要 + 收起/展开按钮。
 - **v4.3（历史）**：**PK 模式岗位层级改造 + 闭环看板层级筛选 + 范围泄漏修复**。① PK 模式层级扩展为门店 / 岗位 / 人员三种，岗位层级 = 跨店同岗对比（候选为范围内各门店的同一岗位节点），附二级岗位选项卡；② 闭环看板新增大区 → 小区 → 门店逐级收窄筛选，切换层级后已选门店保留仍可见的；③ 筛选候选与行严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；④ 范围变化自动清空 PK 已选，避免跨范围残留；⑤ PK 对比岗位选中样式改为岗位色实底 + 白字（修复蓝底蓝字看不清）；⑥ 闭环门店筛选默认单选，可开启「多选」勾选多家。
 - **v4.2（历史）**：**身份权限校验**。① 5 角色：`hq` / `regional_lead` / `area_lead` / `store_lead` / `employee`，覆盖总部、大区、小区、门店、员工五层；② **工号密码自管**：CLI `node server/scripts/create-user.js add <工号> <初始密码> <role>` 一行建账号，`reset/list/import/disable/enable` 子命令齐全；③ **JWT（HS256，8h）** 颁发 token，前端 `fetchJson` 自动注入 Bearer，401 自动跳登录浮层；④ **scope 子树过滤**（递归 CTE）：员工仅看自己；店长看门店；小区长看小区；大区长看大区；HQ 看全量；非 HQ 用户额外纳入祖先链，保留树结构；调岗后下次登录生效（动态计算，不缓存）；⑤ **首登强制改密**：服务端 `must_change_password` 标志 + 客户端拦截双保险；⑥ **mock 模式（演示数据）自动渲染为「演示模式（总部）」徽章**，无需登录；⑦ 账号管理 CLI、token 配置、JWT_SECRET 生成详见 `server/DEPLOY.md §7`。
 - **v4.1（历史）**：**积分排行榜门店人均口径**。门店维度按「总积分 ÷ 在职人数」的人均积分排名（人数 = 树内该门店人员节点数，打开「显示已停用」时含停用人员），消除人数规模优势；tooltip 三要素：人均积分 / 总积分 / 人数；条形标签保留 1 位小数；副标题标注口径。岗位 / 人员维度与 PK 模式维持总积分口径不变。
@@ -84,12 +116,62 @@
 
 ### 📊 业务执行与闭环口径
 
+**v4.6 起为双源（真实 / 模拟）口径**：
+
 - 可选岗位：10 个（数营专家/销售店长/销售专员/产品专家/交付店长/交付专员/直播专员/新媒体运营/市场经理/客户管家）
-- 可选 Y 轴：锁单量 / 试驾点评率 / 线索试驾率（三选一）
-- 人员散点图：X = 累计积分；Y = 当前所选指标；气泡大小可选；按门店分色；琥珀色均值参考线
-- KPI 摘要：6 张卡（人员数、累计积分、锁单量、试驾点评率、线索试驾率、积分产出比）
-- 人员明细表：按累计积分降序，显示门店、岗位、姓名、各核心指标
+- **数据来源标注**：`deliverySpecialist`（交付专员）、`deliveryManager`（交付店长）为 🟢 真实评分数据；其余岗位为 ⚪ 规则驱动模拟数据；岗位 chip 上直接标注来源
+- **真实口径**：拿分项得分取个人日汇总表 `score`（已含达成分 0 / 0.5 / 1）并按规则封顶截断；无汇总行的拿分项回退为动作明细得分之和；当日积分 = 各拿分项得分之和；满分 = 岗位规则项封顶之和
+- 可选 Y 轴（模拟岗位）：锁单量 / 试驾点评率 / 线索试驾率（三选一）；真实岗位 Y 轴为确定性销量（`clHash(工号+门店+日期)` 种子，刷新不漂移）
+- 热力图：人员 × 拿分项（真实岗位为规则项，模拟岗位为 6 维），单元格按得分着色
+- 四象限：X = 当日积分；Y = 销量；均值十字线划分标杆（右上）/待辅导（左下）
+- KPI 摘要：人员数、当日人均积分、满分达成率、零扣分占比、扣分单数、覆盖门店/人数
+- 排名表：名次 / 姓名 / 专营店 / 岗位 / 当日积分 / 评估满分 / 扣分单数 / 状态，点击行打开诊断抽屉（含 AI 证据链时间线）
 - 岗位空缺：筛选器内置灰标注「本店暂无」，闭环看板不参与散点；明细表显示 `—`
+
+---
+
+## 🎯 v4.6 灯塔动作积分（真实评分数据）
+
+### 数据来源与口径（四层模型）
+
+| 层 | 内容 | 来源 |
+|:---|:---|:---|
+| L1 规则主数据 | `post → [{item, action, per, cap, capWeekend, mustDo, judge, noScore, evidence}]` | 《灯塔系统需求 0910》9 个岗位日积分规则 |
+| L2 动作明细 | 门店/工号/姓名/日期/拿分项/动作/得分/证据/订单号 | `scoring_result_交付专员.xlsx`、`scoring_result_交付店长.xlsx`（sheet1） |
+| L3 个人日汇总 | 人员 × 日期 × 拿分项：目标 / 数量 / 目标分 / 得分 | 同上（sheet2） |
+| L4 派生指标 | 拿分项得分、当日积分、达成率、零扣分占比、扣分单数、覆盖门店/人数 | 前端 `closureComputePoints` 与后端 `/api/scoring/*` 同口径计算 |
+
+- **拿分项得分** = 个人日汇总 `score`（真实数据中已是 0 / 0.5 / 1 的达成分）按规则封顶截断；无汇总行的拿分项回退为动作明细得分之和
+- **当日积分** = 各拿分项得分之和；**达成率** = 当日积分 ÷ 已评估项封顶之和（没单的项不计入分母）
+- **扣分单数** = 明细中 `score < 0` 的行数（真实数据为每单 -0.5）
+- 口径已做前后端交叉校验：387 名交付专员当日积分逐一比对，**不一致 0 人**
+
+### 数据规模（2026-05-22 单日快照）
+
+| 岗位 | 明细 | 汇总 | 人员 | 门店 | 规则项 |
+|:---|:--:|:--:|:--:|:--:|:--:|
+| 交付专员 | 733 | 566 | 387 | 327 | 7 |
+| 交付店长 | 542 | 316 | 287 | 221 | 8 |
+| **合计** | **1275** | **882** | **674** | **393** | **48（9 岗位）** |
+
+> **单日降级**：日期选择器限定为数据可用日期集（当前仅 2026-05-22），无对比数据时显示「仅 1 天数据」提示，不生成随机数。
+> **门店归属**：按门店名城市前缀映射「城市 → 省份 → 大区/小区」词典，未命中归入「其他」；映射表在 `tools/parse_lighthouse_v4.6.py` 中可人工修订。
+> **销量**：真实岗位的 Y 轴销量为确定性生成（`clHash(工号+门店+日期)` 种子），刷新/切筛选/切岗位数值不漂移。
+
+### 后端接口（v4.6 · 均需 Bearer Token）
+
+| 接口 | 说明 |
+|:---|:---|
+| `POST /api/import/scoring` | 评分 Excel 导入（表单字段 `file`，`?postKey=deliverySpecialist` 指定岗位、`?dryRun=1` 预演不入库），需 `X-Import-Token` |
+| `POST /api/import/rules` | 动作积分规则导入（JSON body，兼容前端数据文件的 `postRules` 结构），需 `X-Import-Token` |
+| `GET /api/scoring/meta` | 数据概况（可用日期、岗位、明细/汇总/规则行数） |
+| `GET /api/scoring/tree?date=&post=` | 大区 / 小区 / 门店三级树（含人数） |
+| `GET /api/scoring/rules?post=all` | 动作积分规则（封顶 / 拿分必须做到 / 判断逻辑 / 凭证来源） |
+| `GET /api/scoring/persons?date=&post=&storeId=&region=&area=` | 人员当日积分排名（含达成率、扣分单数） |
+| `GET /api/scoring/summary?date=&post=&personId=` | 人员 × 拿分项日汇总 |
+| `GET /api/scoring/details?date=&personId=&item=` | 动作明细（AI 证据链原始字段） |
+
+> 导入幂等：同人同日同项覆盖更新；名册未覆盖的专营店自动落库为门店节点；新员工按工号建档并自动补一条任职段（与名册导入共用同一套层级规范）。
 
 ---
 
@@ -97,20 +179,27 @@
 
 ```
 dashboard/
-├── README.md               ← 本文件
-├── index.html              ← v4.4 当前最新版（前端，双模式：演示/真实数据，含登录浮层）
+├── README.md                    ← 本文件
+├── index.html                   ← v4.6 当前最新版（前端，双模式：演示/真实数据，含登录浮层）
+├── lighthouse_scoring_v4.6.js   ← v4.6 灯塔评分数据文件（规则 / 门店 / 人员 / 明细 / 汇总 / 销量）
 ├── .gitignore
 ├── .gitattributes
 ├── push-to-github.ps1
-├── server/                 ← v4.2 后端（Node.js + Express + SQLite，含 5 角色鉴权，详见下方章节）
-│   ├── services/auth.js    ←   密码哈希/JWT/scope 推导
-│   ├── middleware/         ←   authRequired + scope（CTE 子树过滤）
-│   ├── routes/auth.js      ←   /login /me /change-password /logout
-│   ├── scripts/create-user.js ←  CLI 账号管理（add/reset/list/import/disable/enable）
+├── tools/
+│   └── parse_lighthouse_v4.6.py ← v4.6 解析脚本（Excel → 数据文件 + 后端导入文件 + 校验报告）
+├── server/                      ← 后端（Node.js + Express + SQLite，含 5 角色鉴权，详见下方章节）
+│   ├── services/auth.js         ←   密码哈希/JWT/scope 推导
+│   ├── services/actionScoring_v4.6.js ← v4.6 评分解析 + 规则导入 + 门店/人员落库
+│   ├── routes/scoring_v4.6.js   ←   v4.6 /api/scoring/* 查询接口
+│   ├── middleware/              ←   authRequired + scope（CTE 子树过滤）
+│   ├── routes/auth.js           ←   /login /me /change-password /logout
+│   ├── scripts/create-user.js   ←   CLI 账号管理（add/reset/list/import/disable/enable）
 │   └── ...
 ├── docs/
 │   └── 项目进度报告.html
 └── legacy/
+    ├── index_v4.5.html          ← 上一版快照（本地回滚用，不入 Git）
+    ├── index_v4.4.html
     └── v1/
         ├── README.md
         └── index.html
@@ -176,6 +265,7 @@ npm start                         # http://127.0.0.1:3777
    - **工号是人员唯一身份**：工号命中 → 改名则改名、换门店/岗位则按「生效日期」切分任职区间（历史报表仍归当时门店）；工号未命中但存在无工号同名人员 → **认领**（补工号，不新建重复人员）；工号属另一姓名 → 视为改名
 2. `GET /api/import/template?type=metrics` 下载指标模板 → 按日填写 11 项指标（可加「工号」列）→ `POST /api/import/metrics` 导入
 3. 两个接口均返回 `{ ok, rowsOk, rowsFailed:[{row, reason}] }`；未知门店/人员、非数字、日期格式错误逐行拒绝并给出原因，合法行正常入库（同人同日覆盖更新，可重复上传）
+4. **v4.6 灯塔动作评分**：`POST /api/import/rules`（先灌规则，JSON body）→ `POST /api/import/scoring?postKey=deliverySpecialist`（上传 scoring_result Excel，sheet1 明细 / sheet2 个人日汇总）；返回 `{ detailRows, sumRows, persons, storesFromRoster, storesCreatedCount, days }`，`?dryRun=1` 只出报告；名册未覆盖的门店/员工会自动落库，建议先导名册以获得正确的大区/小区归属
 
 ### 导入模式与预检
 
@@ -263,6 +353,8 @@ node scripts/create-user.js import users.csv                    # 批量导入�
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
+| **v4.6** | 2026-09-17 | **灯塔真实积分接入（动作执行度闭环）**：新增数据文件 `lighthouse_scoring_v4.6.js`（9 岗位日积分规则 48 项 + 2026-05-22 真实评分：明细 1275 / 汇总 882 / 人员 674 / 门店 393）与解析脚本 `tools/parse_lighthouse_v4.6.py`；闭环模块改为**双源 provider**（交付专员/交付店长=真实，其余 8 岗位=规则驱动模拟，岗位 chip 标注来源）；数据层重构为规则驱动 `clRuleFor`/`clBuildAction`（拿分项得分取汇总 `score` 并按封顶截断、无汇总回退明细求和、当日积分=各拿分项之和）；热力图列维度改为**真实拿分项**；四象限 Y 轴改为确定性销量；排名表列重构（名次/姓名/专营店/岗位/当日积分/评估满分/扣分单数/状态）；诊断抽屉新增 **AI 证据链时间线**（分派→首访→最晚时限→判定→订单号）；新增**岗位动作规则视图**（拿分项/单次分值/封顶/拿分必须做到/判断逻辑/不计分情况/凭证来源 + 已接入·待接入徽章）；筛选区支持真实门店大区/小区分层 + 搜索多选 + 单日数据降级提示；后端新增 `action_rules` / `action_scores` / `action_daily_sums` 三表、`services/actionScoring_v4.6.js`、`routes/scoring_v4.6.js`（`/api/scoring/*` 6 个查询接口）与 `POST /api/import/scoring`、`POST /api/import/rules` 导入接口（幂等覆盖、`dryRun` 预演、门店/人员自动落库）；版本号统一 V4.6 |
+| **v4.5** | 2026-09-17 | **闭环看板过程管理三件套（沿用深色主题）**：岗位选择器独立 `.cl-post-sticky` 吸顶固定栏（偏移量运行时按顶栏实际高度计算）；新增 6 维动作积分热力图（`clRenderHeat`，分低偏红，行红=个体问题/列红=流程问题）；四象限重定义（`clRenderQuad`，X=日均积分、Y=销量，均值分象限，右上标杆绿/左下待辅导红）；人员明细表按交付量降序（销量/月度积分/最弱维度/主要扣分项/扣分模式/归因标签/状态徽章）；点击行开诊断抽屉（`#clDrawer`：三 KPI 卡 + 六维雷达 + 周扣分分布 + 扣分明细 TOP3）；数据层 `clBuildAction` 确定性模拟（种子哈希，同人同周期恒定，积分分位驱动）；新增 `.cl-kpi` / `.cl-status` / `.cl-tag` / `.cl-table` 深色组件样式；移除闭环散点纵轴切换与平均线开关；版本号统一 V4.5 |
 | **v4.4** | 2026-09-16 | **闭环筛选面板重排 + 积分/销量排行榜 + 顶栏可折叠**：闭环面板顺序改大区→门店[☐多选/全选/清空按钮并入门店标题行居中]→岗位；积分排行榜升级为「积分/销量排行榜」（维度由当前组织节点自动推导、每个对象同时展示人均销量+人均积分、销量/积分优先可切换默认销量优先、移除维度 tabs）；顶栏筛选区可一键收起/展开并 `localStorage` 记忆；版本号统一 V4.4 |
 | **v4.3** | 2026-09-16 | **PK 模式岗位层级改造 + 闭环看板层级筛选 + 范围泄漏修复**：PK 层级扩展为门店/岗位/人员，岗位层级跨店同岗对比 + 二级岗位选项卡 + 空缺岗位置灰；闭环看板大区→小区→门店逐级收窄，切层级保留可见已选门店；筛选候选/行严格按当前范围收集（修复范围泄漏）；范围变化清空 PK 已选；v4.3.1 追加：PK 对比岗位选中样式改岗位色实底白字、闭环门店筛选默认单选可开「多选」勾选多家、版本号统一 V4.3 |
 | **v4.2** | 2026-09-16 | **身份权限校验**：5 角色（hq/regional_lead/area_lead/store_lead/employee）+ 工号密码自管；bcryptjs 哈希 + JWT（HS256，8h）；递归 CTE scope 子树过滤（员工→自身、店长→门店、小区长→小区、大区长→大区、HQ→全量），非 HQ 额外纳入祖先链保留树结构；前端登录浮层 + 首登强制改密弹窗 + 顶栏用户徽章 + mock 模式「演示模式（总部）」徽章 + `fetchJson` 自动注入 Bearer + 401 跳转登录；新增 `users` 表、`server/services/auth.js`、`middleware/authRequired.js`、`middleware/scope.js`、`routes/auth.js`、`scripts/create-user.js` CLI（add/reset/list/import/disable/enable）；`server/DEPLOY.md §7` 账号管理；`.env.example` 含 `JWT_SECRET` 占位 |
@@ -286,8 +378,10 @@ node scripts/create-user.js import users.csv                    # 批量导入�
 
 - **单文件 HTML**（无需构建工具）
 - **Tailwind CSS**（CDN 引入）
-- **ECharts 5.4**（CDN 引入，折线 / 柱状 / 横向条形 / 散点）
-- 后端：Node.js + Express + SQLite（better-sqlite3）+ bcryptjs + jsonwebtoken（v4.2 起）
+- **ECharts 5.4**（CDN 引入，折线 / 柱状 / 横向条形 / 散点 / 热力图）
+- **静态数据模块**（v4.6 起）：`lighthouse_scoring_v4.6.js` 以 `<script src>` 同步加载，`file://` 与 GitHub Pages 均可直接用
+- 后端：Node.js + Express + SQLite（better-sqlite3）+ bcryptjs + jsonwebtoken + xlsx（v3.8 起，v4.2 加鉴权、v4.6 加灯塔评分）
+- 数据解析（离线）：Python 3 + openpyxl（`tools/parse_lighthouse_v4.6.py`）
 - 零依赖、零安装、零编译
 
 ---
@@ -325,6 +419,6 @@ git push origin --tags
 
 ✨ **推荐使用 GitHub Pages 在线版访问，无需启动本地服务** ✨
 
-[👉 v4.4 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.4 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.4/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
+[👉 v4.6 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.6 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.6/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
 
 </div>

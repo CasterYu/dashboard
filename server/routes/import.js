@@ -2,12 +2,15 @@
 /**
  * POST /api/import/org     名册导入（?mode=merge|snapshot & dryRun=1 & force=1，需 X-Import-Token）
  * POST /api/import/metrics 指标导入（需 X-Import-Token）
+ * POST /api/import/scoring 灯塔动作评分导入（Excel，sheet1 明细 / sheet2 个人日汇总，需 X-Import-Token）
+ * POST /api/import/rules   动作积分规则导入（JSON body，需 X-Import-Token）
  * GET  /api/import/template?type=org|metrics   下载模板（七列名册 / 带工号指标）
  * GET  /api/import/logs?limit=                 导入历史（含模式与停用清单摘要）
  */
 const express = require('express');
 const multer = require('multer');
 const { importOrg, importMetrics, ORG_HEADERS, METRICS_HEADERS, ImportConflict } = require('../services/importService');
+const { importScoring, importRules } = require('../services/actionScoring_v4.6');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -138,6 +141,73 @@ module.exports = function importRoute(db) {
       rowsFailed: result.rowsFailed.slice(0, 100),
       storeMismatch: result.storeMismatch
     });
+  });
+
+  // ---------- v4.6 灯塔动作评分导入 ----------
+  /** multer 按 latin1 解析上传文件名，中文名需转回 utf8（仅影响日志展示） */
+  function fixName(name) {
+    const raw = String(name || '');
+    try {
+      const fixed = Buffer.from(raw, 'latin1').toString('utf8');
+      return /[\u4e00-\u9fa5]/.test(fixed) ? fixed : raw;
+    } catch (e) { return raw; }
+  }
+  /** 在事务中执行；dryRun 时用哨兵异常回滚，只返回报告不落库 */
+  function runTx(fn, dryRun) {
+    const tx = db.transaction(fn);
+    if (!dryRun) return tx();
+    try {
+      tx();
+    } catch (e) {
+      if (e && e.__scoringDryRun) return e.__scoringDryRun;
+      throw e;
+    }
+    return null;
+  }
+
+  router.post('/scoring', importGuard, upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ ok: false, error: '缺少上传文件（表单字段名 file）' });
+    const dryRun = truthy(req.query.dryRun);
+    const filename = fixName(req.file.originalname);
+    const opts = { postKey: req.query.postKey || null, post: req.query.post || null };
+    let result;
+    try {
+      result = runTx(() => {
+        const r = importScoring(db, req.file.buffer, filename, opts);
+        if (dryRun) throw { __scoringDryRun: r };
+        return r;
+      }, dryRun);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: '文件解析失败：' + e.message });
+    }
+    if (!dryRun) {
+      db.prepare('INSERT INTO import_logs (type, filename, rows_ok, rows_failed, report_json) VALUES (?, ?, ?, ?, ?)')
+        .run('scoring', filename, result.detailRows, 0, JSON.stringify({
+          postKey: result.postKey, detailRows: result.detailRows, sumRows: result.sumRows,
+          persons: result.persons,
+          storesFromRoster: result.storesFromRoster, storesCreatedCount: result.storesCreatedCount,
+          storesCreated: result.storesCreated.slice(0, 50),
+          days: result.days
+        }));
+    }
+    res.json({ ok: true, type: 'scoring', filename, dryRun, report: result });
+  });
+
+  // ---------- v4.6 动作积分规则导入（前端数据文件的 postRules 结构） ----------
+  router.post('/rules', importGuard, express.json({ limit: '4mb' }), (req, res) => {
+    const payload = req.body;
+    if (!payload || typeof payload !== 'object' || !Object.keys(payload).length) {
+      return res.status(400).json({ ok: false, error: '请求体需为规则 JSON（{ postRules: {...} } 或 { postKey, item, ... } 数组）' });
+    }
+    let result;
+    try {
+      result = importRules(db, payload);
+    } catch (e) {
+      return res.status(400).json({ ok: false, error: '规则写入失败：' + e.message });
+    }
+    db.prepare('INSERT INTO import_logs (type, filename, rows_ok, rows_failed, report_json) VALUES (?, ?, ?, ?, ?)')
+      .run('rules', 'inline-json', result.rowsOk, result.rowsSkipped, JSON.stringify({ posts: result.posts }));
+    res.json({ ok: true, type: 'rules', ...result });
   });
 
   return router;

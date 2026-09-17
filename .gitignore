@@ -41,3 +41,6 @@ server/.playwright-cli/
 .env
 server/.env
 *.env.local
+
+# v4.6：本地版本快照不入库（仓库内仅保留 index.html 与 legacy/v1/）
+legacy/index_v*.html

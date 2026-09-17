@@ -2,10 +2,13 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
+    <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V4.4 · 汽车销售运营中心</title>
+    <title>业务数据看板 V4.6 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <!-- v4.6：灯塔真实积分数据模块（与 index.html 同目录，file:// 与 GitHub Pages 均可加载） -->
+    <script src="lighthouse_scoring_v4.6.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -309,6 +312,64 @@
         .scatter-legend { display: flex; flex-wrap: wrap; gap: 8px; max-height: 80px; overflow-y: auto; padding-top: 8px; }
         .scatter-legend .sl-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: #cbd5e1; padding: 2px 10px; border-radius: 999px; background: rgba(15,23,42,0.5); border: 1px solid rgba(148,163,184,0.15); }
         .scatter-legend .sl-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; box-shadow: 0 0 0 1px rgba(255,255,255,0.3); }
+        /* ===== v4.5 闭环看板新增组件样式（深色主题，与全局配色一致） ===== */
+        /* 人员明细表 */
+        .cl-table { border-collapse: separate; border-spacing: 0; }
+        .cl-table thead th { background: #111c2f; color: #94a3b8; border-bottom: 1px solid rgba(148,163,184,0.15); }
+        .cl-table tbody tr { border-bottom: 1px solid rgba(148,163,184,0.08); }
+        .cl-table tbody tr:hover { background: rgba(59,130,246,0.08); cursor: pointer; }
+        /* 状态徽章 */
+        .cl-status { display: inline-flex; align-items: center; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+        .cl-status.st-bench { background: rgba(16,185,129,0.15); color: #34d399; border: 1px solid rgba(16,185,129,0.35); }
+        .cl-status.st-good  { background: rgba(59,130,246,0.15); color: #60a5fa; border: 1px solid rgba(59,130,246,0.35); }
+        .cl-status.st-edge  { background: rgba(245,158,11,0.15); color: #fbbf24; border: 1px solid rgba(245,158,11,0.35); }
+        .cl-status.st-tutor { background: rgba(249,115,22,0.15); color: #fb923c; border: 1px solid rgba(249,115,22,0.35); }
+        .cl-status.st-risk  { background: rgba(244,63,94,0.15); color: #fb7185; border: 1px solid rgba(244,63,94,0.35); }
+        .cl-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(148,163,184,0.12); color: #cbd5e1; border: 1px solid rgba(148,163,184,0.2); white-space: nowrap; }
+        .cl-tag.warn { background: rgba(249,115,22,0.15); color: #fb923c; border-color: rgba(249,115,22,0.35); }
+        /* 岗位固定栏（滚动吸顶） */
+        .cl-post-sticky {
+            position: sticky; top: 64px; z-index: 30;
+            background: linear-gradient(180deg, rgba(27,41,64,0.95), rgba(17,28,47,0.95));
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59,130,246,0.18); border-radius: 12px;
+            padding: 10px 14px; box-shadow: 0 10px 24px -12px rgba(0,0,0,0.8);
+        }
+        /* 动作分 4 卡 */
+        .cl-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 14px; }
+        @media (max-width: 1023px) { .cl-grid-4 { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+        .cl-kpi { background: linear-gradient(135deg, rgba(27,41,64,0.9) 0%, rgba(15,25,45,0.9) 100%); border: 1px solid rgba(148,163,184,0.12); border-top: 3px solid var(--kpi-c, #3b82f6); border-radius: 12px; padding: 12px 14px; }
+        .cl-kpi .k-label { font-size: 11px; color: #94a3b8; }
+        .cl-kpi .k-value { font-size: 24px; font-weight: 700; color: #f8fafc; margin-top: 2px; font-variant-numeric: tabular-nums; }
+        .cl-kpi .k-value small { font-size: 12px; font-weight: 500; color: #64748b; }
+        .cl-kpi .k-sub { font-size: 11px; margin-top: 2px; color: #94a3b8; }
+        /* 图表小标题 */
+        .cl-chart-title { font-size: 13px; font-weight: 700; color: #e2e8f0; }
+        .cl-chart-sub { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+        /* ===== v4.6 规则驱动闭环新增组件样式 ===== */
+        .cl-src { display: inline-flex; align-items: center; padding: 1px 6px; border-radius: 999px; font-size: 10px; font-weight: 600; line-height: 16px; border: 1px solid transparent; }
+        .cl-src.real { background: rgba(16,185,129,0.16); color: #34d399; border-color: rgba(16,185,129,0.4); }
+        .cl-src.mock { background: rgba(148,163,184,0.12); color: #94a3b8; border-color: rgba(148,163,184,0.3); }
+        .cl-search { background: rgba(15,23,42,0.75); border: 1px solid rgba(148,163,184,0.22); border-radius: 8px; color: #e2e8f0; font-size: 12px; padding: 5px 10px; outline: none; width: 220px; transition: all .15s; }
+        .cl-search::placeholder { color: #64748b; }
+        .cl-search:focus { border-color: rgba(59,130,246,0.65); box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+        .cl-chip-pick { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.18); color: #94a3b8; transition: all .15s; }
+        .cl-chip-pick:hover { color: #e2e8f0; border-color: rgba(59,130,246,0.5); transform: translateY(-1px); }
+        .cl-chip-pick.on { background: linear-gradient(135deg, rgba(37,99,235,0.92), rgba(6,182,212,0.82)); border-color: transparent; color: #fff; box-shadow: 0 4px 14px -6px rgba(37,99,235,0.9); }
+        .cl-chip-pick .cl-chip-cnt { font-size: 10px; opacity: .7; }
+        .cl-rule-table { border-collapse: separate; border-spacing: 0; width: 100%; font-size: 12px; }
+        .cl-rule-table th { background: #111c2f; color: #94a3b8; text-align: left; padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.15); font-weight: 600; white-space: nowrap; }
+        .cl-rule-table td { padding: 8px 10px; border-bottom: 1px solid rgba(148,163,184,0.08); color: #cbd5e1; vertical-align: top; }
+        .cl-rule-table tbody tr:hover td { background: rgba(59,130,246,0.06); }
+        .cl-rule-table tr.dep td { opacity: .48; text-decoration: line-through; }
+        .cl-ev-item { position: relative; padding: 0 0 14px 18px; border-left: 1px solid rgba(148,163,184,0.22); }
+        .cl-ev-item:last-child { border-left-color: transparent; padding-bottom: 0; }
+        .cl-ev-item::before { content: ''; position: absolute; left: -4.5px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.16); }
+        .cl-ev-item.bad::before { background: #fb7185; box-shadow: 0 0 0 3px rgba(251,113,133,0.16); }
+        .cl-ev-kv { display: inline-flex; gap: 5px; font-size: 11px; padding: 1px 7px; border-radius: 6px; background: rgba(148,163,184,0.1); color: #cbd5e1; margin: 3px 4px 0 0; }
+        .cl-ev-kv b { color: #94a3b8; font-weight: 500; }
+        .cl-bar { height: 6px; border-radius: 999px; background: rgba(148,163,184,0.15); overflow: hidden; }
+        .cl-bar > i { display: block; height: 100%; border-radius: 999px; }
         ::-webkit-scrollbar-track { background: transparent; }
     </style>
 </head>
@@ -319,7 +380,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.4</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.6</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -549,7 +610,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V4.4 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
+            业务数据看板 V4.6 · 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
         </footer>
     </div>
 
@@ -560,7 +621,7 @@
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
                 <div>
                     <h2 class="text-lg font-bold text-white">业务数据看板</h2>
-                    <p class="text-xs text-slate-400">V4.4 · 工号密码登录</p>
+                    <p class="text-xs text-slate-400">V4.6 · 工号密码登录</p>
                 </div>
             </div>
             <p class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
@@ -610,6 +671,14 @@
                 <div id="cpError" class="text-xs text-red-400 min-h-[18px]"></div>
                 <button id="cpSubmit" class="w-full mt-2 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 transition">确认修改</button>
             </div>
+        </div>
+    </div>
+
+    <!-- v4.5：人员动作积分诊断抽屉 -->
+    <div id="clDrawer" class="hidden fixed inset-0 z-[95]">
+        <div class="absolute inset-0" style="background:rgba(3,7,18,0.72)" data-cl-close></div>
+        <div class="relative mx-auto mt-[3vh] w-[min(980px,95vw)] max-h-[92vh] overflow-y-auto rounded-2xl" style="background:linear-gradient(180deg, rgba(23,35,56,0.99), rgba(13,20,35,0.99)); border:1px solid rgba(148,163,184,0.2); box-shadow:0 24px 60px -20px rgba(0,0,0,0.9)">
+            <div id="clDrawerBody"></div>
         </div>
     </div>
 
@@ -1388,7 +1457,7 @@
             expanded: [false, false, false],   // 三大板块各自的展开状态
             panelSel: {},                      // 各板块勾选的指标 key
             // 业务执行与闭环看板状态
-            closure: { postKey: 'productExpert', regionId: null, areaId: null, storeIds: null, storeMulti: false, yMetric: 'locked', avgLine: true }
+            closure: { postKey: 'deliverySpecialist', region: null, area: null, storeCodes: null, storeSearch: '', storeMulti: true, showRules: true, showMonthly: false }
         };
         const panelCharts = {};                // 板块展开态折线图实例
 
@@ -2578,7 +2647,7 @@
             const node = currentNode();
             const level = state.tableDim;
             // v4.3：行严格按当前范围收集，不再回退全树（避免范围外条目出现）
-            const rows = collectLevel(node, level, []);
+            let rows = collectLevel(node, level, []);
             rows = rows.slice().sort(function (a, b) { return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points; });
             sub.textContent = level + '维度 · 范围：' + node.name + ' · 按积分降序 · 共 ' + rows.length + ' 条';
             const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', '积分'];
@@ -2603,61 +2672,657 @@
             }).join('');
         }
 
-        // ==================== PART6：业务执行与闭环看板（积分散点图）====================
-        const CLOSURE_Y_OPTIONS = [
-            { key: 'locked', label: '锁单量', unit: '单', fmtFn: function (v) { return fmt(v); }, isPercent: false },
-            { key: 'testReviewRate', label: '试驾点评率', unit: '%', fmtFn: function (v) { return v.toFixed(1) + '%'; }, isPercent: true },
-            { key: 'testDriveRate', label: '线索试驾率', unit: '%', fmtFn: function (v) { return v.toFixed(1) + '%'; }, isPercent: true }
-        ];
+        // ==================== PART6：业务执行与闭环看板（v4.6 · 灯塔真实积分 + 规则驱动模拟）====================
         const STORE_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#22d3ee', '#fbbf24', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#60a5fa', '#c084fc', '#f87171'];
         function closureStoreColor(idx) { return STORE_PALETTE[idx % STORE_PALETTE.length]; }
+        const CL_REGION_PALETTE = {
+            '华东大区': '#3b82f6', '华南大区': '#10b981', '华中大区': '#f59e0b', '华北大区': '#8b5cf6',
+            '东北大区': '#06b6d4', '西北大区': '#ec4899', '西南大区': '#fb923c', '其他': '#64748b'
+        };
+        const CL_STATUS = [
+            { min: 95, label: '标杆', cls: 'st-bench' },
+            { min: 85, label: '达标', cls: 'st-good' },
+            { min: 70, label: '达标边缘', cls: 'st-edge' },
+            { min: 50, label: '需辅导', cls: 'st-tutor' },
+            { min: -1, label: '重点辅导', cls: 'st-risk' }
+        ];
+        function clStatusOf(rate) {
+            for (let i = 0; i < CL_STATUS.length; i++) if (rate >= CL_STATUS[i].min) return CL_STATUS[i];
+            return CL_STATUS[CL_STATUS.length - 1];
+        }
+        function clHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+        function clRng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
 
-        function closureYValue(p, yMetric) {
-            if (yMetric === 'locked') return p.locked;
-            if (yMetric === 'testReviewRate') return p.testDrives ? (p.testReviews / p.testDrives) * 100 : null;
-            if (yMetric === 'testDriveRate') return p.intentLeads ? (p.testDrives / p.intentLeads) * 100 : null;
-            return 0;
+        // ---------- 灯塔真实积分数据（lighthouse_scoring_v4.6.js）----------
+        const LH = window.LH_SCORING || null;
+        const LH_OK = !!(LH && LH.details && LH.persons && LH.persons.length);
+        const CL_DATES = LH_OK ? (LH.meta.dates || []).slice() : [];
+        const CL_REAL_POSTS = LH_OK ? (LH.meta.realPosts || []) : [];
+        const CL_MOCK_ITEMS = ['接待规范', '线索跟进', '试驾执行', 'DMS录入'];
+        const CL_MOCK_CAP = 60;                   // 模拟岗位单次渲染门店上限（避免数百条模拟人员拖慢渲染）
+        const CL_MEMO = {};                       // 规则 / 组织 / 索引 / 当前范围的轻量缓存
+        let CL_DRAW_CTX = null;                   // 抽屉上下文 {pt, rule}
+
+        // 数值展示：整数不带小数，小数保留 1 位
+        function clNum(v) { return (v === null || v === undefined) ? '—' : (v % 1 === 0 ? String(v) : v.toFixed(1)); }
+        function clShortItem(nm) {
+            return String(nm || '').replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, '').trim();
         }
-        // v4.3：业务执行页「层级筛选」—— 门店列表由 全国→大区→小区 逐级收窄得到
-        function closureScopeStores() {
-            let base = tree;
-            if (state.closure.regionId) {
-                const r = nodeById(state.closure.regionId);
-                if (r && r.level === '大区') base = r; else state.closure.regionId = null;
-            }
-            if (state.closure.areaId) {
-                const a = nodeById(state.closure.areaId);
-                if (a && a.level === '小区') base = a; else state.closure.areaId = null;
-            }
-            return collectLevel(base, '门店', []);
-        }
-        function closureComputePoints() {
-            const allStores = closureScopeStores();
-            if (!state.closure.storeIds || !state.closure.storeIds.length) {
-                state.closure.storeIds = allStores.length ? [allStores[0].id] : [];
-            }
-            const validIds = new Set(allStores.map(function (s) { return s.id; }));
-            state.closure.storeIds = state.closure.storeIds.filter(function (id) { return validIds.has(id); });
-            if (!state.closure.storeIds.length && allStores.length) state.closure.storeIds = [allStores[0].id];
-            const r = currentIdx();
-            const list = [];
-            state.closure.storeIds.forEach(function (sid) {
-                const sn = nodeById(sid); if (!sn) return;
-                const postNode = (sn.children || []).filter(function (c) { return c.postKey === state.closure.postKey; })[0];
-                if (!postNode) return;
-                postNode.children.forEach(function (p) {
-                    const m = metricsOf(p, r[0], r[1]);
-                    list.push({
-                        name: p.name, storeId: sn.id, storeName: sn.name, postKey: state.closure.postKey,
-                        points: m.points, locked: m.locked, testDrives: m.testDrives,
-                        testReviews: m.testReviews, intentLeads: m.intentLeads,
-                        y: closureYValue(m, state.closure.yMetric)
-                    });
-                });
+        function clEvPairs(evStr) {
+            if (!evStr) return [];
+            return evStr.split('|').map(function (seg) {
+                const i = seg.indexOf('=');
+                return i < 0 ? { k: '说明', v: seg } : { k: seg.slice(0, i), v: seg.slice(i + 1) };
             });
-            list.sort(function (a, b) { return b.points - a.points; });
+        }
+
+        // ---------- 岗位积分规则（灯塔规则表；无规则表的岗位用通用动作兜底）----------
+        function clRuleFor(postKey) {
+            if (CL_MEMO['rule|' + postKey]) return CL_MEMO['rule|' + postKey];
+            const meta = POSTS_BY_KEY[postKey] || { name: postKey, color: '#94a3b8' };
+            const raw = (LH_OK && LH.postRules) ? LH.postRules[postKey] : null;
+            let rule;
+            if (raw) {
+                const items = (raw.items || []).map(function (it) {
+                    return {
+                        name: it.name,
+                        cap: (typeof it.cap === 'number' && it.cap > 0) ? it.cap : 1,
+                        per: (typeof it.per === 'number') ? it.per : 0.5,
+                        perText: typeof it.per === 'string' ? it.per : '',
+                        capWeekend: it.capWeekend, mustDo: it.mustDo || '', judge: it.judge || '',
+                        noScore: it.noScore || '', where: it.where || '', evidence: it.evidence || '',
+                        collected: (raw.collected || []).indexOf(it.name) >= 0,
+                        deprecated: !!it.deprecated, extra: it.extra || []
+                    };
+                });
+                rule = {
+                    postKey: postKey, postName: raw.postName || meta.name, sheet: raw.sheet || '',
+                    cap: raw.cap, capAvailable: raw.capAvailable || raw.cap,
+                    capDeclared: raw.capDeclared, capSum: raw.capSum,
+                    requireText: raw.requireText || '', draft: !!raw.draft,
+                    basis: raw.basis || [], rawCols: raw.cols || [], items: items,
+                    real: CL_REAL_POSTS.indexOf(postKey) >= 0
+                };
+            } else {
+                rule = {
+                    postKey: postKey, postName: meta.name, sheet: '', cap: CL_MOCK_ITEMS.length,
+                    capAvailable: CL_MOCK_ITEMS.length, capDeclared: null, capSum: CL_MOCK_ITEMS.length,
+                    requireText: '', draft: true, basis: [], rawCols: [],
+                    items: CL_MOCK_ITEMS.map(function (n) {
+                        return { name: n, cap: 1, per: 0.5, perText: '', capWeekend: null, mustDo: '', judge: '', noScore: '', where: '', evidence: '', collected: false, deprecated: false, extra: [] };
+                    }),
+                    real: false
+                };
+            }
+            rule.scoreItems = rule.items.filter(function (it) { return rule.real ? it.collected : !it.deprecated; });
+            if (!rule.scoreItems.length) rule.scoreItems = rule.items.slice(0, 4);
+            rule.color = meta.color || '#94a3b8';
+            rule.sourceText = rule.real ? '灯塔真实评分数据' : (rule.draft ? '规则草案 · 模拟数据' : '规则驱动模拟数据');
+            CL_MEMO['rule|' + postKey] = rule;
+            return rule;
+        }
+
+        // ---------- 组织：真实专营店 → 大区 / 小区 ----------
+        function clOrgIndex() {
+            if (CL_MEMO.org) return CL_MEMO.org;
+            const stores = [], regionMap = new Map(), byCode = {};
+            if (LH_OK) {
+                LH.stores.forEach(function (s, i) {
+                    const st = { idx: i, id: s.code, code: s.code, name: s.name, city: s.city, province: s.province, region: s.region, area: s.area };
+                    stores.push(st); byCode[s.code] = st;
+                    if (!regionMap.has(s.region)) regionMap.set(s.region, new Map());
+                    const am = regionMap.get(s.region);
+                    if (!am.has(s.area)) am.set(s.area, []);
+                    am.get(s.area).push(i);
+                });
+            }
+            const order = ['华东大区', '华南大区', '华中大区', '华北大区', '东北大区', '西北大区', '西南大区', '其他'];
+            const regions = Array.from(regionMap.keys()).sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); }).map(function (rn) {
+                const am = regionMap.get(rn);
+                let cnt = 0; am.forEach(function (a) { cnt += a.length; });
+                return {
+                    name: rn, count: cnt,
+                    areas: Array.from(am.keys()).sort().map(function (an) { return { name: an, stores: am.get(an), count: am.get(an).length }; })
+                };
+            });
+            CL_MEMO.org = { stores: stores, regions: regions, byCode: byCode, allCodes: stores.map(function (s) { return s.code; }) };
+            return CL_MEMO.org;
+        }
+
+        // ---------- 数据索引（按顶部日期区间命中的可用日期构建，结果缓存）----------
+        function clAllowedDates() { return CL_DATES.filter(function (d) { return d >= state.start && d <= state.end; }); }
+        // 闭环口径的生效日期：优先取与顶部区间重叠的数据日期；不重叠时降级为全部数据日期（并在页面上提示）
+        function clEffectiveDates() {
+            const hit = clAllowedDates();
+            return hit.length ? hit : CL_DATES.slice();
+        }
+        function clDataIndex() {
+            const dates = clEffectiveDates();
+            const key = dates.join(',') || '__none__';
+            if (CL_MEMO['idx|' + key]) return CL_MEMO['idx|' + key];
+            const dset = new Set(dates);
+            const idx = { dates: dates, byPost: {}, persons: [], rows: [], pid: {} };
+            CL_MEMO['idx|' + key] = idx;
+            if (!LH_OK) return idx;
+            LH.persons.forEach(function (p, i) {
+                idx.persons.push({
+                    code: p[0], name: p[1], post: p[2], storeIdx: p[3],
+                    items: {}, score: 0, delivered: (LH.sales && LH.sales[i]) || 0, deductions: [], dedRows: []
+                });
+                (idx.byPost[p[2]] = idx.byPost[p[2]] || []).push(i);
+                idx.rows.push([]);
+            });
+            const dc = LH.details.cols, dRows = LH.details.rows;
+            const cPerson = dc.indexOf('person'), cDate = dc.indexOf('date'), cItem = dc.indexOf('item'),
+                cAct = dc.indexOf('action'), cScore = dc.indexOf('score'), cEv = dc.indexOf('ev'), cOrder = dc.indexOf('order');
+            dRows.forEach(function (r, ri) {
+                if (!dset.has(LH.meta.dates[r[cDate]])) return;
+                idx.rows[r[cPerson]].push(ri);
+            });
+            const sc = LH.sums.cols, sRows = LH.sums.rows;
+            const sPerson = sc.indexOf('person'), sDate = sc.indexOf('date'), sItem = sc.indexOf('item'),
+                sCount = sc.indexOf('count'), sScore = sc.indexOf('score');
+            sRows.forEach(function (r) {
+                if (!dset.has(LH.meta.dates[r[sDate]])) return;
+                const p = idx.persons[r[sPerson]]; if (!p) return;
+                const nm = LH.dict.items[r[sItem]]; if (!nm) return;
+                const o = p.items[nm] || (p.items[nm] = { score: 0, count: 0, hasSum: false });
+                if (r[sScore] !== null) { o.score += r[sScore]; o.hasSum = true; }
+                if (r[sCount] !== null) o.count += r[sCount];
+            });
+            const dict = LH.dict;
+            idx.persons.forEach(function (p, pi) {
+                const dmap = new Map();
+                idx.rows[pi].forEach(function (ri) {
+                    const r = dRows[ri];
+                    const nm = dict.items[r[cItem]] || '';
+                    const o = p.items[nm];
+                    if (!o || !o.hasSum) {
+                        const oo = o || (p.items[nm] = { score: 0, count: 0, hasSum: false, noSum: true });
+                        oo.score += r[cScore];
+                    }
+                    const pk = pi + '|' + nm;
+                    (idx.pid[pk] = idx.pid[pk] || []).push(ri);
+                    if (r[cScore] >= 0) return;
+                    const act = dict.actions[r[cAct]] || '';
+                    const gk = nm + '||' + act;
+                    let d = dmap.get(gk);
+                    if (!d) { d = { item: nm, action: act, per: 0, count: 0, total: 0, evidence: [], orders: [] }; dmap.set(gk, d); }
+                    d.count += 1; d.total += -r[cScore]; d.per = Math.max(d.per, -r[cScore]);
+                    if (r[cEv]) d.evidence.push(r[cEv]);
+                    if (r[cOrder] >= 0) { const oc = dict.orders[r[cOrder]]; if (d.orders.indexOf(oc) < 0) d.orders.push(oc); }
+                    p.dedRows.push({ ri: ri, order: r[cOrder] >= 0 ? dict.orders[r[cOrder]] : '', ev: r[cEv], act: act, item: nm, score: r[cScore] });
+                });
+                p.score = 0;
+                for (const k in p.items) p.score += (p.items[k].score || 0);
+                p.deductions = Array.from(dmap.values()).sort(function (a, b) { return b.total - a.total; });
+            });
+            return idx;
+        }
+
+        // ---------- 筛选范围：大区 / 小区 / 门店多选 ----------
+        function closureScopeStores() {
+            const org = clOrgIndex();
+            const reg = state.closure.region, area = state.closure.area;
+            return org.stores.filter(function (s) {
+                if (reg && s.region !== reg) return false;
+                if (area && s.area !== area) return false;
+                return true;
+            });
+        }
+        // 门店多选：null = 全选当前范围（默认），[] = 显式清空
+        function clScopeSelect() {
+            const scope = closureScopeStores();
+            const ok = new Set(scope.map(function (s) { return s.code; }));
+            if (state.closure.storeCodes === null) {
+                state.closure.storeCodes = scope.map(function (s) { return s.code; });
+            } else {
+                state.closure.storeCodes = state.closure.storeCodes.filter(function (c) { return ok.has(c); });
+            }
+            const codes = state.closure.storeCodes;
+            return { scope: scope, scopeCodes: scope.map(function (s) { return s.code; }), sel: codes, selSet: new Set(codes) };
+        }
+        function clSelectedStoreIdx(sc) { return sc.scope.filter(function (s) { return sc.selSet.has(s.code); }).map(function (s) { return s.idx; }); }
+
+        // ---------- 人员得分点（真实 / 模拟共用结构）----------
+        function clTagOf(deds) {
+            if (!deds.length) return { text: '动作全达标', warn: false };
+            const top = deds[0], nm = clShortItem(top.item);
+            return { text: (nm.length > 10 ? nm.slice(0, 10) + '…' : nm) + ' · 扣' + top.count + '单', warn: true };
+        }
+        function clMakePoint(rule, items, src) {
+            const dims = [], ratios = [], counts = [];
+            items.forEach(function (it) {
+                const sm = src.itemOf(it.name);
+                if (!sm) { dims.push(null); ratios.push(null); counts.push(null); return; }
+                const v = sm.score || 0;
+                dims.push(Math.round(v * 100) / 100);
+                ratios.push(it.cap ? Math.max(0, Math.min(100, v / it.cap * 100)) : 0);
+                counts.push(sm.count === undefined ? null : sm.count);
+            });
+            const points = dims.reduce(function (s, v) { return s + (v || 0); }, 0);
+            const capAvail = rule.capAvailable || rule.cap || 1;
+            // 评估覆盖：只统计该员工当日确有评估数据的拿分项（无数据项不计入分母，避免"没单=0分"的失真）
+            let capCover = 0, coverCnt = 0;
+            items.forEach(function (it, i) { if (dims[i] !== null) { capCover += it.cap; coverCnt++; } });
+            // rate = 已评估口径达成率（主口径，用于状态分级）；rateFull = 严格满分口径
+            const rate = capCover ? Math.max(0, Math.min(100, points / capCover * 100)) : 0;
+            const rateFull = capAvail ? Math.max(0, Math.min(100, points / capAvail * 100)) : 0;
+            const st = clStatusOf(rate);
+            let wi = -1, wv = 1000;
+            ratios.forEach(function (v, i) { if (v !== null && v < wv) { wv = v; wi = i; } });
+            const deds = src.deductions || [];
+            const dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
+            const dedTotal = deds.reduce(function (s, d) { return s + d.total; }, 0);
+            return {
+                key: src.real ? 'p' + src.idx : 'm' + src.code,
+                idx: src.real ? src.idx : -1,
+                name: src.name, code: src.code, postKey: rule.postKey, postName: rule.postName,
+                storeIdx: src.store.idx, storeId: src.store.code, storeCode: src.store.code, storeName: src.store.name,
+                region: src.store.region, area: src.store.area, real: !!src.real,
+                dims: dims, ratios: ratios, counts: counts,
+                points: Math.round(points * 100) / 100, cap: rule.cap, capAvailable: capAvail,
+                capCover: Math.round(capCover * 100) / 100, coverCnt: coverCnt, coverTotal: items.length,
+                rate: Math.round(rate * 10) / 10, rateFull: Math.round(rateFull * 10) / 10,
+                status: st.label, statusCls: st.cls,
+                weakestIdx: wi < 0 ? 0 : wi, weakestName: wi < 0 ? '—' : items[wi].name,
+                weakestRate: wi < 0 ? 0 : Math.round(wv),
+                deductions: deds, dedCount: dedCount, dedTotal: Math.round(dedTotal * 100) / 100,
+                dedRows: src.dedRows || [], empCode: src.code || '',
+                delivered: src.delivered || 0, tag: clTagOf(deds),
+                noData: dims.every(function (v) { return v === null; })
+            };
+        }
+        function clRealPoints(rule, storeIdx, sc) {
+            const idx = clDataIndex();
+            const items = rule.scoreItems;
+            const out = [];
+            (idx.byPost[rule.postKey] || []).forEach(function (pi) {
+                const p = idx.persons[pi];
+                const store = LH.stores[p.storeIdx];
+                if (!sc.selSet.has(store.code)) return;
+                out.push(clMakePoint(rule, items, {
+                    idx: pi, name: p.name, code: p.code, store: store, real: true,
+                    itemOf: function (nm) { return p.items[nm]; },
+                    deductions: p.deductions, dedRows: p.dedRows, delivered: p.delivered
+                }));
+            });
+            return out;
+        }
+        // 模拟岗位：按规则表的拿分项与封顶，为选中的每家专营店生成 1 名模拟人员（确定性随机）
+        function clMockPoints(rule, storeIdx, sc) {
+            const org = clOrgIndex();
+            const items = rule.scoreItems;
+            const span = state.start + '~' + state.end;
+            const used = [];
+            const out = [];
+            storeIdx.forEach(function (si) {
+                const store = org.stores[si];
+                if (!store) return;
+                const rnd = clRng('mock|' + rule.postKey + '|' + store.code + '|' + span);
+                const name = personName(rnd, used);
+                const quality = 0.42 + rnd() * 0.58;
+                const itemOf = {}, deds = [];
+                items.forEach(function (it) {
+                    const cap = it.cap || 1;
+                    const step = cap <= 1 ? 0.5 : Math.round(cap / 4 * 100) / 100;
+                    let v = quality * cap * (0.62 + rnd() * 0.5);
+                    v = Math.round(Math.min(cap, Math.max(0, v)) / step) * step;
+                    v = Math.round(v * 100) / 100;
+                    itemOf[it.name] = { score: v, count: Math.max(1, Math.round((cap <= 1 ? (v > 0 ? 1 : 0) : v) + rnd() * 3)), hasSum: true };
+                    if (v < cap - 1e-6) {
+                        const cnt = 1 + Math.floor(rnd() * 2);
+                        const reason = String(it.noScore || it.judge || '未达到该项拿分条件').replace(/\s+/g, ' ').slice(0, 56);
+                        deds.push({
+                            item: it.name, action: it.name, per: it.per || 0.5, count: cnt,
+                            total: Math.round((it.per || 0.5) * cnt * 100) / 100, mock: true,
+                            evidence: ['判定=未满足|原因=' + reason + '|样本=' + cnt + '单'], orders: []
+                        });
+                    }
+                });
+                deds.sort(function (a, b) { return b.total - a.total; });
+                out.push(clMakePoint(rule, items, {
+                    idx: -1, name: name, code: 'M' + store.code, store: store, real: false,
+                    itemOf: function (nm) { return itemOf[nm]; },
+                    deductions: deds, dedRows: [], delivered: 1 + Math.floor(rnd() * 12)
+                }));
+            });
+            return out;
+        }
+        // 当前岗位 + 组织范围下的人员得分点（按当日积分降序）
+        function closureComputePoints() {
+            const rule = clRuleFor(state.closure.postKey);
+            const sc = clScopeSelect();
+            const storeIdx = clSelectedStoreIdx(sc);
+            const mockCapped = !rule.real && storeIdx.length > CL_MOCK_CAP;
+            const list = rule.real
+                ? clRealPoints(rule, storeIdx, sc)
+                : clMockPoints(rule, storeIdx.slice(0, CL_MOCK_CAP), sc);
+            list.sort(function (a, b) { return b.points - a.points || b.delivered - a.delivered; });
+            CL_MEMO.range = { rule: rule, scope: sc.scope, scopeCodes: sc.scopeCodes, sel: sc.sel, storeIdx: storeIdx, mockCapped: mockCapped };
             return list;
         }
+        // ---------- v4.5：闭环图表公共样式（深色主题） ----------
+        function clDisposeChart(key) {
+            if (extCharts[key]) { try { extCharts[key].dispose(); } catch (_) {} delete extCharts[key]; }
+        }
+        function clChartAxis() {
+            return {
+                axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+                axisTick: { show: false },
+                axisLabel: { color: '#94a3b8', fontSize: 11 },
+                splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
+            };
+        }
+        function clChartTooltip() {
+            return {
+                backgroundColor: 'rgba(11,18,32,0.95)', borderColor: 'rgba(148,163,184,0.2)',
+                textStyle: { color: '#e2e8f0', fontSize: 12 },
+                extraCssText: 'box-shadow:0 8px 24px rgba(0,0,0,0.6);'
+            };
+        }
+        // v4.6：人员 × 拿分项 得分热力图（单元格值 = 该拿分项达成率 %，标签 = 实际得分）
+        function clRenderHeat(points, rule) {
+            const el = document.getElementById('clHeat'); if (!el) return;
+            clDisposeChart('clHeat');
+            const items = rule.scoreItems;
+            const rows = points.length;
+            el.style.height = Math.min(470, Math.max(240, rows * 26 + 92)) + 'px';
+            const heat = echarts.init(el); extCharts.clHeat = heat;
+            const data = [];
+            const colAvg = items.map(function (_, c) {
+                let s = 0, n = 0;
+                points.forEach(function (p) { const v = p.ratios[c]; if (v !== null && v !== undefined) { s += v; n++; } });
+                return n ? Math.round(s / n) : 0;
+            });
+            points.forEach(function (p, r) {
+                items.forEach(function (it, c) {
+                    const rt = p.ratios[c];
+                    if (rt === null || rt === undefined) return;
+                    data.push([c, r, rt, p.dims[c], p.counts[c], it.cap]);
+                });
+            });
+            heat.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        const p = points[it.value[1]];
+                        if (!p || it.value[2] === null) return '';
+                        const cap = it.value[5], cnt = it.value[4];
+                        return '<div style="font-weight:700">' + p.name + ' · ' + p.storeName + '</div>' +
+                            '<div style="margin-top:4px;max-width:300px;white-space:normal;color:#cbd5e1">' + items[it.value[0]].name + '</div>' +
+                            '<div style="margin-top:4px">当日得分 <b style="color:#60a5fa">' + clNum(it.value[3]) + '</b> / ' + clNum(cap) +
+                            ' <span style="opacity:.7">（达成 ' + Math.round(it.value[2]) + '%）</span></div>' +
+                            (cnt === null || cnt === undefined ? '' : '<div style="opacity:.75;font-size:11px">完成单数 ' + cnt + '</div>') +
+                            '<div style="opacity:.65;font-size:11px;margin-top:3px">当日积分 ' + clNum(p.points) + ' / ' + clNum(p.capAvailable) +
+                            ' · 该列均值 ' + colAvg[it.value[0]] + '%</div>';
+                    }
+                }),
+                grid: { left: 76, right: rows > 18 ? 40 : 14, top: 10, bottom: 56 },
+                xAxis: {
+                    type: 'category', data: items.map(function (it) { return clShortItem(it.name); }),
+                    axisLabel: { color: '#94a3b8', fontSize: 10, interval: 0, rotate: rows > 8 ? 26 : 0, formatter: function (v) { return v.length > 9 ? v.slice(0, 9) + '…' : v; } },
+                    axisLine: { show: false }, axisTick: { show: false }
+                },
+                yAxis: {
+                    type: 'category', data: points.map(function (p) { return p.name; }), inverse: true,
+                    axisLabel: { color: '#94a3b8', fontSize: 10, formatter: function (v) { return v.length > 6 ? v.slice(0, 6) + '…' : v; } },
+                    axisLine: { show: false }, axisTick: { show: false }
+                },
+                visualMap: {
+                    min: 0, max: 100, calculable: true, orient: 'horizontal', left: 'center', bottom: -2,
+                    itemWidth: 12, itemHeight: 120, text: ['达成 100%', '0%'], textStyle: { color: '#94a3b8', fontSize: 10 },
+                    inRange: { color: ['#881337', '#b45309', '#f59e0b', '#65a30d', '#059669', '#2563eb'] }
+                },
+                dataZoom: rows > 18 ? [{ type: 'slider', yAxisIndex: 0, startValue: 0, endValue: 15, right: 2, width: 12, brushSelect: false, textStyle: { color: '#64748b', fontSize: 9 } }] : [],
+                series: [{
+                    type: 'heatmap',
+                    data: data,
+                    label: { show: true, fontSize: 10, color: '#fff', textBorderColor: 'rgba(0,0,0,0.45)', textBorderWidth: 2, formatter: function (it) { return clNum(it.value[3]); } },
+                    itemStyle: { borderColor: 'rgba(11,18,32,0.85)', borderWidth: 2, borderRadius: 3 },
+                    emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.4)' } }
+                }]
+            }, true);
+            heat.on('click', function (p) { if (p.value && points[p.value[1]]) clOpenDrawer(p.value[1]); });
+            try { heat.resize(); } catch (_) {}
+            requestAnimationFrame(function () { try { heat.resize(); } catch (_) {} });
+        }
+        // v4.6：当日积分 × 销量四象限（门店 ≤ 8 家按门店着色，否则单系列）
+        function clRenderQuad(points, rule) {
+            const el = document.getElementById('clQuad'); if (!el) return;
+            clDisposeChart('clQuad');
+            el.style.height = '380px';
+            const xs = points.map(function (p) { return p.points; });
+            const ys = points.map(function (p) { return p.delivered || 0; });
+            const avgX = xs.reduce(function (s, v) { return s + v; }, 0) / xs.length;
+            const avgY = ys.reduce(function (s, v) { return s + v; }, 0) / ys.length;
+            const xMax = Math.max(rule.capAvailable || rule.cap || 1, Math.max.apply(null, xs)) * 1.05;
+            const xMin = 0;
+            const yMaxV = Math.max.apply(null, ys);
+            const yMax = yMaxV > 0 ? yMaxV * 1.15 + 0.5 : 1;
+            const yMin = 0;
+            const storeMap = new Map();
+            points.forEach(function (p, i) {
+                if (!storeMap.has(p.storeCode)) storeMap.set(p.storeCode, { name: p.storeName, idxs: [] });
+                storeMap.get(p.storeCode).idxs.push(i);
+            });
+            const groups = Array.from(storeMap.values()).sort(function (a, b) { return b.idxs.length - a.idxs.length; });
+            function mkSeries(name, color, idxs) {
+                return {
+                    name: name, type: 'scatter', symbolSize: 15,
+                    itemStyle: { color: color, opacity: 0.85, borderColor: 'rgba(255,255,255,0.65)', borderWidth: 1.5, shadowBlur: 8, shadowColor: scaleColor(color, 0.4) },
+                    emphasis: { focus: 'self', scale: 1.35 },
+                    data: idxs.map(function (i) {
+                        return { name: points[i].name, value: [Math.round(xs[i] * 100) / 100, ys[i]], _idx: i };
+                    })
+                };
+            }
+            const quad = echarts.init(el); extCharts.clQuad = quad;
+            const byStore = groups.length > 1 && groups.length <= 8;
+            const series = byStore
+                ? groups.map(function (g, gi) { return mkSeries(g.name, closureStoreColor(gi), g.idxs); })
+                : [mkSeries('全部人员', rule.color || '#3b82f6', points.map(function (_, i) { return i; }))];
+            series[0].markLine = {
+                silent: true, symbol: 'none', animation: false,
+                data: [
+                    { xAxis: avgX, label: { formatter: '积分均值 ' + avgX.toFixed(1), color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } },
+                    { yAxis: avgY, label: { formatter: '销量均值 ' + avgY.toFixed(1), color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } }
+                ]
+            };
+            series[0].markArea = {
+                silent: true,
+                data: [
+                    [{ xAxis: avgX, yAxis: avgY, itemStyle: { color: 'rgba(16,185,129,0.1)' }, label: { show: true, position: 'insideTopRight', color: '#34d399', fontSize: 12, fontWeight: 700, formatter: '标杆 · 高积分高销量' } }, { xAxis: xMax, yAxis: yMax }],
+                    [{ xAxis: xMin, yAxis: yMin, itemStyle: { color: 'rgba(244,63,94,0.1)' }, label: { show: true, position: 'insideBottomLeft', color: '#fb7185', fontSize: 12, fontWeight: 700, formatter: '待辅导 · 低积分低销量' } }, { xAxis: avgX, yAxis: avgY }],
+                    [{ xAxis: xMin, yAxis: avgY, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideTopLeft', color: '#94a3b8', fontSize: 11, formatter: '高积分低销量 · 流程找卡点' } }, { xAxis: avgX, yAxis: yMax }],
+                    [{ xAxis: avgX, yAxis: yMin, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideBottomRight', color: '#94a3b8', fontSize: 11, formatter: '低积分高销量 · 动作待复制' } }, { xAxis: xMax, yAxis: avgY }]
+                ]
+            };
+            quad.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        const p = points[it.data._idx];
+                        if (!p) return '';
+                        const top = p.deductions[0];
+                        return '<div style="font-weight:700;margin-bottom:4px">' + p.name + '</div>' +
+                            '<div style="opacity:.7;font-size:11px">' + p.storeName + ' · ' + rule.postName + '</div>' +
+                            '<div style="margin-top:6px">当日积分：<b>' + clNum(p.points) + '</b> / ' + clNum(p.capAvailable) + ' 分</div>' +
+                            '<div>满分达成率：<b>' + p.rate + '%</b></div>' +
+                            '<div>销量：<b>' + fmt(it.value[1]) + '</b> 台</div>' +
+                            '<div style="opacity:.7;font-size:11px;margin-top:4px">扣分单数 ' + p.dedCount +
+                            (top ? ' · 主要 ' + clShortItem(top.item) : '') + '</div>' +
+                            '<div style="color:#60a5fa;font-size:11px;margin-top:2px">点击查看证据链 →</div>';
+                    }
+                }),
+                grid: { left: 48, right: 20, top: 30, bottom: 44 },
+                xAxis: Object.assign({ type: 'value', name: '当日积分', nameLocation: 'middle', nameGap: 26, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: xMin, max: xMax }, clChartAxis()),
+                yAxis: Object.assign({ type: 'value', name: '销量（台）', nameLocation: 'middle', nameGap: 36, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: yMin, max: yMax }, clChartAxis()),
+                series: series
+            }, true);
+            quad.on('click', function (p) { if (p.data && p.data._idx !== undefined) clOpenDrawer(p.data._idx); });
+            try { quad.resize(); } catch (_) {}
+            requestAnimationFrame(function () { try { quad.resize(); } catch (_) {} });
+            return byStore ? groups.map(function (g, gi) { return { name: g.name, color: closureStoreColor(gi) }; }) : [];
+        }
+        // v4.6：人员动作积分诊断抽屉（拿分项构成 / 扣分明细 / AI 证据链时间线）
+        function clOpenDrawer(idx) {
+            const ctx = CL_DRAW_CTX; if (!ctx) return;
+            const d = document.getElementById('clDrawer'); if (!d) return;
+            const p = ctx.points[idx], rule = ctx.rule;
+            if (!p) return;
+            const items = rule.scoreItems;
+            // ---- 证据链条目：真实数据用明细行，模拟数据用扣分项证据 ----
+            const tl = [];
+            if (p.dedRows && p.dedRows.length) {
+                p.dedRows.forEach(function (r) {
+                    tl.push({ order: r.order || '', item: r.item, act: r.act, ev: r.ev || '', score: r.score });
+                });
+            } else {
+                (p.deductions || []).forEach(function (dd) {
+                    (dd.evidence || []).forEach(function (e) {
+                        tl.push({ order: (dd.orders || [])[0] || '', item: dd.item, act: dd.action, ev: e, score: -dd.per });
+                    });
+                });
+            }
+            const tlShown = tl.slice(0, 40);
+            // ---- 各拿分项扣分单数 ----
+            const dedByItem = {};
+            (p.deductions || []).forEach(function (dd) { dedByItem[dd.item] = (dedByItem[dd.item] || 0) + dd.count; });
+            const totalDed = (p.deductions || []).reduce(function (s, x) { return s + x.total; }, 0);
+            const srcCls = p.real ? 'real' : 'mock';
+            const srcText = p.real ? '灯塔真实评分数据' : (rule.real ? '模拟数据' : '规则驱动模拟数据');
+            const itemRows = items.map(function (it, i) {
+                const sc = p.dims[i], rt = p.ratios[i], cnt = p.counts[i], dn = dedByItem[it.name] || 0;
+                const barC = rt === null ? '#475569' : (rt >= 95 ? '#10b981' : rt >= 85 ? '#3b82f6' : rt >= 70 ? '#fbbf24' : rt >= 50 ? '#fb923c' : '#fb7185');
+                return '<tr class="border-b border-slate-700/30">' +
+                    '<td class="py-2 px-2" style="color:#e2e8f0;font-weight:600">' + it.name + '</td>' +
+                    '<td class="py-2 px-2 text-right font-semibold" style="color:' + barC + '">' + (sc === null ? '—' : clNum(sc)) + '</td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#94a3b8">' + clNum(it.cap) + '</td>' +
+                    '<td class="py-2 px-2" style="min-width:110px"><div class="flex items-center gap-2"><div class="cl-bar" style="flex:1"><i style="width:' + (rt === null ? 0 : Math.max(2, Math.round(rt))) + '%;background:' + barC + '"></i></div><span style="font-size:11px;color:#94a3b8">' + (rt === null ? '—' : Math.round(rt) + '%') + '</span></div></td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + (cnt === null || cnt === undefined ? '—' : cnt) + '</td>' +
+                    '<td class="py-2 px-2 text-right" style="color:' + (dn ? '#fb923c' : '#64748b') + '">' + dn + '</td>' +
+                    '</tr>';
+            }).join('');
+            const dedRowsHtml = (p.deductions || []).length ? p.deductions.map(function (x, i) {
+                return '<tr class="border-b border-slate-700/30">' +
+                    '<td class="py-2 px-2" style="color:#94a3b8">' + (i + 1) + '</td>' +
+                    '<td class="py-2 px-2" style="color:#e2e8f0">' + x.item + '</td>' +
+                    '<td class="py-2 px-2" style="color:#cbd5e1">' + clShortItem(x.action) + '</td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + x.count + ' 单</td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + clNum(x.per) + '</td>' +
+                    '<td class="py-2 px-2 text-right font-semibold" style="color:#fb923c">' + clNum(x.total) + '</td>' +
+                    '<td class="py-2 px-2 text-xs" style="color:#94a3b8">' + ((x.orders || []).length ? (x.orders || []).slice(0, 2).join(' / ') + ((x.orders || []).length > 2 ? ' +' + (x.orders.length - 2) : '') : '—') + '</td>' +
+                    '</tr>';
+            }).join('') : '<tr><td colspan="7" class="py-4 text-center" style="color:#94a3b8">当日无扣分记录 · 动作全达标</td></tr>';
+            document.getElementById('clDrawerBody').innerHTML =
+                '<div class="p-6 space-y-5">' +
+                    '<div class="flex items-start justify-between gap-3 flex-wrap">' +
+                        '<div class="flex items-center gap-3 flex-wrap">' +
+                            '<div style="font-size:20px;font-weight:800;color:#f8fafc">' + p.name + ' <span style="font-size:12px;font-weight:500;color:#94a3b8">· ' + rule.postName + ' · 动作积分诊断</span></div>' +
+                            '<span class="cl-status ' + p.statusCls + '">' + p.status + '</span>' +
+                            '<span class="cl-tag' + (p.dedCount ? ' warn' : '') + '">' + p.tag.text + '</span>' +
+                            '<span class="cl-src ' + srcCls + '">' + srcText + '</span>' +
+                        '</div>' +
+                        '<button data-cl-close class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" style="color:#94a3b8;font-size:14px">✕</button>' +
+                    '</div>' +
+                    '<div class="flex gap-4 flex-wrap">' +
+                        '<div class="cl-kpi" style="--kpi-c:' + rule.color + ';flex:1;min-width:150px"><div class="k-label">当日积分</div><div class="k-value">' + clNum(p.points) + ' <small>/ ' + clNum(p.capAvailable) + '</small></div><div class="k-sub">' + (rule.capAvailable !== rule.cap ? '规则满分 ' + clNum(rule.cap) + ' · 当日可得分项已接入' : '岗位规则满分') + '</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#10b981;flex:1;min-width:150px"><div class="k-label">满分达成率</div><div class="k-value">' + p.rate + ' <small>%</small></div><div class="k-sub">最弱拿分项 ' + clShortItem(p.weakestName) + '（' + p.weakestRate + '%）</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#f59e0b;flex:1;min-width:150px"><div class="k-label">扣分单数 / 累计扣分</div><div class="k-value">' + p.dedCount + ' <small>单</small></div><div class="k-sub">累计 -' + clNum(totalDed) + ' 分</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#2563eb;flex:1;min-width:150px"><div class="k-label">销量 / 交付</div><div class="k-value">' + fmt(p.delivered || 0) + ' <small>台</small></div><div class="k-sub">' + p.storeName + (p.empCode ? ' · 工号 ' + p.empCode : '') + '</div></div>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-1 md:grid-cols-2 gap-5">' +
+                        '<div><div class="cl-chart-title">拿分项得分 <span style="font-weight:400;color:#94a3b8">（虚线为团队均值，每个轴按该拿分项封顶）</span></div><div id="clRadar" style="height:280px"></div></div>' +
+                        '<div><div class="cl-chart-title">扣分单数分布 <span style="font-weight:400;color:#94a3b8">（按拿分项）</span></div><div id="clWeek" style="height:280px"></div></div>' +
+                    '</div>' +
+                    '<div>' +
+                        '<div class="cl-chart-title mb-2">拿分项得分构成 <span style="font-weight:400;color:#94a3b8">（当日积分 ' + clNum(p.points) + ' / ' + clNum(p.capAvailable) + ' 分 · 已评估 ' + p.coverCnt + '/' + p.coverTotal + ' 项 · 动作达成 ' + p.rate + '% · 严格口径 ' + p.rateFull + '%）</span></div>' +
+                        '<table class="cl-table w-full text-sm"><thead class="text-xs"><tr>' +
+                        '<th class="py-2 px-2 text-left font-medium">拿分项</th><th class="py-2 px-2 text-right font-medium">当日得分</th><th class="py-2 px-2 text-right font-medium">封顶</th><th class="py-2 px-2 text-left font-medium">达成率</th><th class="py-2 px-2 text-right font-medium">完成单数</th><th class="py-2 px-2 text-right font-medium">扣分单数</th>' +
+                        '</tr></thead><tbody>' + itemRows + '</tbody></table>' +
+                    '</div>' +
+                    '<div>' +
+                        '<div class="cl-chart-title mb-2">扣分明细 <span style="font-weight:400;color:#94a3b8">（共 ' + (p.deductions || []).length + ' 类 · ' + p.dedCount + ' 单 · 累计 -' + clNum(totalDed) + ' 分）</span></div>' +
+                        '<table class="cl-table w-full text-sm"><thead class="text-xs"><tr>' +
+                        '<th class="py-2 px-2 text-left font-medium">#</th><th class="py-2 px-2 text-left font-medium">拿分项</th><th class="py-2 px-2 text-left font-medium">未达成动作</th><th class="py-2 px-2 text-right font-medium">单数</th><th class="py-2 px-2 text-right font-medium">单次</th><th class="py-2 px-2 text-right font-medium">累计</th><th class="py-2 px-2 text-left font-medium">关联订单</th>' +
+                        '</tr></thead><tbody>' + dedRowsHtml + '</tbody></table>' +
+                    '</div>' +
+                    '<div>' +
+                        '<div class="cl-chart-title mb-2">AI 证据链 <span style="font-weight:400;color:#94a3b8">（' + tl.length + ' 条判定记录' + (tl.length > tlShown.length ? ' · 展示前 ' + tlShown.length + ' 条' : '') + ' · 来源：灯塔系统判定日志）</span></div>' +
+                        (tlShown.length ? '<div style="max-height:340px;overflow-y:auto;padding-right:6px">' + tlShown.map(function (e, i) {
+                            const pairs = clEvPairs(e.ev);
+                            const bad = pairs.some(function (kv) { return /未满足|不通过|扣分/.test(kv.v) || (/判定|结论/.test(kv.k) && /未|扣/.test(kv.v)); });
+                            return '<div class="cl-ev-item' + (bad ? ' bad' : '') + '">' +
+                                '<div class="flex items-center gap-2 flex-wrap"><span style="font-size:12px;font-weight:700;color:#e2e8f0">' + (e.order ? '订单 ' + e.order : '记录 ' + (i + 1)) + '</span>' +
+                                '<span class="cl-tag">' + e.item + '</span>' +
+                                (e.score < 0 ? '<span class="cl-tag warn">扣 ' + clNum(-e.score) + ' 分</span>' : '') + '</div>' +
+                                '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + clShortItem(e.act) + '</div>' +
+                                (pairs.length ? '<div style="margin-top:2px">' + pairs.map(function (kv) {
+                                    return '<span class="cl-ev-kv"><b>' + kv.k + '</b>' + kv.v + '</span>';
+                                }).join('') + '</div>' : '') +
+                                '</div>';
+                        }).join('') + '</div>' : '<div class="text-xs py-4" style="color:#64748b">当日无扣分判定记录</div>') +
+                    '</div>' +
+                '</div>';
+            d.classList.remove('hidden');
+            // ---- 拿分项雷达（个人 vs 团队均值，各轴上限 = 拿分项封顶） ----
+            clDisposeChart('clRadar');
+            const rd = echarts.init(document.getElementById('clRadar'));
+            extCharts.clRadar = rd;
+            rd.setOption({
+                animation: false,
+                legend: { bottom: 0, itemWidth: 14, textStyle: { color: '#94a3b8', fontSize: 11 } },
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        if (!it.name && !it.seriesName) return '';
+                        return '<div style="font-weight:700">' + it.seriesName + '</div>' +
+                            it.name + '：<b>' + clNum(it.value) + '</b> / ' + clNum(items[it.dataIndex] ? items[it.dataIndex].cap : 0);
+                    }
+                }),
+                radar: {
+                    indicator: items.map(function (it) { return { name: clShortItem(it.name), max: it.cap }; }),
+                    radius: '58%', center: ['50%', '46%'],
+                    axisName: { color: '#94a3b8', fontSize: 10 },
+                    splitArea: { areaStyle: { color: ['rgba(148,163,184,0.07)', 'rgba(148,163,184,0.02)'] } },
+                    splitLine: { lineStyle: { color: 'rgba(148,163,184,0.18)' } },
+                    axisLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } }
+                },
+                series: [{
+                    type: 'radar',
+                    data: [
+                        { name: '个人得分', value: p.dims.map(function (v) { return v === null ? null : v; }), itemStyle: { color: '#2563eb' }, lineStyle: { color: '#2563eb', width: 2 }, areaStyle: { color: 'rgba(37,99,235,0.18)' } },
+                        { name: '团队均值', value: ctx.teamScores, itemStyle: { color: '#f59e0b' }, lineStyle: { color: '#f59e0b', width: 1.5, type: 'dashed' }, areaStyle: { color: 'rgba(245,158,11,0.06)' } }
+                    ]
+                }]
+            }, true);
+            // ---- 扣分单数分布（按拿分项） ----
+            clDisposeChart('clWeek');
+            const wk = echarts.init(document.getElementById('clWeek'));
+            extCharts.clWeek = wk;
+            wk.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), { formatter: function (it) { return it.name + '：<b>' + Number(it.value) + '</b> 单扣分'; } }),
+                grid: { left: 46, right: 16, top: 24, bottom: 58 },
+                xAxis: Object.assign({
+                    type: 'category', data: items.map(function (it) { return clShortItem(it.name); }),
+                    axisLabel: { color: '#94a3b8', fontSize: 10, interval: 0, rotate: 26, formatter: function (v) { return v.length > 8 ? v.slice(0, 8) + '…' : v; } }
+                }, clChartAxis()),
+                yAxis: Object.assign({ type: 'value', minInterval: 1 }, clChartAxis()),
+                series: [{
+                    type: 'bar', barWidth: 22,
+                    data: items.map(function (it) { return dedByItem[it.name] || 0; }),
+                    itemStyle: { color: '#f59e0b', borderRadius: [4, 4, 0, 0] },
+                    label: { show: true, position: 'top', color: '#94a3b8', fontSize: 10 }
+                }]
+            }, true);
+        }
+        function clCloseDrawer() {
+            const d = document.getElementById('clDrawer');
+            if (d) d.classList.add('hidden');
+            clDisposeChart('clRadar'); clDisposeChart('clWeek');
+        }
+
         function renderClosure() {
             if (DATA_MODE === 'api') {
                 apiLoading(true);
@@ -2669,309 +3334,335 @@
         function renderClosureSync() {
             const $bc = document.getElementById('boardClosure');
             if (!$bc) return;
-            const post = POSTS_BY_KEY[state.closure.postKey] || POSTS[0];
-            if (!POSTS_BY_KEY[state.closure.postKey]) state.closure.postKey = post.key;
+            const postKey = state.closure.postKey;
+            const rule = clRuleFor(postKey);
+            const post = POSTS_BY_KEY[postKey] || { name: rule.postName, color: rule.color };
+            const sc = clScopeSelect();
             const points = closureComputePoints();
-            const storeNodes = state.closure.storeIds.map(function (id) { return nodeById(id); }).filter(Boolean);
             const personCount = points.length;
+            const items = rule.scoreItems;
+            const allItems = rule.items;
+            const topHits = clAllowedDates();
+            const viewDates = topHits.length ? topHits : CL_DATES.slice();
+            const storeCount = new Set(points.map(function (p) { return p.storeCode; })).size;
 
-            // ---- 摘要 KPI（与上一等长周期对比）----
-            const pr = prevRange();
-            let pCount = 0, pPts = 0, pLock = 0, pTR = 0, pTD = 0, pIL = 0;
-            storeNodes.forEach(function (sn) {
-                const postNode = (sn.children || []).filter(function (c) { return c.postKey === state.closure.postKey; })[0];
-                if (!postNode) return;
-                postNode.children.forEach(function (p) {
-                    const m = metricsOf(p, pr.i0, pr.i1);
-                    pCount++; pPts += m.points; pLock += m.locked;
-                    pTR += m.testReviews; pTD += m.testDrives; pIL += m.intentLeads;
-                });
-            });
+            // ---- 摘要 KPI（当日积分口径）----
             const sumPts = points.reduce(function (s, x) { return s + x.points; }, 0);
-            const sumLock = points.reduce(function (s, x) { return s + x.locked; }, 0);
-            const sumTD = points.reduce(function (s, x) { return s + x.testDrives; }, 0);
-            const sumTR = points.reduce(function (s, x) { return s + x.testReviews; }, 0);
-            const sumIL = points.reduce(function (s, x) { return s + x.intentLeads; }, 0);
             const avgPts = personCount ? sumPts / personCount : 0;
-            const avgLock = personCount ? sumLock / personCount : 0;
-            const tReviewRate = sumTD ? (sumTR / sumTD) * 100 : 0;
-            const tDriveRate = sumIL ? (sumTD / sumIL) * 100 : 0;
-            const prevAvgPts = pCount ? pPts / pCount : 0;
-            const prevAvgLock = pCount ? pLock / pCount : 0;
-            const prevTRR = pTD ? (pTR / pTD) * 100 : 0;
-            const prevTDR = pIL ? (pTD / pIL) * 100 : 0;
+            const avgRate = personCount ? points.reduce(function (s, x) { return s + x.rate; }, 0) / personCount : 0;
+            const avgRateFull = personCount ? points.reduce(function (s, x) { return s + x.rateFull; }, 0) / personCount : 0;
+            const avgCover = personCount ? points.reduce(function (s, x) { return s + x.coverCnt; }, 0) / personCount : 0;
+            const zeroDed = points.filter(function (p) { return p.dedCount === 0; }).length;
+            const dedOrders = points.reduce(function (s, p) { return s + p.dedCount; }, 0);
+            const benchCnt = points.filter(function (p) { return p.rate >= 95; }).length;
+            const riskCnt = points.filter(function (p) { return p.rate < 70; }).length;
+            // 各拿分项团队达成率（列均值），用于定位最弱拿分项
+            const itemAvg = items.map(function (it, i) {
+                let s = 0, n = 0;
+                points.forEach(function (p) { const v = p.ratios[i]; if (v !== null && v !== undefined) { s += v; n++; } });
+                return n ? Math.round(s / n * 10) / 10 : 0;
+            });
+            let weakI = -1, weakV = 1e9;
+            itemAvg.forEach(function (v, i) { if (v < weakV) { weakV = v; weakI = i; } });
             const kpis = [
-                { label: '在岗人数', value: fmt(personCount) + ' <span class="text-slate-400 text-sm">人</span>', deltaText: '人数固定', deltaUp: null, color: post.color },
-                { label: '积分合计', value: fmt(sumPts) + ' <span class="text-slate-400 text-sm">分</span>', deltaText: arrowPct(pct(sumPts, pPts)), deltaUp: sumPts >= pPts, color: '#f59e0b' },
-                { label: '人均积分', value: Math.round(avgPts) + ' <span class="text-slate-400 text-sm">分</span>', deltaText: arrowPct(pct(avgPts, prevAvgPts)), deltaUp: avgPts >= prevAvgPts, color: '#a78bfa' },
-                { label: '人均锁单', value: avgLock.toFixed(1) + ' <span class="text-slate-400 text-sm">单</span>', deltaText: arrowPct(pct(avgLock, prevAvgLock)), deltaUp: avgLock >= prevAvgLock, color: '#10b981' },
-                { label: '线索试驾率', value: tDriveRate.toFixed(1) + '%', deltaText: fmtSigned(tDriveRate - prevTDR, 1) + 'pt', deltaUp: tDriveRate >= prevTDR, color: '#06b6d4' },
-                { label: '试驾点评率', value: tReviewRate.toFixed(1) + '%', deltaText: fmtSigned(tReviewRate - prevTRR, 1) + 'pt', deltaUp: tReviewRate >= prevTRR, color: '#22d3ee' }
+                { label: '在岗人数', value: fmt(personCount) + ' <span class="text-slate-400 text-sm">人</span>', sub: '覆盖 ' + storeCount + ' 家专营店', color: post.color },
+                { label: '人均当日积分', value: clNum(Math.round(avgPts * 10) / 10) + ' <span class="text-slate-400 text-sm">分</span>', sub: '满分 ' + clNum(rule.capAvailable) + ' 分/人' + (rule.capAvailable !== rule.cap ? '（规则 ' + clNum(rule.cap) + '）' : ''), color: '#a78bfa' },
+                { label: '满分达成率', value: avgRate.toFixed(1) + '%', sub: '标杆（≥95%）' + benchCnt + ' 人', color: '#3b82f6' },
+                { label: '零扣分占比', value: (personCount ? (zeroDed / personCount * 100) : 0).toFixed(1) + '%', sub: zeroDed + ' / ' + personCount + ' 人动作全达标', color: '#10b981' },
+                { label: '扣分单数', value: fmt(dedOrders) + ' <span class="text-slate-400 text-sm">单</span>', sub: '人均 ' + (personCount ? (dedOrders / personCount).toFixed(1) : '0.0') + ' 单', color: '#f59e0b' },
+                { label: '最弱拿分项', value: '<span style="font-size:16px">' + (weakI < 0 ? '—' : clShortItem(items[weakI].name)) + '</span>', sub: weakI < 0 ? '—' : '团队达成率 ' + weakV.toFixed(1) + '%', color: '#fb7185' }
             ];
-            function arrowPct(d) { return (d >= 0 ? '↑ ' : '↓ ') + Math.abs(d).toFixed(1) + '%'; }
             const kpiHtml = '<div class="closure-grid-6">' + kpis.map(function (k) {
-                const deltaCls = k.deltaUp === null ? 'text-slate-500' : (k.deltaUp ? 'text-emerald-400' : 'text-rose-400');
                 return '<div class="closure-cell" style="--cell-color:' + k.color + '">' +
                     '<div class="cc-label">' + k.label + '</div>' +
                     '<div class="cc-value">' + k.value + '</div>' +
-                    '<div class="cc-delta ' + deltaCls + '">' + k.deltaText + '</div>' +
+                    '<div class="cc-delta" style="color:#94a3b8">' + k.sub + '</div>' +
                     '</div>';
             }).join('') + '</div>';
 
-            // ---- 岗位 chip（10 个，按 POSTS 顺序）----
-            const postChipsHtml = '<div class="flex flex-wrap gap-2">' + POSTS.map(function (p) {
-                const on = p.key === state.closure.postKey;
-                return '<span class="post-chip' + (on ? ' on' : '') + '" data-post="' + p.key + '" ' +
-                    'style="--chip-color:' + p.color + ';--chip-color-12:' + scaleColor(p.color, 0.16) + ';--chip-color-30:' + scaleColor(p.color, 0.3) + ';--chip-color-50:' + scaleColor(p.color, 0.5) + '">' +
-                    '<span class="pc-dot"></span>' + p.name + '</span>';
+            // ---- 动作分 4 卡（规则满分 / 达成分布 / 采集接入度）----
+            const collectedCnt = allItems.filter(function (it) { return it.collected; }).length;
+            const scoreKpis = [
+                { label: '团队动作达成率', val: avgRate.toFixed(1), unit: '%', sub: '已评估拿分项口径 · 严格满分口径 ' + avgRateFull.toFixed(1) + '%', c: '#2563eb' },
+                { label: '标杆人数（≥95%）', val: String(benchCnt), unit: '人', sub: personCount ? '占比 ' + Math.round(benchCnt / personCount * 100) + '%' : '—', c: '#10b981' },
+                { label: '待辅导人数（<70%）', val: String(riskCnt), unit: '人', sub: personCount ? '占比 ' + Math.round(riskCnt / personCount * 100) + '%' : '—', c: '#f43f5e' },
+                { label: '已接入拿分项', val: collectedCnt + ' / ' + allItems.length, unit: '项', sub: rule.real ? '当日可得分上限 ' + clNum(rule.capAvailable) + ' 分' : '规则驱动模拟数据', c: '#06b6d4' }
+            ];
+            const actKpiHtml = '<div class="cl-grid-4">' + scoreKpis.map(function (k) {
+                return '<div class="cl-kpi" style="--kpi-c:' + k.c + '">' +
+                    '<div class="k-label">' + k.label + '</div>' +
+                    '<div class="k-value">' + k.val + ' <small>' + k.unit + '</small></div>' +
+                    '<div class="k-sub">' + k.sub + '</div>' +
+                    '</div>';
             }).join('') + '</div>';
 
-            // ---- 门店筛选（v4.3 层级：大区 → 小区 → 门店）----
-            const regionList = collectLevel(tree, '大区', []);
-            let areaBase = tree;
-            if (state.closure.regionId) {
-                const rn = nodeById(state.closure.regionId);
-                if (rn) areaBase = rn;
-            }
-            const areaList = state.closure.regionId ? collectLevel(areaBase, '小区', []) : [];
-            const scopeStores = closureScopeStores();
+            // ---- 岗位 chip（含数据来源与规则项数标识）----
+            const postChipsHtml = '<div class="flex flex-wrap gap-2">' + POSTS.map(function (p) {
+                const on = p.key === state.closure.postKey;
+                const isReal = CL_REAL_POSTS.indexOf(p.key) >= 0;
+                const rawRule = (LH_OK && LH.postRules) ? LH.postRules[p.key] : null;
+                const itemCnt = rawRule ? (rawRule.items || []).length : CL_MOCK_ITEMS.length;
+                return '<span class="post-chip' + (on ? ' on' : '') + '" data-post="' + p.key + '" ' +
+                    'style="--chip-color:' + p.color + ';--chip-color-12:' + scaleColor(p.color, 0.16) + ';--chip-color-30:' + scaleColor(p.color, 0.3) + ';--chip-color-50:' + scaleColor(p.color, 0.5) + '">' +
+                    '<span class="pc-dot"></span>' + p.name +
+                    '<span class="cl-src ' + (isReal ? 'real' : 'mock') + '" style="margin-left:6px">' + (isReal ? '真实' : '模拟') + '</span>' +
+                    '<span style="font-size:10px;opacity:.6;margin-left:4px">' + itemCnt + '项</span>' +
+                    '</span>';
+            }).join('') + '</div>';
+
+            // ---- 组织筛选：大区 → 小区 → 门店（真实专营店 · 搜索式多选）----
+            const org = clOrgIndex();
+            const regions = org.regions;
+            const curRegion = state.closure.region ? regions.filter(function (r) { return r.name === state.closure.region; })[0] : null;
+            const areas = curRegion ? curRegion.areas : [];
+            const scopeStores = sc.scope;
 
             const regionChipHtml = '<div class="flex flex-wrap gap-2">' +
-                '<button class="quick-btn' + (!state.closure.regionId ? ' active' : '') + '" data-closure-region="">全国</button>' +
-                regionList.map(function (rg) {
-                    return '<button class="quick-btn' + (state.closure.regionId === rg.id ? ' active' : '') + '" data-closure-region="' + rg.id + '">' + rg.name + '</button>';
+                '<button class="cl-chip-pick' + (!state.closure.region ? ' on' : '') + '" data-closure-region="">全国<span class="cl-chip-cnt">' + org.stores.length + '</span></button>' +
+                regions.map(function (rg) {
+                    return '<button class="cl-chip-pick' + (state.closure.region === rg.name ? ' on' : '') + '" data-closure-region="' + rg.name + '">' + rg.name + '<span class="cl-chip-cnt">' + rg.count + '</span></button>';
                 }).join('') + '</div>';
 
-            const areaChipHtml = !state.closure.regionId ? '' :
+            const areaChipHtml = !curRegion ? '' :
                 '<div class="mt-2"><div class="text-[11px] text-slate-500 mb-1.5">小区（选填，可进一步收窄）</div>' +
                 '<div class="flex flex-wrap gap-2">' +
-                '<button class="quick-btn' + (!state.closure.areaId ? ' active' : '') + '" data-closure-area="">全部小区</button>' +
-                areaList.map(function (ar) {
-                    return '<button class="quick-btn' + (state.closure.areaId === ar.id ? ' active' : '') + '" data-closure-area="' + ar.id + '">' + ar.name + '</button>';
+                '<button class="cl-chip-pick' + (!state.closure.area ? ' on' : '') + '" data-closure-area="">全部小区<span class="cl-chip-cnt">' + curRegion.count + '</span></button>' +
+                areas.map(function (ar) {
+                    return '<button class="cl-chip-pick' + (state.closure.area === ar.name ? ' on' : '') + '" data-closure-area="' + ar.name + '">' + ar.name + '<span class="cl-chip-cnt">' + ar.count + '</span></button>';
                 }).join('') + '</div></div>';
 
-            // v4.3.1：门店筛选默认单选（点击即选中该门店），开启「多选」后可勾选多家
-            const storeMulti = !!state.closure.storeMulti;
-            const storeChipHtml = '<div class="store-chip-row">' + scopeStores.map(function (s, idx) {
-                const on = state.closure.storeIds.indexOf(s.id) >= 0;
-                const c = closureStoreColor(idx);
-                return '<span class="pk-opt' + (on ? ' on' : '') + '" data-store="' + s.id + '" ' +
-                    (on ? 'style="--primary:' + c + ';border-color:' + c + ';background:' + scaleColor(c, 0.16) + ';color:#fff"' : '') +
-                    '><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
-            }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无门店</span>' : '') + '</div>';
-            // v4.4：多选/全选/清空按钮并入门店标题行（中间位置），右侧放提示
-            const storeActionHtml = '<button class="quick-btn' + (storeMulti ? ' active' : '') + '" data-store-action="multi">' + (storeMulti ? '☑ 多选（已开启）' : '☐ 多选') + '</button>' +
+            // 门店：搜索过滤 + 多选；范围过大时仅渲染前 N 家，避免一次生成数百 DOM
+            const STORE_SHOW_LIMIT = 60;
+            const q = (state.closure.storeSearch || '').trim();
+            const matched = q ? scopeStores.filter(function (s) { return s.name.indexOf(q) >= 0 || String(s.code).indexOf(q) >= 0; }) : scopeStores;
+            const shown = matched.slice(0, q ? 120 : STORE_SHOW_LIMIT);
+            const selStores = scopeStores.filter(function (s) { return sc.selSet.has(s.code); });
+            const storeChipHtml = '<div class="store-chip-row">' + shown.map(function (s, idx) {
+                const on = sc.selSet.has(s.code);
+                const c = on ? closureStoreColor(idx % 8) : '#475569';
+                return '<span class="pk-opt' + (on ? ' on' : '') + '" data-store="' + s.code + '" title="' + s.name + ' · ' + s.region + ' / ' + s.area + '">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
+            }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无专营店</span>'
+                : (q && !matched.length ? '<span class="text-xs" style="color:#fbbf24">未找到匹配「' + q + '」的门店，试试其他关键词或更换大区 / 小区</span>' : '')) + '</div>';
+            const storeMoreHint = (matched.length > shown.length)
+                ? '<div class="text-[11px] mb-1.5" style="color:#fbbf24">匹配 ' + matched.length + ' 家，仅展示前 ' + shown.length + ' 家 · 请用搜索或收窄大区 / 小区</div>'
+                : '';
+            const selTagHtml = selStores.length ? '<div class="flex flex-wrap gap-1.5 mt-2">' +
+                selStores.slice(0, 24).map(function (s) {
+                    return '<span class="cl-tag" data-store="' + s.code + '" style="cursor:pointer" title="点击取消选择">' + s.name + ' ✕</span>';
+                }).join('') +
+                (selStores.length > 24 ? '<span class="cl-tag">+' + (selStores.length - 24) + ' 家</span>' : '') + '</div>' : '';
+            const storeActionHtml =
+                '<button class="quick-btn' + (state.closure.storeMulti ? ' active' : '') + '" data-store-action="multi">' + (state.closure.storeMulti ? '☑ 多选（已开启）' : '☐ 多选') + '</button>' +
                 '<button class="quick-btn" data-store-action="all">全选当前范围</button>' +
                 '<button class="quick-btn" data-store-action="clear">清空</button>';
-            const storeHint = (storeMulti
-                ? '已选 <strong class="text-slate-200">' + state.closure.storeIds.length + '</strong> / ' + scopeStores.length + ' 家 · 点击门店勾选/取消，可多选'
-                : '单选模式 · 点击门店即选中，开启「多选」可勾选多家') + ' · 切换岗位会自动剔除空缺门店';
+            const storeHint = '已选 <strong class="text-slate-200">' + selStores.length + '</strong> / ' + scopeStores.length + ' 家 · 点击门店勾选 / 取消';
 
             const storeScopeHtml =
-                '<div><div class="text-xs text-slate-400 mb-2">大区（按层级收窄门店范围）</div>' + regionChipHtml + '</div>' +
+                '<div><div class="text-xs text-slate-400 mb-2">大区（专营店按门店名城市前缀自动归属）</div>' + regionChipHtml + '</div>' +
                 areaChipHtml +
                 '<div class="mt-2">' +
                     '<div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-2 mb-2">' +
-                        '<div class="text-xs text-slate-400 whitespace-nowrap">门店（默认单选，可开启多选）<span class="text-[11px] text-slate-500 ml-1">当前范围 ' + scopeStores.length + ' 家</span></div>' +
+                        '<div class="flex items-center gap-2 text-xs text-slate-400 whitespace-nowrap">门店<span class="text-[11px] text-slate-500">当前范围 ' + scopeStores.length + ' 家</span>' +
+                            '<input id="clStoreSearch" class="cl-search" type="text" placeholder="搜索门店名 / 编码" value="' + (q || '') + '"></div>' +
                         '<div class="flex items-center gap-2 flex-wrap justify-self-center">' + storeActionHtml + '</div>' +
                         '<span class="text-xs text-slate-400 justify-self-end text-right">' + storeHint + '</span>' +
                     '</div>' +
-                    storeChipHtml +
+                    storeMoreHint + storeChipHtml + selTagHtml +
                 '</div>';
 
-            // ---- Y 轴单选 ----
-            const yOpt = CLOSURE_Y_OPTIONS.filter(function (o) { return o.key === state.closure.yMetric; })[0] || CLOSURE_Y_OPTIONS[0];
-            const yHtml = '<div class="flex flex-wrap gap-2">' + CLOSURE_Y_OPTIONS.map(function (o) {
-                const on = o.key === state.closure.yMetric;
-                return '<span class="y-radio' + (on ? ' on' : '') + '" data-y="' + o.key + '">' + o.label + '</span>';
-            }).join('') + '</div>';
-
-            const avgHtml = '<span class="avg-toggle' + (state.closure.avgLine ? ' on' : '') + '" data-avg="1"><span class="switch-dot"></span>平均参考线</span>';
-            const ctxHtml = '<span class="closure-context">时间 <strong>' + state.start + ' ~ ' + state.end + '</strong> · 岗位 <strong>' + post.name + '</strong> · 门店 <strong>' + state.closure.storeIds.length + '</strong> 家 · 在岗 <strong>' + personCount + '</strong> 人</span>';
+            const dateHint =
+                (!CL_DATES.length
+                    ? '<div class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24">未加载到灯塔评分数据文件（lighthouse_scoring_v4.6.js），当前展示的是规则驱动模拟数据。</div>'
+                    : (!topHits.length
+                        ? '<div class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24">顶部日期 ' + state.start + ' ~ ' + state.end + ' 与灯塔评分数据日期（' + CL_DATES.join('、') + '）不重叠，闭环模块已自动按数据日期展示；经营总览等模块仍按顶部区间取数。</div>'
+                        : (CL_DATES.length < 2 ? '<div class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:rgba(59,130,246,0.1);border:1px solid rgba(59,130,246,0.28);color:#93c5fd">单日数据降级：灯塔评分数据当前仅有 ' + viewDates.join('、') + ' 一天，环比 / 趋势指标已隐藏，仅展示当日口径。</div>' : '')))
+                + ((CL_MEMO.range && CL_MEMO.range.mockCapped)
+                    ? '<div class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);color:#94a3b8">模拟岗位渲染上限：当前范围 ' + CL_MEMO.range.storeIdx.length + ' 家专营店，仅展示前 ' + CL_MOCK_CAP + ' 家（模拟数据）。收窄大区 / 小区或切换「真实」岗位可查看全量。</div>'
+                    : '');
+            const ctxHtml = '<span class="closure-context">时间 <strong>' + state.start + ' ~ ' + state.end + '</strong> · 岗位 <strong>' + rule.postName + '</strong>' +
+                ' · 门店 <strong>' + selStores.length + '</strong> 家 · 在岗 <strong>' + personCount + '</strong> 人</span>';
 
             $bc.innerHTML = '<section class="space-y-6">' +
-                // 筛选
+                // 筛选（层级范围）
                 '<div class="panel p-5 space-y-4">' +
                     '<div class="flex items-center justify-between gap-3 flex-wrap">' +
                         '<div>' +
                             '<div class="panel-title"><span class="dot"></span>岗位 × 门店 筛选</div>' +
-                            '<div class="panel-subtitle">单岗位 × 多门店 · 每个散点代表该岗位在该门店的一名在岗人员</div>' +
+                            '<div class="panel-subtitle">单岗位 × 多门店 · 先选范围，再在下方固定栏选择岗位</div>' +
                         '</div>' + ctxHtml +
                     '</div>' +
                     '<div>' + storeScopeHtml + '</div>' +
-                    '<div class="mt-2"><div class="text-xs text-slate-400 mb-2">岗位（单选）</div>' + postChipsHtml + '</div>' +
-                    '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-                        '<div><div class="text-xs text-slate-400 mb-2">纵坐标指标（单选）</div>' + yHtml + '</div>' +
-                        '<div><div class="text-xs text-slate-400 mb-2">图表辅助</div><div class="flex flex-wrap gap-2">' + avgHtml + '</div></div>' +
+                '</div>' +
+                // 岗位固定栏（滚动吸顶）
+                '<div class="cl-post-sticky">' +
+                    '<div class="flex items-center gap-3 flex-wrap">' +
+                        '<span class="text-xs font-bold whitespace-nowrap" style="color:#94a3b8">岗位（单选）</span>' +
+                        postChipsHtml +
+                        '<span class="text-[11px] ml-auto whitespace-nowrap" style="color:#94a3b8">↓ 滚动时本栏固定 · 「真实」= 灯塔评分明细 · 「模拟」= 规则驱动演示数据</span>' +
                     '</div>' +
                 '</div>' +
-                // KPI
+                // 业务 KPI
                 '<div>' + kpiHtml + '</div>' +
-                // 散点图
+                dateHint +
+                // 动作积分：4 卡 + 热力图 + 四象限
                 '<div class="panel p-6">' +
-                    '<div class="flex items-start justify-between mb-1 flex-wrap gap-3">' +
+                    '<div class="flex items-start justify-between mb-3 flex-wrap gap-3">' +
                         '<div>' +
-                            '<div class="panel-title"><span class="dot"></span>人员散点分析</div>' +
-                            '<div class="panel-subtitle">横坐标 = 累计积分 · 纵坐标 = ' + yOpt.label + ' · 按门店分色 · 琥珀虚线为平均值参考线</div>' +
+                            '<div class="panel-title"><span class="dot"></span>' + rule.postName + ' · 动作积分与规则达成</div>' +
+                            '<div class="panel-subtitle">满分 ' + clNum(rule.capAvailable) + ' 分 · 按 ' + items.length + ' 个已接入拿分项计分（' + rule.sourceText + '）· 点击热力图 / 散点 / 明细行可查看个人证据链</div>' +
                         '</div>' +
-                        '<div class="text-xs text-slate-400">每点 = 1 人 · 共 ' + personCount + ' 点</div>' +
+                        '<div class="text-xs text-slate-400">共 ' + personCount + ' 人 · 数据日期 ' + (viewDates.join('、') || '无') + '</div>' +
                     '</div>' +
+                    actKpiHtml +
                     (personCount ?
-                        '<div id="closureScatter" style="height:420px" class="mt-3"></div>' +
-                        '<div class="scatter-legend mt-3" id="closureLegend"></div>'
-                        : '<div class="closure-empty"><div class="ce-icon">○</div><div>所选岗位在这些门店暂无在岗人员</div><div class="text-xs text-slate-500">试试切换其他岗位，或多选几家门店</div></div>'
+                        '<div class="grid grid-cols-1 xl:grid-cols-2 gap-6 mt-5">' +
+                            '<div>' +
+                                '<div class="cl-chart-title">人员 × 拿分项 得分热力图</div>' +
+                                '<div class="cl-chart-sub">颜色 = 达成率（越低越红）· 标签 = 当日得分 · 某行整体偏红 = 个体问题 · 某列整体偏红 = 流程 / 培训问题</div>' +
+                                '<div id="clHeat" class="mt-2"></div>' +
+                            '</div>' +
+                            '<div>' +
+                                '<div class="cl-chart-title">当日积分 × 销量四象限</div>' +
+                                '<div class="cl-chart-sub">横坐标 = 当日积分 · 纵坐标 = 销量（配套数据）· 虚线 = 各自平均值 · 右上标杆 / 左下待辅导</div>' +
+                                '<div id="clQuad" class="mt-2"></div>' +
+                                '<div class="scatter-legend" id="closureLegend"></div>' +
+                            '</div>' +
+                        '</div>'
+                        : '<div class="closure-empty"><div class="ce-icon">○</div><div>' + (viewDates.length ? '所选岗位在这些门店暂无在岗人员' : '当前时间区间无可用评分数据') + '</div><div class="text-xs text-slate-500">' + (viewDates.length ? '试试切换其他岗位，或调整门店范围' : '请把顶部日期范围调整到 ' + (CL_DATES[0] || '数据日期')) + '</div></div>'
                     ) +
                 '</div>' +
-                // 人员明细表
+                // 人员积分排名与证据链
                 '<div class="panel p-6">' +
                     '<div class="flex items-center justify-between mb-1 flex-wrap gap-3">' +
                         '<div>' +
-                            '<div class="panel-title"><span class="dot"></span>人员明细</div>' +
-                            '<div class="panel-subtitle">按累计积分降序 · 前三名带金 / 银 / 铜徽章</div>' +
+                            '<div class="panel-title"><span class="dot"></span>人员积分排名与证据链</div>' +
+                            '<div class="panel-subtitle">按当日积分降序 · 积分 = 各拿分项得分之和（满分 ' + clNum(rule.capAvailable) + ' 分）· 点击任意行查看扣分明细与 AI 证据链</div>' +
                         '</div>' +
                         '<div class="text-xs text-slate-400">共 ' + personCount + ' 人</div>' +
                     '</div>' +
-                    '<div class="mt-4 max-h-[440px] overflow-auto">' +
+                    '<div class="mt-4 max-h-[520px] overflow-auto">' +
                     (personCount ?
-                        '<table class="w-full text-sm"><thead class="text-xs text-slate-400 sticky top-0" style="background:#111c2f">' +
-                        '<tr><th class="py-2 px-2 text-left font-medium">#</th><th class="py-2 px-2 text-left font-medium">姓名 / 门店 · 岗位</th>' +
-                        '<th class="py-2 px-2 text-right font-medium">累计积分</th>' +
-                        '<th class="py-2 px-2 text-right font-medium">锁单量</th>' +
-                        '<th class="py-2 px-2 text-right font-medium">有效试驾</th>' +
-                        '<th class="py-2 px-2 text-right font-medium">试驾点评率</th>' +
-                        '<th class="py-2 px-2 text-right font-medium">线索试驾率</th></tr></thead>' +
+                        '<table class="cl-table w-full text-sm"><thead class="text-xs sticky top-0">' +
+                        '<tr>' +
+                        '<th class="py-2 px-2 text-left font-medium">名次</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">姓名 / 专营店 · 岗位</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">当日积分</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">满分</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">达成率</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">扣分单数</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">最弱拿分项</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">主要扣分项</th>' +
+                        '<th class="py-2 px-2 text-center font-medium">状态</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">明细</th>' +
+                        '</tr></thead>' +
                         '<tbody id="closureTbody"></tbody></table>'
                         : '<div class="text-center text-slate-500 py-8">所选条件下无人员</div>'
                     ) + '</div>' +
                 '</div>' +
+                // 岗位动作规则视图（灯塔规则主数据）
+                renderRuleView(rule, items) +
             '</section>';
 
-            // ---- 表格行 ----
+            // 抽屉上下文（团队均值与拿分项一一对应）
+            CL_DRAW_CTX = {
+                points: points, rule: rule, dates: viewDates,
+                teamScores: items.map(function (it, i) {
+                    return itemAvg[i] ? Math.round(itemAvg[i] / 100 * it.cap * 100) / 100 : 0;
+                })
+            };
+            // 岗位吸顶栏偏移 = 顶栏实际高度（避免硬编码错位）
+            (function () {
+                const bar = $bc.querySelector('.cl-post-sticky');
+                const tb = document.querySelector('.topbar');
+                if (bar && tb) bar.style.top = tb.offsetHeight + 'px';
+            })();
+
+            // ---- 表格行（按当日积分降序）----
             const $tb = document.getElementById('closureTbody');
             if ($tb && points.length) {
-                $tb.innerHTML = points.map(function (x, i) {
-                    const trr = x.testDrives ? (x.testReviews / x.testDrives) * 100 : 0;
-                    const tdr = x.intentLeads ? (x.testDrives / x.intentLeads) * 100 : 0;
-                    let badgeCls = 'normal', badgeText = String(i + 1);
-                    if (i === 0) { badgeCls = 'gold'; }
-                    else if (i === 1) { badgeCls = 'silver'; }
-                    else if (i === 2) { badgeCls = 'bronze'; }
-                    return '<tr class="border-b border-slate-700/30 hover:bg-blue-500/5">' +
+                $tb.innerHTML = points.map(function (x, pi) {
+                    let badgeCls = 'normal', badgeText = String(pi + 1);
+                    if (pi === 0) { badgeCls = 'gold'; }
+                    else if (pi === 1) { badgeCls = 'silver'; }
+                    else if (pi === 2) { badgeCls = 'bronze'; }
+                    const mainItem = x.deductions.length
+                        ? clShortItem(x.deductions[0].item) + (x.deductions.length > 1 ? ' <span style="color:#94a3b8">+' + (x.deductions.length - 1) + '</span>' : '')
+                        : '<span style="color:#94a3b8">—</span>';
+                    const scoreC = x.rate >= 95 ? '#34d399' : (x.rate >= 85 ? '#60a5fa' : (x.rate >= 70 ? '#fbbf24' : '#fb7185'));
+                    return '<tr data-person-detail="' + pi + '">' +
                         '<td class="py-2 px-2"><span class="closure-rank-badge ' + badgeCls + '">' + badgeText + '</span></td>' +
                         '<td class="py-2 px-2">' +
                             '<div class="font-medium text-slate-100">' + x.name + '</div>' +
-                            '<div class="text-xs text-slate-500">' + x.storeName + ' · ' + (POSTS_BY_KEY[x.postKey] ? POSTS_BY_KEY[x.postKey].name : '') + '</div>' +
+                            '<div class="text-xs" style="color:#94a3b8">' + x.storeName + ' · ' + rule.postName + (x.empCode ? ' · 工号 ' + x.empCode : '') + '</div>' +
                         '</td>' +
-                        '<td class="py-2 px-2 text-right font-semibold text-amber-400">' + fmt(x.points) + '</td>' +
-                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(x.locked) + '</td>' +
-                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(x.testDrives) + '</td>' +
-                        '<td class="py-2 px-2 text-right text-slate-400">' + trr.toFixed(1) + '%</td>' +
-                        '<td class="py-2 px-2 text-right text-slate-400">' + tdr.toFixed(1) + '%</td>' +
+                        '<td class="py-2 px-2 text-right font-bold" style="color:' + scoreC + '">' + clNum(x.points) + '</td>' +
+                        '<td class="py-2 px-2 text-right" style="color:#94a3b8">' + clNum(x.capAvailable) + '</td>' +
+                        '<td class="py-2 px-2" style="min-width:132px"><div class="flex items-center gap-2"><div class="cl-bar" style="flex:1"><i style="width:' + Math.max(2, Math.round(x.rate)) + '%;background:' + scoreC + '"></i></div><span style="font-size:11px;color:' + scoreC + '">' + x.rate + '%</span></div>' +
+                        '<div class="text-[10px] mt-0.5" style="color:#64748b">已评估 ' + x.coverCnt + '/' + x.coverTotal + ' 项 · 严格口径 ' + x.rateFull + '%</div></td>' +
+                        '<td class="py-2 px-2 text-right" style="color:' + (x.dedCount ? '#fb923c' : '#64748b') + '">' + x.dedCount + '</td>' +
+                        '<td class="py-2 px-2 text-xs" style="color:#cbd5e1">' + clShortItem(x.weakestName) + ' <span style="color:#fb923c;font-size:11px">(' + x.weakestRate + '%)</span></td>' +
+                        '<td class="py-2 px-2 text-xs" style="color:#cbd5e1">' + mainItem + '</td>' +
+                        '<td class="py-2 px-2 text-center"><span class="cl-status ' + x.statusCls + '">' + x.status + '</span></td>' +
+                        '<td class="py-2 px-2 text-right text-xs font-semibold" style="color:#60a5fa">明细 →</td>' +
                         '</tr>';
                 }).join('');
             }
 
-            // ---- 散点图 ----
+            // ---- 热力图 + 四象限（容器随 innerHTML 重建，图表必须重新 init）----
             if (personCount) {
-                const $scat = document.getElementById('closureScatter');
-                if ($scat) {
-                    // renderClosure 每次 innerHTML 重建，#closureScatter 是新 DOM 节点
-                    // 旧 chart 实例仍绑在已脱离的节点上，必须重建
-                    if (extCharts.closureScatter) {
-                        try { extCharts.closureScatter.dispose(); } catch (_) {}
-                        delete extCharts.closureScatter;
-                    }
-                    const sc = echarts.init($scat);
-                    extCharts.closureScatter = sc;
-                    const series = storeNodes.map(function (sn, sIdx) {
-                        const color = closureStoreColor(sIdx);
-                        const storePts = points.filter(function (p) { return p.storeId === sn.id && p.y !== null && p.y !== undefined; });
-                        return {
-                            name: sn.name,
-                            type: 'scatter',
-                            symbolSize: 14,
-                            itemStyle: {
-                                color: color, opacity: 0.85,
-                                borderColor: 'rgba(255,255,255,0.7)', borderWidth: 1,
-                                shadowBlur: 8, shadowColor: scaleColor(color, 0.4)
-                            },
-                            emphasis: { focus: 'self', scale: 1.4, itemStyle: { opacity: 1, borderColor: '#fff', borderWidth: 2 } },
-                            data: storePts.map(function (p) {
-                                return { name: p.name, value: [p.points, p.y], _meta: { storeName: p.storeName, postName: (POSTS_BY_KEY[p.postKey] || {}).name || '', points: p.points, locked: p.locked } };
-                            })
-                        };
-                    });
-                    const ys = points.map(function (p) { return p.y; }).filter(function (v) { return v !== null && v !== undefined; });
-                    const yMin = ys.length ? Math.max(0, Math.min.apply(null, ys) * 0.92) : 0;
-                    const yMax = ys.length ? Math.max.apply(null, ys) * 1.08 : (yOpt.isPercent ? 100 : 1);
-                    const xs = points.map(function (p) { return p.points; });
-                    const xMin = xs.length ? Math.max(0, Math.min.apply(null, xs) * 0.9) : 0;
-                    const xMax = xs.length ? Math.max.apply(null, xs) * 1.1 : 1;
-
-                    let avgX = 0, avgY = 0;
-                    if (state.closure.avgLine && points.length) {
-                        avgX = xs.reduce(function (s, x) { return s + x; }, 0) / xs.length;
-                        if (ys.length) avgY = ys.reduce(function (s, x) { return s + x; }, 0) / ys.length;
-                    }
-                    const markLines = state.closure.avgLine && avgX && avgY ? {
-                        silent: true, symbol: 'none', animation: false,
-                        data: [
-                            { xAxis: avgX, name: 'X 均值', label: { formatter: 'X 均值 ' + fmt(avgX), color: '#fbbf24', position: 'insideEndTop', fontSize: 11 }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } },
-                            { yAxis: avgY, name: 'Y 均值', label: { formatter: 'Y 均值 ' + yOpt.fmtFn(avgY), color: '#fbbf24', position: 'insideEndTop', fontSize: 11 }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } }
-                        ]
-                    } : undefined;
-
-                    sc.setOption({
-                        animation: false,
-                        tooltip: {
-                            trigger: 'item',
-                            backgroundColor: 'rgba(11,18,32,0.95)',
-                            borderColor: 'rgba(148,163,184,0.2)',
-                            textStyle: { color: '#e2e8f0', fontSize: 12 },
-                            extraCssText: 'box-shadow:0 8px 24px rgba(0,0,0,0.6);',
-                            formatter: function (it) {
-                                const m = it.data._meta;
-                                return '<div style="font-weight:700;margin-bottom:4px">' + it.data.name + '</div>' +
-                                    '<div style="opacity:.7;font-size:11px">' + m.storeName + ' · ' + m.postName + '</div>' +
-                                    '<div style="margin-top:6px">累计积分：<b>' + fmt(m.points) + '</b> 分</div>' +
-                                    '<div>' + yOpt.label + '：<b>' + yOpt.fmtFn(it.value[1]) + '</b></div>' +
-                                    '<div style="opacity:.6;font-size:11px;margin-top:4px">锁单量 ' + fmt(m.locked) + ' 单</div>';
-                            }
-                        },
-                        grid: { left: 60, right: 24, top: 36, bottom: 56 },
-                        xAxis: {
-                            type: 'value', name: '累计积分（分）', nameLocation: 'middle', nameGap: 28,
-                            nameTextStyle: { color: '#94a3b8', fontSize: 12 },
-                            min: xMin, max: xMax,
-                            axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
-                            axisTick: { show: false },
-                            axisLabel: { color: '#94a3b8', fontSize: 11 },
-                            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
-                        },
-                        yAxis: {
-                            type: 'value', name: yOpt.label + '（' + yOpt.unit + '）', nameLocation: 'middle', nameGap: 48,
-                            nameTextStyle: { color: '#94a3b8', fontSize: 12 },
-                            min: yMin, max: yMax,
-                            axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
-                            axisTick: { show: false },
-                            axisLabel: { color: '#94a3b8', fontSize: 11, formatter: yOpt.isPercent ? '{value}%' : '{value}' },
-                            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
-                        },
-                        series: series.map(function (s) { return Object.assign({}, s, { markLine: markLines }); })
-                    }, true);
-                    // 容器在 innerHTML 重建后可能尚未 layout，强制 resize + 双 rAF 兜底
-                    try { sc.resize(); } catch (_) {}
-                    requestAnimationFrame(function () { try { sc.resize(); } catch (_) {} });
-                    requestAnimationFrame(function () { try { sc.resize(); } catch (_) {} });
-
-                    const $leg = document.getElementById('closureLegend');
-                    if ($leg) {
-                        $leg.innerHTML = storeNodes.map(function (sn, idx) {
-                            return '<span class="sl-item"><span class="sl-dot" style="background:' + closureStoreColor(idx) + '"></span>' + sn.name + '</span>';
-                        }).join('');
-                    }
+                clRenderHeat(points, rule);
+                const legend = clRenderQuad(points, rule) || [];
+                const $leg = document.getElementById('closureLegend');
+                if ($leg) {
+                    $leg.innerHTML = legend.length
+                        ? legend.map(function (g) { return '<span class="sl-item"><span class="sl-dot" style="background:' + g.color + '"></span>' + g.name + '</span>'; }).join('')
+                        : '<span class="sl-item"><span class="sl-dot" style="background:' + (rule.color || '#3b82f6') + '"></span>' + rule.postName + ' · 全部人员</span>';
                 }
             }
+        }
+
+        // v4.6：岗位动作规则视图（拿分项 / 封顶 / 判断逻辑 / 凭证来源 / 采集接入状态）
+        function renderRuleView(rule, items) {
+            const rows = rule.items.map(function (it) {
+                const st = it.deprecated ? '<span class="cl-tag">已取消</span>'
+                    : (it.collected ? '<span class="cl-src real">已接入</span>' : '<span class="cl-src mock">待接入</span>');
+                return '<tr class="' + (it.deprecated ? 'dep' : '') + '">' +
+                    '<td style="color:#e2e8f0;font-weight:600">' + it.name + '</td>' +
+                    '<td>' + (it.perText || (it.per ? clNum(it.per) : '—')) + '</td>' +
+                    '<td>' + clNum(it.cap) + (it.capWeekend !== null && it.capWeekend !== undefined ? ' / 周末 ' + clNum(it.capWeekend) : '') + '</td>' +
+                    '<td>' + (it.mustDo || '—') + '</td>' +
+                    '<td>' + (it.judge || '—') + '</td>' +
+                    '<td>' + (it.noScore || '—') + '</td>' +
+                    '<td>' + (it.where || '—') + '</td>' +
+                    '<td>' + st + '</td>' +
+                    '</tr>';
+            }).join('');
+            const monthly = (LH_OK && LH.monthlyRules ? LH.monthlyRules : []).filter(function (m) { return m.post === rule.postName; });
+            const monthlyHtml = monthly.length ? (state.closure.showMonthly ?
+                '<div class="overflow-auto mt-3"><table class="cl-rule-table"><thead><tr><th>类型</th><th>积分类型</th><th>考核指标项</th><th>规则</th><th>数据可得性</th><th>数据来源</th></tr></thead><tbody>' +
+                monthly.map(function (m) {
+                    return '<tr><td>' + m.kind + '</td><td>' + m.cls + '</td><td style="color:#e2e8f0">' + m.item + '</td><td>' + m.rule + '</td><td>' + m.category + '</td><td style="color:#94a3b8">' + m.dataSource + '</td></tr>';
+                }).join('') + '</tbody></table></div>'
+                : '<div class="text-xs mt-2" style="color:#64748b">另有 ' + monthly.length + ' 条月度 / 扣分考核项，点击右上「展开月度考核项」查看。</div>') : '';
+            return '<div class="panel p-6">' +
+                '<div class="flex items-start justify-between mb-3 flex-wrap gap-3">' +
+                    '<div>' +
+                        '<div class="panel-title"><span class="dot"></span>' + rule.postName + ' · 岗位日积分规则（灯塔规则主数据）</div>' +
+                        '<div class="panel-subtitle">来源 sheet：' + (rule.sheet || '—') + ' · 规则满分 ' + clNum(rule.cap) + ' 分 · 已接入 ' + items.length + ' 项 / 规则共 ' + rule.items.length + ' 项' +
+                        (rule.requireText ? ' · 规则声明：' + rule.requireText : '') + (rule.draft ? ' · <span style="color:#fbbf24">规则草案（公式未定稿）</span>' : '') + '</div>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-2">' +
+                        (monthly.length ? '<button class="quick-btn" data-cl-rule="monthly">' + (state.closure.showMonthly ? '收起月度考核项' : '展开月度考核项') + '</button>' : '') +
+                        '<button class="quick-btn' + (state.closure.showRules ? ' active' : '') + '" data-cl-rule="toggle">' + (state.closure.showRules ? '收起规则表' : '展开规则表') + '</button>' +
+                    '</div>' +
+                '</div>' +
+                (state.closure.showRules ?
+                    '<div class="overflow-auto"><table class="cl-rule-table"><thead><tr>' +
+                    '<th>拿分项</th><th>单次分值</th><th>封顶（日常 / 周末）</th><th>拿分必须做到</th><th>判断逻辑</th><th>不计分情况</th><th>看哪里（凭证）</th><th>采集状态</th>' +
+                    '</tr></thead><tbody>' + rows + '</tbody></table></div>' + monthlyHtml
+                    : '<div class="text-xs" style="color:#64748b">规则表已收起，点击右上「展开规则表」查看 ' + rule.items.length + ' 个拿分项的分值与判定口径。</div>') +
+                '</div>';
         }
 
         // ---------- 统一渲染 ----------
@@ -3089,14 +3780,16 @@
                     Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) panelCharts[k].dispose(); delete panelCharts[k]; });
                     Object.keys(extCharts).forEach(function (k) { if (extCharts[k]) { extCharts[k].dispose(); delete extCharts[k]; } });
                 } else {
-                    if (extCharts.closureScatter) { extCharts.closureScatter.dispose(); delete extCharts.closureScatter; }
+                    ['closureScatter', 'clHeat', 'clQuad'].forEach(function (k) {
+                        if (extCharts[k]) { try { extCharts[k].dispose(); } catch (_) {} delete extCharts[k]; }
+                    });
                 }
                 state.board = next;
                 renderAll();
                 // 给浏览器一个 layout 周期再 resize 新看板的图
                 requestAnimationFrame(function () {
                     if (state.board === 'closure') {
-                        const c = extCharts.closureScatter; if (c) c.resize();
+                        ['clHeat', 'clQuad'].forEach(function (k) { const c = extCharts[k]; if (c) { try { c.resize(); } catch (_) {} } });
                     } else {
                         Object.values(extCharts).forEach(function (c) { c.resize(); });
                     }
@@ -3106,56 +3799,94 @@
         // 闭环看板交互（事件委托，#boardClosure 内 innerHTML 每次 renderClosure 都替换）
         document.getElementById('boardClosure').addEventListener('click', function (e) {
             const postEl = e.target.closest('[data-post]');
-            if (postEl) { state.closure.postKey = postEl.dataset.post; renderClosure(); return; }
-            const storeEl = e.target.closest('[data-store]');
-            if (storeEl) {
-                const id = storeEl.dataset.store;
-                if (state.closure.storeMulti) {
-                    // 多选模式：点击勾选/取消
-                    const i = state.closure.storeIds.indexOf(id);
-                    if (i >= 0) state.closure.storeIds.splice(i, 1);
-                    else state.closure.storeIds.push(id);
-                } else {
-                    // 默认单选：点击即只选中该门店
-                    state.closure.storeIds = [id];
-                }
+            if (postEl) {
+                state.closure.postKey = postEl.dataset.post;
+                state.closure.storeCodes = null; state.closure.storeSearch = '';
                 renderClosure(); return;
             }
-            // v4.3：层级筛选——切换大区/小区后，已选门店保留仍可见的，其余剔除（不自动全选）
+            const ruleBtn = e.target.closest('[data-cl-rule]');
+            if (ruleBtn) {
+                if (ruleBtn.dataset.clRule === 'monthly') state.closure.showMonthly = !state.closure.showMonthly;
+                else state.closure.showRules = !state.closure.showRules;
+                renderClosure(); return;
+            }
+            // 门店：多选模式勾选/取消；单选模式点击即切换为该门店
+            const storeEl = e.target.closest('[data-store]');
+            if (storeEl) {
+                const code = storeEl.dataset.store;
+                const sel = clScopeSelect().sel.slice();
+                const i = sel.indexOf(code);
+                if (state.closure.storeMulti) {
+                    if (i >= 0) sel.splice(i, 1); else sel.push(code);
+                } else if (i < 0) {
+                    sel.length = 0;
+                    sel.push(code);
+                }
+                state.closure.storeCodes = sel;
+                renderClosure(); return;
+            }
             const cr = e.target.closest('[data-closure-region]');
             if (cr) {
-                const rid = cr.dataset.closureRegion || null;
-                if (rid !== state.closure.regionId) {
-                    state.closure.regionId = rid;
-                    state.closure.areaId = null;
+                const rg = cr.dataset.closureRegion || null;
+                if (rg !== state.closure.region) {
+                    state.closure.region = rg;
+                    state.closure.area = null;
+                    state.closure.storeCodes = null;
                 }
                 renderClosure(); return;
             }
             const ca = e.target.closest('[data-closure-area]');
             if (ca) {
-                const aid = ca.dataset.closureArea || null;
-                if (aid !== state.closure.areaId) state.closure.areaId = aid;
+                const ar = ca.dataset.closureArea || null;
+                if (ar !== state.closure.area) {
+                    state.closure.area = ar;
+                    state.closure.storeCodes = null;
+                }
                 renderClosure(); return;
             }
             const sa = e.target.closest('[data-store-action]');
             if (sa) {
                 const act = sa.dataset.storeAction;
                 if (act === 'multi') {
-                    // 切换多选模式；关闭时若已选多家则保留第一个，回到单选语义
+                    // 切换多选；关闭时若已选多家则保留第一家，回到单选语义
                     state.closure.storeMulti = !state.closure.storeMulti;
-                    if (!state.closure.storeMulti && state.closure.storeIds.length > 1) {
-                        state.closure.storeIds = [state.closure.storeIds[0]];
-                    }
+                    const cur = state.closure.storeCodes || clScopeSelect().sel;
+                    if (!state.closure.storeMulti && cur.length > 1) state.closure.storeCodes = [cur[0]];
                 }
-                else if (act === 'all') state.closure.storeIds = closureScopeStores().map(function (s) { return s.id; });
-                else if (act === 'clear') state.closure.storeIds = [];
+                else if (act === 'all') state.closure.storeCodes = null;
+                else if (act === 'clear') state.closure.storeCodes = [];
                 renderClosure(); return;
             }
-            const yEl = e.target.closest('[data-y]');
-            if (yEl) { state.closure.yMetric = yEl.dataset.y; renderClosure(); return; }
-            const aEl = e.target.closest('[data-avg]');
-            if (aEl) { state.closure.avgLine = !state.closure.avgLine; renderClosure(); return; }
+            // 明细行点击 → 动作积分诊断抽屉
+            const pdEl = e.target.closest('[data-person-detail]');
+            if (pdEl) { clOpenDrawer(+pdEl.dataset.personDetail); return; }
         });
+        // 门店搜索：防抖过滤并保持输入焦点（整块 innerHTML 会重建）
+        (function () {
+            const bc = document.getElementById('boardClosure');
+            if (!bc) return;
+            bc.addEventListener('input', function (e) {
+                const t = e.target;
+                if (!t || t.id !== 'clStoreSearch') return;
+                state.closure.storeSearch = t.value;
+                clearTimeout(bc._clSearchTimer);
+                bc._clSearchTimer = setTimeout(function () {
+                    renderClosure();
+                    const nx = document.getElementById('clStoreSearch');
+                    if (nx) {
+                        nx.focus();
+                        try { nx.setSelectionRange(nx.value.length, nx.value.length); } catch (_) {}
+                    }
+                }, 220);
+            });
+        })();
+        // v4.5：诊断抽屉关闭（遮罩 / ✕ / Esc）
+        (function () {
+            const d = document.getElementById('clDrawer');
+            if (!d) return;
+            d.addEventListener('click', function (e) { if (e.target.closest('[data-cl-close]')) clCloseDrawer(); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clCloseDrawer(); });
+        })();
         document.getElementById('applyBtn').addEventListener('click', function () {
             if (!$start.value || !$end.value || $start.value > $end.value) return;
             state.start = $start.value;

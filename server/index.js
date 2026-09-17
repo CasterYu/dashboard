@@ -13,8 +13,9 @@ const orgRoute = require('./routes/org');
 const metricsRoute = require('./routes/metrics');
 const importRoute = require('./routes/import');
 const adminRoute = require('./routes/admin');
+const scoringRoute = require('./routes/scoring_v4.6');
 
-const VERSION = '4.2.0';
+const VERSION = '4.6.0';
 
 const app = express();
 const db = openDb();
@@ -52,6 +53,7 @@ app.use('/api', authRoute(db));
 app.use('/api', orgRoute(db));
 app.use('/api', metricsRoute(db));
 app.use('/api/import', importRoute(db));
+app.use('/api', scoringRoute(db));
 app.use('/api', adminRoute(db));
 
 // 404 + 统一错误处理
