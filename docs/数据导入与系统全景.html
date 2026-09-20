@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>业务数据看板 · 数据导入与系统全景</title>
+<style>
+  :root { --primary:#3b82f6; --ink:#1e293b; --sub:#64748b; --line:#e2e8f0; --bg:#f8fafc; --ok:#10b981; --warn:#f59e0b; --violet:#8b5cf6; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:"Microsoft YaHei","PingFang SC",system-ui,sans-serif; color:var(--ink); background:var(--bg); line-height:1.75; padding:40px 20px; }
+  .page { max-width:900px; margin:0 auto; background:#fff; border:1px solid var(--line); border-radius:12px; padding:48px 56px; box-shadow:0 4px 24px rgba(15,23,42,.06); }
+  h1 { font-size:26px; display:flex; align-items:center; gap:12px; }
+  h1 .badge { font-size:13px; background:#eff6ff; color:var(--primary); border:1px solid #bfdbfe; padding:2px 10px; border-radius:999px; font-weight:600; }
+  .meta { color:var(--sub); font-size:13px; margin:6px 0 28px; }
+  h2 { font-size:19px; margin:36px 0 12px; padding-left:12px; border-left:4px solid var(--primary); }
+  h3 { font-size:15px; margin:20px 0 8px; color:#0f172a; }
+  h4 { font-size:13.5px; margin:14px 0 6px; color:#1e293b; }
+  p { margin:8px 0; font-size:14px; }
+  table { width:100%; border-collapse:collapse; margin:12px 0; font-size:13px; }
+  th { background:#f1f5f9; text-align:left; }
+  th, td { border:1px solid var(--line); padding:8px 10px; vertical-align:top; }
+  tr:nth-child(even) td { background:#fafbfc; }
+  code { background:#f1f5f9; border:1px solid #e2e8f0; border-radius:4px; padding:1px 5px; font-size:12px; font-family:Consolas,Menlo,monospace; color:#334155; }
+  .box { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:14px 18px; margin:12px 0; font-size:13px; }
+  .box.blue { background:#eff6ff; border-color:#bfdbfe; }
+  .box.green { background:#ecfdf5; border-color:#a7f3d0; }
+  .box.amber { background:#fffbeb; border-color:#fde68a; }
+  .box.violet { background:#f5f3ff; border-color:#ddd6fe; }
+  ul, ol { padding-left:22px; }
+  li { font-size:13px; margin:4px 0; }
+  .tag { display:inline-block; font-size:12px; font-weight:600; color:var(--primary); }
+  .dim { color:var(--sub); }
+  .ok { color:var(--ok); font-weight:600; }
+  .no { color:#ef4444; font-weight:600; }
+  .arch { font-family:Consolas,Menlo,monospace; font-size:12.5px; white-space:pre; background:#0f172a; color:#e2e8f0; border-radius:8px; padding:18px 20px; overflow-x:auto; line-height:1.6; margin: 10px 0; }
+  .arch .c1 { color:#94a3b8; }
+  .arch .k { color:#7dd3fc; }
+  .footer { margin-top:36px; padding-top:16px; border-top:1px solid var(--line); color:var(--sub); font-size:12px; text-align:center; }
+  .stack-chip { display:inline-block; padding:2px 8px; margin:2px 4px 2px 0; border-radius:999px; font-size:12px; font-weight:600; }
+  .c-blue   { background:#dbeafe; color:#1d4ed8; }
+  .c-green  { background:#d1fae5; color:#047857; }
+  .c-amber  { background:#fef3c7; color:#b45309; }
+  .c-violet { background:#ede9fe; color:#6d28d9; }
+  .c-rose   { background:#ffe4e6; color:#be123c; }
+  .c-slate  { background:#e2e8f0; color:#334155; }
+  .toc { background:#f8fafc; border:1px solid var(--line); border-radius:8px; padding:16px 22px; margin:16px 0 24px; font-size:13px; }
+  .toc ol { padding-left:20px; margin:6px 0 0; }
+  .toc a { color:var(--primary); text-decoration:none; }
+  .toc a:hover { text-decoration:underline; }
+  @media print { body{background:#fff;padding:0} .page{border:none;box-shadow:none;padding:20px} .toc{break-after:always} }
+</style>
+</head>
+<body>
+<div class="page">
+
+<h1>业务数据看板 · 数据导入与系统全景 <span class="badge">当前 v4.8</span></h1>
+<div class="meta">日期：2026-09-17 ｜ 仓库：github.com/CasterYu/dashboard ｜ 文档位置：D:\projects\dashboard\docs\数据导入与系统全景.html ｜ 仅供内部参考，不同步 GitHub</div>
+
+<div class="toc">
+<b>目录</b>
+<ol>
+<li><a href="#deploy">当前部署形态</a></li>
+<li><a href="#stack">前后端技术栈</a></li>
+<li><a href="#tables">数据导入全景表（一张表看懂需要几张表）</a></li>
+<li><a href="#er">表关系图</a></li>
+<li><a href="#templates">三个导入模板字段</a></li>
+<li><a href="#flow">导入顺序与依赖</a></li>
+<li><a href="#checks">预检与安全阀</a></li>
+<li><a href="#backup">备份与运维</a></li>
+</ol>
+</div>
+
+<h2 id="deploy">一、当前部署形态</h2>
+
+<p>系统由<b>三层独立部署</b>构成：前端静态页 + 后端 API 服务 + 单文件数据库。</p>
+
+<table>
+<tr><th style="width:160px">层</th><th>位置 / 形态</th><th style="width:200px">入口</th></tr>
+<tr><td><b>前端</b><br><span class="dim">静态页</span></td>
+<td>GitHub Pages 永久托管（推荐）。本地开发：<code>file://</code> 双击 <code>index.html</code> 也可打开（mock 模式）</td>
+<td><code>https://casteryu.github.io/dashboard/</code></td>
+</tr>
+<tr><td><b>后端</b><br><span class="dim">Node 进程</span></td>
+<td>Ubuntu 22.04 LTS 轻量云服务器（2C4G）<br>Nginx 反代 + certbot 自动 HTTPS + PM2 守护<br>进程名 <code>dashboard-api</code>，监听 <code>127.0.0.1:3777</code></td>
+<td><code>https://api.你的域名.com</code></td>
+</tr>
+<tr><td><b>数据库</b><br><span class="dim">SQLite</span></td>
+<td>单文件 <code>/opt/dashboard/server/data/dashboard.db</code><br>WAL 模式，开箱即用，无独立 DB 服务<br>cron 每日 02:00 备份至 <code>/var/backups/dashboard/</code> 保留 30 天</td>
+<td>本地文件，无外部端点</td>
+</tr>
+</table>
+
+<h3>1.1 切换数据源（前端 → 后端）</h3>
+<div class="box blue">
+默认 mock 演示模式（前端内置）。打开 URL 时追加查询参数即可切真实 API：
+<p style="margin:8px 0 0"><code>https://casteryu.github.io/dashboard/?data=api&amp;api=https://api.你的域名.com</code></p>
+<p class="dim">前端从 <code>localStorage</code> 读取 JWT（登录后），所有 <code>/api/*</code> 业务请求自动附带 <code>Authorization: Bearer &lt;token&gt;</code>；导入接口仍走 <code>X-Import-Token</code>，与登录体系并存。</p>
+</div>
+
+<h3>1.2 鉴权与会话</h3>
+<ul>
+<li><b>5 角色</b>：<code>hq</code> / <code>regional_lead</code> / <code>area_lead</code> / <code>store_lead</code> / <code>employee</code>，scope 按人员当前位置实时计算</li>
+<li><b>登录</b>：<code>POST /api/auth/login { emp_no, password }</code> → <code>{ token, user, mustChangePassword }</code>，JWT 有效期 <b>8 小时</b></li>
+<li><b>首登强改密</b>：返回 <code>mustChangePassword=true</code> 时前端拦截至改密页</li>
+<li><b>导入鉴权</b>：<code>X-Import-Token</code> 头（默认 <code>change-me-import-token</code>，<span class="no">生产必须改</span>）</li>
+</ul>
+
+<div class="box amber">
+<b>JWT_SECRET 必须设置</b>：未设置时服务启动会随机生成一次性值并打印警告，<b>重启后所有 token 失效</b>。生产用 <code>JWT_SECRET=$(node -e "console.log(require('crypto').randomBytes(48).toString('hex'))")</code> 生成强随机串并写入 PM2 环境变量。
+</div>
+
+<h2 id="stack">二、前后端技术栈</h2>
+
+<h3>2.1 前端 <span class="dim">（零构建 · 单文件 · 双模式）</span></h3>
+<p><span class="stack-chip c-blue">HTML5</span><span class="stack-chip c-blue">原生 JavaScript（ES2020）</span><span class="stack-chip c-amber">Tailwind CSS（CDN）</span><span class="stack-chip c-amber">ECharts 5.4.3（CDN）</span><span class="stack-chip c-violet">Inter 字体（Google Fonts）</span><span class="stack-chip c-slate">外置 lighthouse_scoring_v4.6.js</span></p>
+<ul>
+<li>无打包/无 npm 依赖，<code>index.html</code> 单文件即整套看板</li>
+<li><code>file://</code> 打开走 mock 演示数据；<code>?data=api</code> 切真实 API</li>
+<li>模块化拆分：<code>lighthouse_scoring_v4.6.js</code> 单独承载灯塔规则与积分逻辑，可被 <code>legacy/</code> 历史快照复用</li>
+</ul>
+
+<h3>2.2 后端 <span class="dim">（Node 20 + Express · 单进程）</span></h3>
+<table>
+<tr><th style="width:140px">类别</th><th>依赖</th><th style="width:160px">版本</th><th>用途</th></tr>
+<tr><td>运行时</td><td>Node.js</td><td>20 LTS</td><td>Express 服务</td></tr>
+<tr><td>Web 框架</td><td><code>express</code></td><td>4.21</td><td>路由 / 中间件</td></tr>
+<tr><td>数据库驱动</td><td><code>better-sqlite3</code></td><td>11.10</td><td>同步 API，WAL 模式</td></tr>
+<tr><td>鉴权</td><td><code>bcryptjs</code> + <code>jsonwebtoken</code></td><td>2.4 / 9.0</td><td>密码哈希 + JWT（HS256，8h）</td></tr>
+<tr><td>上传 / 解析</td><td><code>multer</code> + <code>xlsx</code></td><td>1.4 / 0.18</td><td>Excel/CSV 解析与上传</td></tr>
+<tr><td>跨域 / 配置</td><td><code>cors</code> + <code>dotenv</code></td><td>2.8 / 16.4</td><td>CORS 白名单 + <code>.env</code></td></tr>
+</table>
+
+<h3>2.3 部署 / 运维栈</h3>
+<p><span class="stack-chip c-green">Nginx 1.18（反代）</span><span class="stack-chip c-green">Let's Encrypt · certbot（自动 HTTPS）</span><span class="stack-chip c-green">PM2（守护 + 开机自启）</span><span class="stack-chip c-rose">cron（每日备份）</span><span class="stack-chip c-violet">GitHub Pages（前端发布）</span><span class="stack-chip c-slate">push-to-github.ps1（本地推送）</span></p>
+
+<h3>2.4 环境变量</h3>
+<table>
+<tr><th>变量</th><th>默认值</th><th>说明</th></tr>
+<tr><td><code>PORT</code></td><td>3777</td><td>API 端口</td></tr>
+<tr><td><code>DATA_DIR</code></td><td><code>./data</code></td><td>SQLite 文件目录</td></tr>
+<tr><td><code>IMPORT_TOKEN</code></td><td><code>change-me-import-token</code></td><td>导入接口令牌，<span class="no">生产必改</span></td></tr>
+<tr><td><code>JWT_SECRET</code></td><td>（必设）</td><td>JWT 签名密钥；未设则每次重启作废全部 token</td></tr>
+<tr><td><code>ALLOW_ORIGINS</code></td><td>GH Pages + localhost</td><td>CORS 追加白名单，逗号分隔，支持 <code>*</code> 通配前缀</td></tr>
+</table>
+
+<h2 id="tables">三、数据导入全景表</h2>
+
+<p>本节回答<b>列存储需要几张表、每张表干什么</b>。系统当前共 <b>9 张业务表</b>（不含 <code>meta</code> / <code>import_logs</code>），其中 7 张常态使用、2 张仅在 <b>「灯塔动作积分」模块（v4.6）</b>启用后承载数据。</p>
+
+<table>
+<tr><th style="width:60px">#</th><th style="width:180px">表名</th><th>用途 / 关键字段</th><th style="width:140px">谁写入</th><th style="width:140px">谁读取</th></tr>
+<tr><td>1</td><td><code>org_nodes</code></td><td>六级组织树（全国/大区/小区/门店/岗位/人员），<code>parent_id</code> 自指，含 <code>status/deactivated_at/emp_no/store_id/post_key</code></td><td><code>import/org</code></td><td>全部树形筛选 / scope CTE</td></tr>
+<tr><td>2</td><td><code>posts</code></td><td>10 个岗位配置（积分权重 <code>pw_*</code>），建库时 <code>seed.js</code> 内置</td><td><code>seed.js</code></td><td>指标导入 / 前端岗位选项</td></tr>
+<tr><td>3</td><td><code>person_assignments</code></td><td>任职记录真源：<code>(person_id, from_date)</code> 唯一，调岗 = 关旧段+开新段</td><td><code>import/org</code></td><td>历史报表归属回溯</td></tr>
+<tr><td>4</td><td><code>node_paths</code></td><td>物化路径：人员 → 所有祖先，按任职区间分片（<code>from_date/to_date</code>）</td><td>与上同事务</td><td>5 角色 scope 子树过滤</td></tr>
+<tr><td>5</td><td><code>users</code></td><td>登录账号：<code>emp_no</code> 唯一 1:1 绑定，<code>password_hash</code> bcrypt</td><td><code>scripts/create-user.js</code> CLI</td><td><code>/api/auth/login</code></td></tr>
+<tr><td>6</td><td><code>daily_metrics</code></td><td>日指标：(person_id, date) 主键，11 项指标列</td><td><code>import/metrics</code></td><td>经营总览 / 排行榜 / 漏斗</td></tr>
+<tr><td>7</td><td><code>action_rules</code></td><td>灯塔规则主数据：(post_key, item) 主键，<span class="dim">仅 v4.6+ 使用</span></td><td><code>import/rules</code></td><td>闭环看板「规则视图」</td></tr>
+<tr><td>8</td><td><code>action_scores</code></td><td>动作明细（每单一笔）：UNIQUE(person, date, item, action, order_no)，<span class="dim">仅 v4.6+</span></td><td><code>import/scoring</code></td><td>诊断抽屉 AI 时间线</td></tr>
+<tr><td>9</td><td><code>action_daily_sums</code></td><td>个人日汇总：(person, date, item) 主键，达成率直接消费，<span class="dim">仅 v4.6+</span></td><td>同上事务</td><td>热力图 / 四象限</td></tr>
+</table>
+
+<div class="box violet">
+<b>辅助表</b>：<code>meta</code>（KV 配置）+ <code>import_logs</code>（每次导入留痕：文件名/模式/行数/失败明细 JSON）→ 通过 <code>/api/import/logs?limit=20</code> 可直接查看。
+</div>
+
+<h3>3.2 指标列全量清单（<code>daily_metrics</code>）</h3>
+<table>
+<tr><th style="width:160px">字段（驼峰 key）</th><th style="width:160px">列名（SQL）</th><th>Excel 表头中文</th></tr>
+<tr><td><code>leads</code></td><td><code>leads</code></td><td>线索</td></tr>
+<tr><td><code>validLeads</code></td><td><code>valid_leads</code></td><td>有效线索</td></tr>
+<tr><td><code>intentLeads</code></td><td><code>intent_leads</code></td><td>意向线索</td></tr>
+<tr><td><code>invites</code></td><td><code>invites</code></td><td>邀约</td></tr>
+<tr><td><code>arrivals</code></td><td><code>arrivals</code></td><td>到店</td></tr>
+<tr><td><code>testDrives</code></td><td><code>test_drives</code></td><td>试驾</td></tr>
+<tr><td><code>testReviews</code></td><td><code>test_reviews</code></td><td>试驾评价</td></tr>
+<tr><td><code>returnVisits</code></td><td><code>return_visits</code></td><td>回访</td></tr>
+<tr><td><code>opportunities</code></td><td><code>opportunities</code></td><td>商机</td></tr>
+<tr><td><code>locked</code></td><td><code>locked</code></td><td>锁单</td></tr>
+<tr><td><code>delivered</code></td><td><code>delivered</code></td><td>交付</td></tr>
+</table>
+
+<h2 id="er">四、表关系图</h2>
+
+<div class="arch"><span class="c1"># 简化 ER：箭头方向 = 写入方 → 表</span>
+<span class="k">┌─ 名册导入（org）─────────────────────┐</span>
+│  POST /api/import/org                │
+│  写入 org_nodes + person_assignments │
+│  + node_paths（事务同开）            │
+└────────┬─────────────────────────────┘
+         │ 供下下游读取
+         ▼
+┌─ 组织树读取（org.js）─────────────────┐
+│  GET /api/org /api/persons           │
+│  scope CTE 过滤（5 角色）            │
+└────────┬─────────────────────────────┘
+         │ 父子追溯
+         ▼
+┌─ 指标导入（metrics）──────────────────┐
+│  POST /api/import/metrics            │
+│  写入 daily_metrics（11 项指标）     │
+└────────┬─────────────────────────────┘
+         │ person_id 关联 org_nodes
+         ▼
+┌─ 业务 API（metrics.js）───────────────┐
+│  经营总览 / 漏斗 / 排行榜 / 趋势分析 │
+└───────────────────────────────────────┘
+
+<span class="c1"># 灯塔模块（v4.6 起独立链路）</span>
+<span class="k">┌─ 规则主数据导入（rules）───────────────┐</span>
+│  POST /api/import/rules（JSON body） │
+│  写入 action_rules（post_key+item） │
+└────────┬──────────────────────────────┘
+         │ 供评分消费
+         ▼
+┌─ 评分导入（scoring）───────────────────┐
+│  POST /api/import/scoring?postKey=…  │
+│  写入 action_scores + action_daily_sums│
+│  （同一事务，sheet1 明细 / sheet2 汇总）│
+└────────┬──────────────────────────────┘
+         │
+         ▼
+┌─ 闭环看板（act/scoring_v4.6.js）────────┐
+│  热力图 / 四象限 / 诊断抽屉 / 规则视图  │
+└───────────────────────────────────────┘
+
+<span class="c1"># 鉴权支线</span>
+<span class="k">scripts/create-user.js add &lt;emp_no&gt; [role]</span>
+         │ 1:1 绑定
+         ▼
+       users 表（emp_no UNIQUE）── 与 org_nodes.emp_no 同源
+         │
+         ▼
+       /api/auth/login → JWT 8h → 前端 Authorization 头</div>
+
+<h2 id="templates">五、三个导入模板字段</h2>
+
+<h3>5.1 名册模板 <code>GET /api/import/template?type=org</code></h3>
+<table>
+<tr><th style="width:180px">列名</th><th>必填</th><th>说明</th></tr>
+<tr><td>大区</td><td class="ok">是</td><td>如「华东」，不存在则自动建</td></tr>
+<tr><td>小区</td><td class="ok">是</td><td>归属上一级大区</td></tr>
+<tr><td>门店</td><td class="ok">是</td><td>归属上一级小区</td></tr>
+<tr><td>岗位</td><td class="ok">是</td><td>必须命中 <code>posts.key</code>（10 个内置岗位之一）</td></tr>
+<tr><td>人员</td><td class="ok">是</td><td>无工号时需配合门店+姓名唯一定位</td></tr>
+<tr><td><b>工号</b></td><td>否</td><td><b>强烈建议填</b>，人员唯一身份。命中 → 改名则改名、调岗就切分任职区间；未命中 + 同名 → 「认领」补工号；归属另一姓名 → 视为改名</td></tr>
+<tr><td><b>生效日期</b></td><td>否</td><td>YYYY-MM-DD，调岗/入职时必填，历史报表按当时架构统计</td></tr>
+</table>
+
+<div class="box">
+<b>空库开箱可用</b>：建库时已 seed 10 个岗位（含积分权重），「全国」根节点在首次导入时自动创建。旧 5 列名册仍兼容（缺工号的行降级为「岗位/门店+姓名」匹配并单独告警）。
+</div>
+
+<h3>5.2 指标模板 <code>GET /api/import/template?type=metrics</code></h3>
+<table>
+<tr><th style="width:160px">列名</th><th>必填</th><th>说明</th></tr>
+<tr><td>工号</td><td>否（强烈建议）</td><td>填了则优先用工号匹配人员；未填则按姓名+门店/岗位降级</td></tr>
+<tr><td>姓名</td><td class="ok">是</td><td>降级匹配的兜底</td></tr>
+<tr><td>日期</td><td class="ok">是</td><td>YYYY-MM-DD</td></tr>
+<tr><td>leads / validLeads / intentLeads / invites / arrivals / testDrives / testReviews / returnVisits / opportunities / locked / delivered</td>
+<td>否</td>
+<td>11 项指标数值列，缺列默认 0；非数字 → 整行拒绝并返回原因</td></tr>
+</table>
+
+<div class="box green">
+<b>同人同日覆盖更新</b>，可重复上传；返回 <code>{ ok, rowsOk, rowsFailed:[{row, reason}] }</code>，失败行不阻断合法行入库。
+</div>
+
+<h3>5.3 灯塔评分模板 <span class="dim">（v4.6+）</span></h3>
+<p>上传 Excel 文件，<code>POST /api/import/scoring?postKey=&lt;岗位 key&gt;</code>。两个 sheet：</p>
+
+<h4>Sheet 1 · 动作明细</h4>
+<table>
+<tr><th style="width:160px">列名</th><th>必填</th><th>说明</th></tr>
+<tr><td>工号</td><td class="ok">是</td><td>匹配人员</td></tr>
+<tr><td>姓名</td><td>否</td><td>冗余便于审计</td></tr>
+<tr><td>日期</td><td class="ok">是</td><td>YYYY-MM-DD</td></tr>
+<tr><td>拿分项</td><td class="ok">是</td><td>必须命中 <code>action_rules.item</code></td></tr>
+<tr><td>动作</td><td>否</td><td>如「首访 / 配车 / 交付排程」</td></tr>
+<tr><td>订单号</td><td>否</td><td>用于诊断抽屉追溯</td></tr>
+<tr><td>得分</td><td>否</td><td>缺省按规则 <code>per</code> 计算</td></tr>
+</table>
+
+<h4>Sheet 2 · 个人日汇总</h4>
+<table>
+<tr><th style="width:160px">列名</th><th>必填</th><th>说明</th></tr>
+<tr><td>工号</td><td class="ok">是</td></tr>
+<tr><td>姓名</td><td>否</td></tr>
+<tr><td>日期</td><td class="ok">是</td></tr>
+<tr><td>拿分项</td><td class="ok">是</td></tr>
+<tr><td>目标</td><td>否</td><td>如 1 / 3 / 5</td></tr>
+<tr><td>数量</td><td>否</td><td>实际完成数</td></tr>
+<tr><td>得分</td><td>否</td><td>达成率直接消费</td></tr>
+</table>
+
+<div class="box amber">
+<b>建议先导名册</b>：未覆盖的门店/员工会自动落库（无大区/小区归属，闭环看板分大区树会落到「未归类」节点）。返回 <code>{ detailRows, sumRows, persons, storesFromRoster, storesCreatedCount, days }</code>，<code>?dryRun=1</code> 只出报告。
+</div>
+
+<h2 id="flow">六、导入顺序与依赖</h2>
+
+<div class="arch"><span class="c1"># 4 步流水线（最常跑的路径）</span>
+
+[<b>① 名册</b>]──  org ──&gt;  org_nodes + person_assignments + node_paths
+   │                                  │
+   │                  ┌───────────────┘
+   ▼
+[<b>② 指标</b>]── metrics ──&gt; daily_metrics ──&gt; 经营总览 / 排行榜
+   │
+   │
+   ▼
+[<b>③ 评分</b>]── scoring (v4.6) ──&gt; action_scores + action_daily_sums
+   │                              │
+   │                              └─&gt; 热力图 / 四象限 / 诊断抽屉
+   ▼
+[<b>④ 账号 CLI</b>]── create-user.js ──&gt; users（EMP_NULL 与名册 1:1 绑定）
+
+<span class="c1"># 可独立于名册的导入</span>
+
+[<b>规则</b>]── rules (JSON) ──&gt; action_rules ──&gt; 闭环看板「规则视图」
+   时机：任何时候，建议首次部署时一次灌入</div>
+
+<table>
+<tr><th style="width:140px">依赖关系</th><th>说明</th></tr>
+<tr><td>指标 ⇐ 名册</td><td>指标行必须能匹配到 <code>org_nodes</code> 中的人员节点，否则整行拒绝</td></tr>
+<tr><td>评分 ⇐ 名册 + 规则</td><td>未匹配到人员的工号自动落库（无归属），未匹配到规则项的拿分项拒绝入库</td></tr>
+<tr><td>账号 ⇐ 名册</td><td>账号 <code>emp_no</code> 必须先在 <code>org_nodes.emp_no</code> 存在，否则 CLI 拒绝建号</td></tr>
+<tr><td>规则 ⊥ 名册</td><td>规则是主数据，可独立于名册导入/更新</td></tr>
+</table>
+
+<h2 id="checks">七、预检与安全阀</h2>
+
+<h3>7.1 三种导入模式 <code>POST /api/import/org</code></h3>
+<table>
+<tr><th style="width:120px">参数</th><th>取值</th><th>行为</th></tr>
+<tr><td rowspan="2"><code>mode</code></td><td><code>merge</code>（默认）</td><td>只新增与调岗，不做离职判定，适合日常增补</td></tr>
+<tr><td><code>snapshot</code></td><td>以文件中出现的<b>大区</b>为范围，名单内没有的门店/岗位/人员自动停用，重新出现的自动恢复，未涉及的大区完全不动</td></tr>
+<tr><td><code>dryRun</code></td><td><code>1</code></td><td>只返回差异报告（将新增 / 将调岗 / 将停用 / 将恢复 / 已认领 / 失败明细），<b>不写库、不记日志</b></td></tr>
+<tr><td><code>force</code></td><td><code>1</code></td><td>跳过安全阀：停用「人员+门店」数量 > 5 且占比 > 20% 时返回 <b>409 + 待停用清单</b>，人工核对后再加 <code>force=1</code> 重发</td></tr>
+</table>
+
+<h3>7.2 预检示例（PowerShell）</h3>
+<div class="arch"><span class="c1"># 全量快照前先预检（不写库）</span>
+curl.exe -H <span class="k">"X-Import-Token: change-me-import-token"</span> `
+  -F <span class="k">"file=@名册.xlsx"</span> <span class="k">"http://127.0.0.1:3777/api/import/org?mode=snapshot&amp;dryRun=1"</span>
+
+<span class="c1"># 确认后正式执行（大批量停用需再带 force=1）</span>
+curl.exe -H <span class="k">"X-Import-Token: change-me-import-token"</span> `
+  -F <span class="k">"file=@名册.xlsx"</span> <span class="k">"http://127.0.0.1:3777/api/import/org?mode=snapshot"</span></div>
+
+<div class="box">
+<b>软删除 ≠ 物理删除</b>：停用只影响「可见性」，不改变聚合口径。离职人员/闭店门店的历史指标仍完整保留并计入上级合计，因此打开「显示已停用」后榜单求和可能小于上级合计，页面会给出提示语。
+</div>
+
+<h2 id="backup">八、备份与运维</h2>
+
+<h3>8.1 每日自动备份</h3>
+<div class="arch"><span class="c1"># /etc/cron.d/dashboard-backup</span>
+<span class="k">0 2 * * *</span> root sqlite3 /opt/dashboard/server/data/dashboard.db <span class="k">".backup '/var/backups/dashboard/db-$(date +%F).db'"</span> && find /var/backups/dashboard -name <span class="k">'db-*.db'</span> -mtime +30 -delete</div>
+
+<h3>8.2 升级前备份（跨大版本必做）</h3>
+<div class="arch">pm2 stop dashboard-api
+sqlite3 /opt/dashboard/server/data/dashboard.db <span class="k">".backup '/var/backups/dashboard/pre-v4-$(date +%F-%H%M).db'"</span>
+pm2 start dashboard-api        <span class="c1"># 启动即自动迁移（幂等）</span></div>
+
+<p>迁移内容（v4.0 起）：<code>org_nodes</code> 加 <code>status/deactivated_at/emp_no</code>、<code>node_paths</code> 重建为任职区间分片、新建 <code>person_assignments</code>。旧数据回填为「开放区间 + 在职 + 无工号」，升级后数值与旧版逐值一致。</p>
+
+<h3>8.3 升级后自检</h3>
+<div class="arch">curl -s localhost:3777/api/health                                  <span class="c1"># 应返回 4.6.0</span>
+curl -s localhost:3777/api/admin/data-quality | head -c 400        <span class="c1"># 工号覆盖率 / 重复工号 / 停用统计</span>
+curl -s <span class="k">'localhost:3777/api/org'</span> | head -c 300                     <span class="c1"># 组织树（默认已剪掉停用节点）</span></div>
+
+<h3>8.4 物化路径修复</h3>
+<p>如怀疑「任职区间 → 节点路径」不一致（例如手改过库），可全量重建（<b>幂等，不改变任何聚合数值</b>，仅重建 <code>node_paths</code> 与 <code>node.store_id</code>）：</p>
+<div class="arch">cd /opt/dashboard/server
+DATA_DIR=./data node -e <span class="k">"const d=require('./db');console.log(d.rebuildAllPaths(d.openDb()))"</span>
+<span class="c1"># 输出形如 { persons: 8, paths: 54 }</span></div>
+
+<div class="box amber">
+<b>危险操作</b>：<code>node scripts/seed.js --reset</code> 会清空全部数据，<span class="no">生产环境禁用</span>。
+</div>
+
+<h3>8.5 常见运维清单</h3>
+<table>
+<tr><th style="width:140px">场景</th><th>动作</th></tr>
+<tr><td>首次上线</td><td>启动服务 → 下载名册模板 → 填好导入 <code>org</code> → 导入 <code>metrics</code></td></tr>
+<tr><td>月度报表</td><td>业务侧按模板填 Excel → 导入指标（同人同日覆盖）→ 查看返回失败明细并修正</td></tr>
+<tr><td>入职 / 调岗 / 离职</td>
+<td>只补新增与调岗 → <code>POST /api/import/org</code>（默认 <code>merge</code>）；调岗建议填「生效日期」，历史报表仍按当时归属。全公司月度对账 → 先 <code>dryRun=1</code> 看差异清单 → <code>mode=snapshot</code>；返回 409 时核对清单后加 <code>force=1</code></td></tr>
+<tr><td>工号治理</td>
+<td><code>GET /api/admin/data-quality</code> 查在职缺工号清单与重复工号；补齐后重导同一份名册即可「认领」（不会产生重复人员）</td></tr>
+<tr><td>积分权重调整</td>
+<td>改 <code>posts.pw_*</code> 列，历史积分自动按新权重重算，无需回填</td></tr>
+<tr><td>升级</td>
+<td><code>git pull &amp;&amp; npm install --omit=dev &amp;&amp; pm2 restart dashboard-api</code>（跨大版本先按 8.2 备份）</td></tr>
+<tr><td>监控</td>
+<td><code>pm2 logs dashboard-api</code>；<code>import_logs</code> 表留全量导入历史；<code>GET /api/import/logs?limit=20</code> 可直接查看</td></tr>
+</table>
+
+<div class="footer">
+生成于 2026-09-17 · 仅供内部参考 · 不推送 GitHub · 与 README.md 中「数据导入流程」「导入模式与预检」「DEPLOY.md」章节保持一致
+</div>
+
+</div>
+</body>
+</html>

@@ -35,6 +35,12 @@ const { hashPassword, randomPassword, findPersonByEmpNo, ROLE_LEVEL_MAP } = requ
 
 const ROLES = Object.keys(ROLE_LEVEL_MAP);   // hq / regional_lead / area_lead / store_lead / employee
 
+/** v5.2：合法角色 = 内置五种 + roles 表中的自定义角色（如 supervisor） */
+function validRoles(db) {
+  const extra = db.prepare('SELECT code FROM roles').all().map(r => r.code);
+  return ROLES.concat(extra.filter(c => ROLES.indexOf(c) < 0));
+}
+
 function die(msg) { console.error('[create-user] ' + msg); process.exit(1); }
 
 function parseArgs(argv) {
@@ -67,8 +73,8 @@ async function cmdAdd(db, args) {
     role = inferRoleByLevel(person.level);
     if (!role) die('人员节点 level=' + person.level + ' 无法推断 role，请明确指定');
     console.log('[create-user] 自动推断 role=' + role + '（人员 level=' + person.level + '）');
-  } else if (!ROLES.includes(role)) {
-    die('role 非法，可选：' + ROLES.join(' / '));
+  } else if (!validRoles(db).includes(role)) {
+    die('role 非法，可选：' + validRoles(db).join(' / '));
   }
   if (role !== 'hq' && !person) die('role=' + role + ' 需要工号对应的人员节点已导入；请先导入名册');
   const password = args.flags.password || randomPassword(10);
@@ -150,7 +156,7 @@ async function cmdImport(db, args) {
       if (!person) { console.warn('[create-user] 跳过：' + r.emp_no + ' 未指定 role 且未找到人员'); fail++; continue; }
       role = inferRoleByLevel(person.level);
     }
-    if (!ROLES.includes(role)) { console.warn('[create-user] 跳过：' + r.emp_no + ' role 非法 ' + role); fail++; continue; }
+    if (!validRoles(db).includes(role)) { console.warn('[create-user] 跳过：' + r.emp_no + ' role 非法 ' + role); fail++; continue; }
     if (role !== 'hq' && !person) { console.warn('[create-user] 跳过：' + r.emp_no + ' 人员未导入'); fail++; continue; }
     const password = r.password || randomPassword(10);
     const hash = await hashPassword(password);

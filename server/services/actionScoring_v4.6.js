@@ -111,24 +111,30 @@ function normDate(v) {
   return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
 }
 
-/** 解析评分明细（sheet1）与个人日汇总（sheet2） */
-function parseScoring(buffer, postKey) {
+/**
+ * 解析评分明细（sheet1）与个人日汇总（sheet2）
+ * v1 真实数据扩展：opts.keepStoreRows=true 时保留员工列为空的「店级行」（emp=''，规则到店不到人）
+ */
+function parseScoring(buffer, postKey, opts) {
+  const keepStore = !!(opts && opts.keepStoreRows);
   const d = sheetRows(buffer, 0), s = sheetRows(buffer, 1);
   const details = [], sums = [];
   for (const r of d.slice(2)) {
-    const storeName = clean(r[0]), emp = clean(r[4]);
-    if (!storeName || !emp) continue;
+    const storeName = clean(r[0]), code = clean(r[1]), emp = clean(r[4]);
+    if (!storeName && !code) continue;            // 店名编码全空 → 非数据行
+    if (!emp && !keepStore) continue;             // 旧行为：无工号行跳过
     details.push({
-      storeCode: clean(r[1]), storeName, personName: clean(r[3]), emp,
+      storeCode: code, storeName, personName: clean(r[3]), emp,
       date: normDate(r[5]), item: clean(r[6]), action: clean(r[7]),
       score: toNum(r[8]), evidence: clean(r[9]), orderNo: clean(r[11]), postKey
     });
   }
   for (const r of s.slice(2)) {
-    const emp = clean(r[4]);
-    if (!emp) continue;
+    const storeName = clean(r[0]), code = clean(r[1]), emp = clean(r[4]);
+    if (!storeName && !code) continue;
+    if (!emp && !keepStore) continue;
     sums.push({
-      storeCode: clean(r[1]), storeName: clean(r[0]), emp, personName: clean(r[3]),
+      storeCode: code, storeName, emp, personName: clean(r[3]),
       date: normDate(r[5]), item: clean(r[6]), target: clean(r[7]),
       cnt: toNum(r[8]), targetScore: toNum(r[9]), score: toNum(r[10]), postKey
     });
@@ -136,32 +142,69 @@ function parseScoring(buffer, postKey) {
   return { details, sums };
 }
 
-/** 评分导入：落库门店/人员层级 + 明细 + 汇总（同人同日同项覆盖） */
+/**
+ * 评分导入：落库门店/人员层级 + 明细 + 汇总（同人同日同项覆盖）
+ * v1 真实数据扩展（均向后兼容，缺省时行为与 v4.6 完全一致）：
+ *   opts.orgMap          Map<专营店编码, {region, area, name}> —— 提供时启用「编码挂树」模式：
+ *                        门店按编码解析归属（全国→销售大区→销售小区→门店），树节点幂等创建
+ *   opts.virtual         true —— 员工列为空时按 (门店, 岗位) 建虚拟人员节点，命名 '[岗位名]店名'，
+ *                        无 emp_no（不可登录），明细/汇总全落其名下
+ *   opts.includeUnmatched orgMap 模式下未命中编码的门店是否落库（挂「其它/未匹配」）；
+ *                        false（默认）= 跳过并在返回值 skippedStores 中上报
+ *   opts.rootId          大区挂载的父节点 id（默认取库里第一个「全国」根）
+ * 返回值新增：createdNodeIds（本次新建 org 节点，回滚用）/ personIds / unmatchedStores /
+ *            skippedStores / nameBackfilled（店名缺失用映射表补齐的编码集合）
+ */
 function importScoring(db, buffer, filename, opts) {
   const o = opts || {};
   const postKey = o.postKey || postKeyOf(o.post || filename) || 'deliverySpecialist';
-  const { details, sums } = parseScoring(buffer, postKey);
+  const { details, sums } = parseScoring(buffer, postKey, { keepStoreRows: o.virtual });
   const storeCache = new Map(), personCache = new Map();
   const storeByName = db.prepare("SELECT id, name FROM org_nodes WHERE level = '门店' AND status = 1 AND name = ?");
   const postName = (db.prepare('SELECT name FROM posts WHERE key = ?').get(postKey) || {}).name || postKey;
   const dbh = require('../db');
   const unmatchedStores = new Set();
-  let rowsOk = 0, rowsSum = 0;
-  function personOf(emp, name, storeName) {
-    const key = emp || (storeName + '|' + name);
-    if (personCache.has(key)) return personCache.get(key);
-    let node = emp ? dbh.findPersonByEmpNo(db, emp) : undefined;
-    if (!node) {
-      const label = clean(name) || emp || '未知人员';
-      const sid = storeOf(storeName);
-      const postNodeId = dbh.findOrCreateNode(db, postName, '岗位', sid, postKey);
-      const id = emp ? dbh.createPersonNode(db, label, postNodeId, postKey, sid)
-                     : dbh.findOrCreateNode(db, label, '人员', postNodeId, postKey);
-      if (emp) dbh.setPersonEmpNo(db, id, emp);
-      node = db.prepare('SELECT id, name FROM org_nodes WHERE id = ?').get(id);
+  const createdNodeIds = [];
+  const personIds = [];
+  const skippedStores = new Map();   // code → 跳过行数
+  const nameBackfilled = new Set();  // 评分文件店名缺失、以映射表名称补齐的编码
+  const storeCodeId = new Map();     // code → 门店节点 id（orgMap 模式缓存；0 = 跳过）
+  const rootNode = db.prepare("SELECT id FROM org_nodes WHERE level = '全国' ORDER BY id LIMIT 1").get();
+  const rootId = o.rootId || (rootNode ? rootNode.id : null);
+
+  /** 幂等建节点并记录本次新建的 id（供回滚） */
+  function ensureNode(name, level, parentId, pk) {
+    const exist = db.prepare('SELECT id FROM org_nodes WHERE name = ? AND level = ? AND parent_id IS ?')
+      .get(name, level, parentId === null ? null : parentId);
+    const id = dbh.findOrCreateNode(db, name, level, parentId, pk || null);
+    if (!exist) createdNodeIds.push(id);
+    return id;
+  }
+
+  /** orgMap 模式：编码 → 大区/小区/门店（幂等建树）；未命中按 includeUnmatched 决定挂「其它」或跳过 */
+  function storeByCode(code, fallbackName) {
+    if (!code) return null;
+    if (storeCodeId.has(code)) return storeCodeId.get(code);
+    const hit = o.orgMap ? o.orgMap.get(code) : null;
+    if (hit) {
+      const regionId = ensureNode(hit.region || '其它', '大区', rootId, null);
+      const areaId = ensureNode(hit.area || '未匹配', '小区', regionId, null);
+      const storeName = hit.name || fallbackName || ('门店' + code);
+      const storeId = ensureNode(storeName, '门店', areaId, null);
+      storeCodeId.set(code, storeId);
+      return storeId;
     }
-    personCache.set(key, node);
-    return node;
+    if (o.includeUnmatched) {
+      const regionId = ensureNode('其它', '大区', rootId, null);
+      const areaId = ensureNode('未匹配', '小区', regionId, null);
+      const storeName = fallbackName || ('门店' + code);
+      const storeId = ensureNode(storeName, '门店', areaId, null);
+      storeCodeId.set(code, storeId);
+      unmatchedStores.add(code);
+      return storeId;
+    }
+    storeCodeId.set(code, 0);
+    return 0;
   }
 
   function storeOf(name) {
@@ -179,28 +222,80 @@ function importScoring(db, buffer, filename, opts) {
     return storeCache.get(name) || 0;
   }
 
+  /** 人员解析：有工号走实名通道（兼容旧行为）；virtual 且无工号 → 店级虚拟人员（不建登录账号） */
+  function personOf(emp, name, storeId, storeCode, storeName) {
+    if (!emp) {
+      if (!o.virtual || !storeId) return null;
+      const vkey = 'V|' + (storeCode || storeId);
+      if (personCache.has(vkey)) return personCache.get(vkey);
+      const postNodeId = ensureNode(postName, '岗位', storeId, postKey);
+      const label = '[' + postName + ']' + (storeName || db.prepare('SELECT name FROM org_nodes WHERE id = ?').get(storeId).name);
+      const id = ensureNode(label, '人员', postNodeId, postKey);
+      const node = { id, name: label };
+      personCache.set(vkey, node);
+      return node;
+    }
+    const key = emp;
+    if (personCache.has(key)) return personCache.get(key);
+    let node = dbh.findPersonByEmpNo(db, emp);
+    if (!node) {
+      const label = clean(name) || emp || '未知人员';
+      const sid = storeId || storeOf(storeName);
+      const postNodeId = dbh.findOrCreateNode(db, postName, '岗位', sid, postKey);
+      const id = dbh.createPersonNode(db, label, postNodeId, postKey, sid);
+      if (emp) dbh.setPersonEmpNo(db, id, emp);
+      node = db.prepare('SELECT id, name FROM org_nodes WHERE id = ?').get(id);
+      createdNodeIds.push(id);
+    }
+    personCache.set(key, node);
+    return node;
+  }
+
   const insDetail = db.prepare(`INSERT OR REPLACE INTO action_scores
     (person_id, emp_no, person_name, post_key, store_id, store_code, store_name, date, item, action, score, ok, evidence, order_no)
     VALUES (@personId, @empNo, @name, @postKey, @storeId, @storeCode, @storeName, @date, @item, @action, @score, @ok, @evidence, @orderNo)`);
   const insSum = db.prepare('INSERT OR REPLACE INTO action_daily_sums (person_id, emp_no, post_key, store_id, date, item, target, cnt, target_score, score) VALUES (?,?,?,?,?,?,?,?,?,?)');
+  let rowsOk = 0, rowsSum = 0;
+
+  /** 单行归属解析：返回 { sid, storeName } 或 null（跳过） */
+  function resolveStore(code, rawName) {
+    if (o.orgMap) {
+      let storeName = rawName;
+      if (!storeName) {
+        const hit = o.orgMap.get(code);
+        if (hit && hit.name) { storeName = hit.name; nameBackfilled.add(code); }
+      }
+      const sid = storeByCode(code, storeName || null);
+      if (!sid) { skippedStores.set(code, (skippedStores.get(code) || 0) + 1); return null; }
+      return { sid, storeName: storeName || db.prepare('SELECT name FROM org_nodes WHERE id = ?').get(sid).name };
+    }
+    return { sid: storeOf(rawName), storeName: rawName };
+  }
+
   const tx = db.transaction(() => {
     for (const d of details) {
       if (!d.date) continue;
-      const sid = storeOf(d.storeName);
-      const p = personOf(d.emp, d.personName, d.storeName);
+      const loc = resolveStore(d.storeCode, d.storeName);
+      if (!loc) continue;
+      const p = personOf(d.emp, d.personName, loc.sid, d.storeCode, loc.storeName);
+      if (!p) continue;
       insDetail.run({
-        personId: p.id, empNo: d.emp, name: d.personName || p.name, postKey: d.postKey,
-        storeId: sid, storeCode: d.storeCode, storeName: d.storeName, date: d.date,
+        personId: p.id, empNo: d.emp || null, name: d.personName || p.name, postKey: d.postKey,
+        storeId: loc.sid, storeCode: d.storeCode, storeName: loc.storeName, date: d.date,
         item: d.item, action: d.action || '', score: d.score, ok: d.score >= 0 ? 1 : 0,
         evidence: d.evidence || null, orderNo: d.orderNo || ''
       });
+      personIds.push(p.id);
       rowsOk++;
     }
     for (const s of sums) {
       if (!s.date) continue;
-      const sid = storeOf(s.storeName);
-      const p = personOf(s.emp, s.personName, s.storeName);
-      insSum.run(p.id, s.emp, s.postKey, sid, s.date, s.item, s.target, s.cnt, s.targetScore, s.score);
+      const loc = resolveStore(s.storeCode, s.storeName);
+      if (!loc) continue;
+      const p = personOf(s.emp, s.personName, loc.sid, s.storeCode, loc.storeName);
+      if (!p) continue;
+      insSum.run(p.id, s.emp || null, s.postKey, loc.sid, s.date, s.item, s.target, s.cnt, s.targetScore, s.score);
+      personIds.push(p.id);
       rowsSum++;
     }
   });
@@ -208,11 +303,17 @@ function importScoring(db, buffer, filename, opts) {
   return {
     postKey, postName,
     detailRows: rowsOk, sumRows: rowsSum,
-    persons: personCache.size,
+    persons: new Set(personIds).size,
     storesFromRoster: storeCache.size - unmatchedStores.size,
     storesCreated: Array.from(unmatchedStores).slice(0, 50),
     storesCreatedCount: unmatchedStores.size,
-    days: Array.from(new Set(details.concat(sums).map(x => x.date).filter(Boolean))).sort()
+    days: Array.from(new Set(details.concat(sums).map(x => x.date).filter(Boolean))).sort(),
+    // v1 扩展返回值
+    createdNodeIds,
+    personIds: Array.from(new Set(personIds)),
+    unmatchedStores: Array.from(unmatchedStores),
+    skippedStores: Array.from(skippedStores.entries()).map(function (e) { return { code: e[0], rows: e[1] }; }),
+    nameBackfilled: Array.from(nameBackfilled)
   };
 }
 module.exports = { migrateScoring, importScoring, importRules, DDL, sheetRows, clean, toNum, normDate, postKeyOf, parseScoring };

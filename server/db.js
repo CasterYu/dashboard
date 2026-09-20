@@ -159,6 +159,26 @@ function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_users_role ON users(role);
     CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 
+    -- v5.2 角色表：功能权限（能干什么）与派生层级（自动模式下管哪层）集中配置，可自定义增删
+    CREATE TABLE IF NOT EXISTS roles (
+      code         TEXT PRIMARY KEY,        -- hq / regional_lead / ... / 自定义如 supervisor
+      name         TEXT NOT NULL,           -- 显示名（总部管理员/大区总监/督导...）
+      scope_level  TEXT,                    -- '大区'/'小区'/'门店'/'人员'；NULL=全树（hq 语义）
+      permissions  TEXT NOT NULL DEFAULT '{}',  -- JSON 权限点 {"admin.dataQuality":true,...}
+      built_in     INTEGER NOT NULL DEFAULT 0,
+      created_at   TEXT DEFAULT (datetime('now','localtime'))
+    );
+
+    -- v5.2 显式授权表：谁管哪些节点（include=白名单；exclude=从 include 子树中抠掉）
+    -- 有记录 = 显式模式（多根并集减排除子树）；无记录 = 维持按人员位置自动派生（存量账号零感知）
+    CREATE TABLE IF NOT EXISTS user_scope_nodes (
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      node_id INTEGER NOT NULL REFERENCES org_nodes(id) ON DELETE CASCADE,
+      mode    TEXT NOT NULL DEFAULT 'include' CHECK(mode IN ('include','exclude')),
+      UNIQUE(user_id, node_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_scope_user ON user_scope_nodes(user_id);
+
     -- 元信息（schema 版本等）
     CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
   `);
@@ -179,6 +199,32 @@ function migrate(db) {
     tx();
   }
   seedDefaultPosts(db);
+  seedBuiltinRoles(db);
+}
+
+/**
+ * v5.2 内置角色预置（幂等：INSERT OR IGNORE，已存在/已被人工调整的行不动）
+ * 权限点：dashboard.view（看板基本访问） / admin.dataQuality（数据质量报告）
+ *         metrics.fullTree（跨范围全树指标） / admin.userManage（账号与授权管理）
+ *         roles.manage（角色管理）
+ * hq 预置全部权限点 → hasPerm 行为与 v5.1 的 role==='hq' 判断完全一致
+ */
+const BUILTIN_ROLES = [
+  { code: 'hq',            name: '总部管理员', scope_level: null,   perms: ['dashboard.view', 'admin.dataQuality', 'metrics.fullTree', 'admin.userManage', 'roles.manage'] },
+  { code: 'regional_lead', name: '大区总监',   scope_level: '大区', perms: ['dashboard.view'] },
+  { code: 'area_lead',     name: '小区主管',   scope_level: '小区', perms: ['dashboard.view'] },
+  { code: 'store_lead',    name: '店长',       scope_level: '门店', perms: ['dashboard.view'] },
+  { code: 'employee',      name: '员工',       scope_level: '人员', perms: ['dashboard.view'] }
+];
+
+function seedBuiltinRoles(db) {
+  const ins = db.prepare(
+    'INSERT OR IGNORE INTO roles (code, name, scope_level, permissions, built_in) VALUES (?, ?, ?, ?, 1)'
+  );
+  const tx = db.transaction(() => BUILTIN_ROLES.forEach(r =>
+    ins.run(r.code, r.name, r.scope_level, JSON.stringify(r.perms))
+  ));
+  tx();
 }
 
 /** 出厂岗位配置：仅填补缺失的岗位（已存在则保留现有编制与权重，便于生产环境自行调整） */

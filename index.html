@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V4.8 · 汽车销售运营中心</title>
+    <title>业务数据看板 V5.4 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <!-- v4.6：灯塔真实积分数据模块（与 index.html 同目录，file:// 与 GitHub Pages 均可加载） -->
     <script src="lighthouse_scoring_v4.6.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -451,7 +451,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V4.8</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V5.4</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -590,58 +590,6 @@
             </aside>
         </section>
 
-        <!-- 多维下钻 + 积分排行榜 -->
-        <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_420px] gap-6 items-start">
-            <div class="panel p-6">
-                <div class="flex items-start justify-between mb-1 flex-wrap gap-3">
-                    <div>
-                        <div class="panel-title"><span class="dot"></span>多维下钻分析</div>
-                        <div class="panel-subtitle" id="drillSubtitle">全国 → 大区 → 小区 → 门店 → 岗位 → 人员 · 点击柱子或列表继续下钻</div>
-                    </div>
-                    <div class="flex items-center gap-2 flex-wrap">
-                        <div id="drillBreadcrumb" class="flex items-center gap-1 text-xs flex-wrap"></div>
-                        <button id="drillBack" class="quick-btn">返回上级</button>
-                        <select id="drillMetric" class="org-select" style="min-width:100px">
-                            <option value="leads">线索量</option>
-                            <option value="arrivals">到店量</option>
-                            <option value="locked">锁单量</option>
-                            <option value="delivered">交车量</option>
-                            <option value="points">积分</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5 mt-5">
-                    <div class="lg:col-span-2 rounded-xl p-2" style="background:rgba(15,23,42,0.35)">
-                        <div id="drillChart" style="height:340px"></div>
-                    </div>
-                    <div class="space-y-3">
-                        <div class="rounded-xl p-4" style="background:rgba(15,23,42,0.35)">
-                            <div class="text-xs text-slate-400 mb-3" id="drillSummaryTitle">当前层级合计</div>
-                            <div id="drillSummary" class="space-y-2 text-sm"></div>
-                        </div>
-                        <div class="rounded-xl p-4" style="background:rgba(15,23,42,0.35)">
-                            <div class="text-xs text-slate-400 mb-2">下级明细</div>
-                            <div id="drillList" class="space-y-1 max-h-[190px] overflow-auto pr-1"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="panel p-6">
-                <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
-                    <div>
-                        <div class="panel-title"><span class="dot"></span>积分/销量排行榜</div>
-                        <div class="panel-subtitle" id="pointsSubtitle">TOP 10 · 跟随页面组织范围</div>
-                    </div>
-                    <div class="flex items-center gap-1">
-                        <button class="quick-btn active" data-rank="sales">销量优先</button>
-                        <button class="quick-btn" data-rank="points">积分优先</button>
-                    </div>
-                </div>
-                <div id="pointsRankChart" style="height:372px" class="mt-2"></div>
-            </div>
-        </section>
-
         <!-- 经营结果趋势分析 -->
         <section class="panel p-6">
             <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
@@ -657,6 +605,38 @@
             </div>
             <div id="trendChips" class="panel-chips mt-2"></div>
             <div id="trendChart" style="height:320px" class="mt-2"></div>
+        </section>
+
+        <!-- 多维下钻 -->
+        <section class="panel p-6" id="drillPanel">
+                <div class="flex items-start justify-between mb-1 flex-wrap gap-3">
+                    <div>
+                        <div class="panel-title"><span class="dot"></span>多维下钻分析</div>
+                        <div class="panel-subtitle" id="drillSubtitle">全国 → 大区 → 小区 → 门店 → 岗位 → 人员 · 点击列表行继续下钻</div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <div id="drillBreadcrumb" class="flex items-center gap-1 text-xs flex-wrap"></div>
+                        <button id="drillBack" class="quick-btn">返回上级</button>
+                    </div>
+                </div>
+                <div class="mt-5 rounded-xl p-4" style="background:rgba(15,23,42,0.35)">
+                    <div class="flex items-start justify-between gap-3 flex-wrap mb-2">
+                        <div>
+                            <div class="text-sm text-slate-100 font-medium" id="drillMatrixTitle">指标环比矩阵</div>
+                            <div class="text-[11px] text-slate-400" id="drillMatrixSub">全国 · 大区→小区→门店 · 按所选范围 · 环比 = 对比上一等长周期</div>
+                        </div>
+                        <div class="flex items-center gap-3 text-[11px] text-slate-300">
+                            <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:#ef4444"></span>提升</span>
+                            <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:#10b981"></span>下降</span>
+                            <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:#64748b"></span>持平</span>
+                        </div>
+                    </div>
+                    <div id="drillList" class="overflow-auto max-h-[280px] pr-1"></div>
+                    <!-- v4.12：岗位 → 人员 下钻后，点击人员行展开的单人动作得分率明细 -->
+                    <div id="drillDutyDetail" class="mt-3"></div>
+                    <!-- v4.13：产品专家岗位下钻后追加四象限散点（达成率% × 交付量），其它岗位此处保持为空 -->
+                    <div id="drillPostQuad" class="mt-3"></div>
+                </div>
         </section>
 
         <!-- 明细数据表 -->
@@ -680,8 +660,35 @@
             </div>
         </section>
 
+        <!-- 积分/销量排行榜（v4.10：移至页面最底部） -->
+        <section class="panel p-6">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>积分/销量排行榜</div>
+                    <div class="panel-subtitle" id="pointsSubtitle">TOP 10 · 跟随页面组织范围</div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button class="quick-btn active" data-rank="sales">销量优先</button>
+                    <button class="quick-btn" data-rank="points">积分优先</button>
+                </div>
+            </div>
+            <div id="pointsRankChart" style="height:372px" class="mt-2"></div>
+        </section>
+
+        <!-- 岗位职责说明表（v4.11：页面最下方，可展开/收起） -->
+        <section class="panel p-6" id="dutyPanel">
+            <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
+                <div>
+                    <div class="panel-title"><span class="dot"></span>岗位职责说明表</div>
+                    <div class="panel-subtitle" id="dutySubtitle">按岗位列出关键动作与具体说明 · 示意文案，待业务确认</div>
+                </div>
+                <button id="dutyToggle" class="quick-btn" title="展开/收起岗位职责说明表">展开岗位职责 ▾</button>
+            </div>
+            <div id="dutyBody" class="hidden mt-3 space-y-4"></div>
+        </section>
+
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V4.8 · v4.8：业务执行与闭环看板新增独立日报翻阅器（◀ 日期 ▾ ▶，仅列真实数据日期，绑定「动作积分与规则达成」面板展示）、闭环取数收敛为单日口径彻底与顶栏区间解耦、闭环门店多选默认关闭、移除「不重叠 / 单日降级」提示、不引入环比；顶栏日期筛选保持原位不动；闭环热力图左侧人员姓名与底部拿分项标签提亮加粗放大（可读性优化）、交付店长/交付专员拿分项启用短别名（横轴水平不倾斜，别名同步至规则表） · v4.7：闭环筛选修复（移除门店已选标签冗余行 / 切换岗位·大区·小区不再自动点亮全部门店，未单独勾选=范围内全部生效 / 热力图按达成率着色；筛选层级：大区→小区→门店→岗位→人员）· 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
+            业务数据看板 V5.4 · v5.4：下钻页「人员层 · 每日动作积分完成率」接入动作评分导入数据 —— 服务端新增 `GET /api/scoring/range?personId=&from=&to=`（按 action_daily_sums 聚合逐日各拿分项得分与满分，已按 postKey IN 子集化规则封顶），前端 renderDrillPersonDaily 改为异步渲染，先拉真实区间数据再渲染表格（有数据日期显示真实分值/完成率、无数据日期置灰「当日无该人评估数据」）；影响最直接的就是「Excel 评分导入但区间内只有少数日期有数据」的岗位（如新媒体运营导入仅 9/10）：下钻逐日表只显示 9/10 真实行、其余日期置灰（之前区间内每天都有确定性模拟数值是误导）；无导入数据的岗位或服务端失败时自动回退到原有 LH/规则驱动模拟；行为兼容：LH 真实日报（交付专员/店长）走原路径不受影响，mock 模式仍走确定性生成。下钻行点击诊断在真实数据来源的支持下走 /scoring/details 证据链 · v5.3：组织筛选层级语义化修复 + 演示数据归整 —— 早期 seed 演示树（华东/华南/华北/西南大区含上海一区/杭州小区等 Excel 映射之外的虚构组织）统一挪入新建顶层大区「虚拟区」并改名虚拟1~4区（数据库 organize-demo_v5.2.js，不删任何业务数据、可回滚）；修复「虚拟区→虚拟1区」大区套大区结构导致顶栏五级下拉（大区→小区→门店→岗位→人员）按 children 直取而整级错位的问题：小区/门店/人员候选改为 collectLevel 按层级语义收集、岗位候选只取「岗位」层子节点，杜绝门店槽出现小区、岗位下拉全列「（本店暂无）」、人员下拉出现重复岗位名等错乱 · v5.2：RBAC 权限树 —— 服务端新增 roles 角色表（功能权限点化：dashboard.view/admin.dataQuality/metrics.fullTree/admin.userManage/roles.manage，支持自定义「督导」等新角色）与 user_scope_nodes 显式授权表（include 白名单 / exclude 排除双模式；授权粒度为大区/小区/门店任意节点，支持跨大区授权与「管A大区但排除b小区」的排除式授权，组织变动自动跟随）；数据范围 = include 多根子树并集 − exclude 子树，每次请求实时计算，改授权刷新即生效；无显式授权的账号维持按组织位置自动派生（与 v5.1 行为完全一致，存量账号零感知）；角色徽章兜底显示自定义角色 code；配套 PUT/GET/POST/DELETE /api/admin/users/:empNo/scope-nodes 与 /api/admin/roles CRUD 接口（adminRequired 权限点守卫 + 倒挂校验）、manage-scope_v5.2.js 交互式管理 CLI（命令/菜单双模式 + 变更留痕 logs/scope_changes_v5.2.log）、权限管理_v5.2.bat 双击入口与《权限维护手册_v5.2》（docs/） · 业务数据看板 V5.1 · v5.1：鉴权模式开关 AUTH_MODE —— 服务端 .env 一键切换 password（工号+密码，默认）与 emp_only（仅工号免密，试用推广期）；emp_only 模式下 JWT 有效期缩短为 2h、登录接口按 IP 限速 10 次/分钟、跳过 must_change_password 强制改密；/api/health 下发 authMode，前端登录浮层自动隐藏密码框并只提交工号 · v5.0：组织树全面切换为真实专营店组织 —— ORG_SPEC 由 4 大区 8 小区 14 家演示虚构店（上海浦东旗舰店/杭州西湖店/广州天河店/北京朝阳店/成都高新店等，大区小区均为早期演示假数据）整体重建为真实「10 个销售大区 + 待确认分组 × 63 个销售小区 × 393 家灯塔门店」组织树（数据源：专营店20260918175014.xls，沿用 v4.17 店名匹配重映射结果，14 家无同名店归入待确认分组不丢失）；经营总览顶栏五个下拉（大区/小区/全部店铺/全部岗位/全部人员）与多维下钻全部切换为真实组织树并联动刷新；删除旧演示门店及岗位空缺白名单 blankStores 的旧店名引用（空缺改由 min:0 岗位确定性随机生成，PK 对比「暂无」置灰逻辑同步修正）；版本跳号 V5.0 标记组织体系切换 · 业务数据看板 V4.17 · v4.17：门店大区/小区按专营店主数据表（专营店20260918175014.xls，956家营业店）重映射 —— 灯塔数据 393 家门店按「店名匹配」（编码体系不同：灯塔纯数字 vs 主数据 D 开头）重写 region/area 为真实「销售大区/销售小区」体系：379 家成功映射至新 12 大区（华东一区/华东二区/华东三区/华中一区/华中二区/华南区/华北区/东北区/西北区/西南区/英菲尼迪区域/其它）× 64 小区，14 家在主数据表中无同名店（宿州东十里、温州新成等）归入「待确认」分组不丢失；闭环看板大区胶囊自动切换为新体系（组织排序白名单与配色 map 同步更新）；配套交付《门店大区小区对照表_v4.17.xlsx》（对照明细 393 行 + 待确认清单 14 行附近似店名线索 + 大区×小区汇总透视）；ORG_SPEC 演示树与 PK 模式不受影响 · v4.16：多维下钻与顶栏「组织范围」筛选双向同步 —— 每次点击下钻列表行即把当前下钻路径（大区→小区→门店→岗位→人员）写入顶栏五个下拉（直接改 state.sel + renderAll 回显，不派发 change 事件以保留下钻栈），全页看板（KPI / 榜单 / 闭环等）随下钻范围联动收窄；面包屑跳转与「返回上级」回退时筛选同步放宽到对应层级（栈内回退到栈顶节点、栈空回退一层筛选），下钻面包屑与顶栏筛选始终一致；顶栏手动改筛选仍按现状清空下钻栈，PK 模式不受影响 · v4.15：多维下钻「销售店长」人员逐日表新增「晨会报表 / 夕会报表」两列（位于最弱拿分项与明细之间）—— 晨会报表 = 当日晨会向该人员发布/承接的任务清单（时间轴 / 任务名称 / 责任人 / 衡量标准 / 完成时限 / 任务来源 / 发布状态），夕会报表 = 对照晨会任务逐条核对的完成情况（实际完成 / 完成状态 ✓△✗ / 差距说明，完成率 = 完成 100% + 部分完成 50% 计权），两报表共用同一确定性模拟任务集合（seed = 人员 × 日期），点击胶囊独立开抽屉查看且不触发行级诊断抽屉，无日报数据行置灰；仅销售店长岗位显示，其他岗位保持现状 · v4.14：多维下钻「人员」成为可下钻层级 —— 岗位矩阵点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏筛选区间内的「每日动作积分完成率」表（每行 = 一天：当日积分 / 已评估满分 / 完成率（已评估口径，无数据项不计入分母）/ 与前一日之差 / 最弱拿分项），点击任意日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（KPI 卡 + 拿分项雷达图 + 扣分单数分布 + 得分构成 + 扣分明细 + AI 证据链，取数 = 该行单日）；真实评分岗位按确定性映射取灯塔评分明细（无日报日期置灰），模拟岗位按人员 × 日期确定性生成；适用全部岗位 · v4.13：多维下钻「产品专家」岗位下钻到人员后，在「人员 × 关键动作得分率矩阵」下方追加一张四象限散点图（横轴 = 区间积分达成率 % = 个人区间积分 ÷ 个人满分梯度 × 100%；纵轴 = 区间交付量；每人 = 一个点；含两轴均值虚线 + 四象限背景与文字解读：标杆 / 待辅导 / 流程找卡点 / 动作待复制），数据跟随顶栏筛选与日期区间联动刷新；其他岗位保持现状 · v4.12：多维下钻新增「岗位 → 人员」层级 —— 岗位下钻后矩阵切换为「人员 × 关键动作得分率」（动作取自岗位职责说明表，得分率 = 完成量 ÷ 该人被分配的任务量，随顶栏日期区间聚合，环比为百分点差），点击人员行展开单人动作明细进度条；人员动作数据为演示假数据（确定性生成，待接真实接口） · v4.11：岗位体系按业务职责文本对齐（8 岗位：销售专员归入产品专家、市场经理 + 新媒体运营合并为「新媒体&市场经理」、客户管家/经理改名「客关经理」）、页面最下方新增可折叠「岗位职责说明表」（岗位 × 关键动作 × 具体内容，共 40 项，示意文案待业务确认）；多维下钻移除岗位指标下拉（矩阵展示全指标，排序固定为大区/小区按线索量、门店按积分） · v4.10：多维下钻移除「当前层级合计」卡片与下钻柱状图（仅保留可点击下钻的下级明细列表）、积分/销量排行榜移至页面最底部 · v4.8：业务执行与闭环看板新增独立日报翻阅器（◀ 日期 ▾ ▶，仅列真实数据日期，绑定「动作积分与规则达成」面板展示）、闭环取数收敛为单日口径彻底与顶栏区间解耦、闭环门店多选默认关闭、移除「不重叠 / 单日降级」提示、不引入环比；顶栏日期筛选保持原位不动；闭环热力图左侧人员姓名与底部拿分项标签提亮加粗放大（可读性优化）、交付店长/交付专员拿分项启用短别名（横轴水平不倾斜，别名同步至规则表） · v4.7：闭环筛选修复（移除门店已选标签冗余行 / 切换岗位·大区·小区不再自动点亮全部门店，未单独勾选=范围内全部生效 / 热力图按达成率着色；筛选层级：大区→小区→门店→岗位→人员）· 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
         </footer>
     </div>
 
@@ -692,10 +699,10 @@
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
                 <div>
                     <h2 class="text-lg font-bold text-white">业务数据看板</h2>
-                    <p class="text-xs text-slate-400">V4.8 · 工号密码登录</p>
+                    <p id="loginSubTitle" class="text-xs text-slate-400">V5.4 · 工号密码登录</p>
                 </div>
             </div>
-            <p class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
+            <p id="loginDesc" class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
             <div id="demoHint" class="hidden mb-4 px-3 py-2 rounded-md text-[11px] leading-relaxed" style="background: rgba(6,182,212,0.10); border: 1px solid rgba(6,182,212,0.28); color: #a5f3fc;">
                 演示模式内置账号：<code class="font-mono text-white">demo</code> / <code class="font-mono text-white">demo123</code>（纯前端校验，无需后端）
             </div>
@@ -704,14 +711,14 @@
                     <label class="text-xs text-slate-400 mb-1 block">工号</label>
                     <input id="loginEmpNo" type="text" autocomplete="username" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none" placeholder="请输入工号">
                 </div>
-                <div>
+                <div id="loginPwdRow">
                     <label class="text-xs text-slate-400 mb-1 block">密码</label>
                     <input id="loginPwd" type="password" autocomplete="current-password" class="w-full px-3 py-2 rounded-md bg-slate-900/60 border border-slate-700 text-slate-100 focus:border-blue-500 focus:outline-none" placeholder="请输入密码">
                 </div>
                 <div id="loginError" class="text-xs text-red-400 min-h-[18px]"></div>
                 <button id="loginSubmit" class="w-full mt-2 py-2 rounded-md bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-medium hover:opacity-90 transition">登录</button>
             </div>
-            <p class="text-[11px] text-slate-500 mt-3 leading-relaxed">忘记密码请联系管理员重置（CLI：<code class="text-slate-400">node scripts/create-user.js reset &lt;工号&gt;</code>）。</p>
+            <p id="loginForgotHint" class="text-[11px] text-slate-500 mt-3 leading-relaxed">忘记密码请联系管理员重置（CLI：<code class="text-slate-400">node scripts/create-user.js reset &lt;工号&gt;</code>）。</p>
             <div class="mt-4 pt-4 border-t border-slate-700/60">
                 <button id="demoSkipBtn" onclick="window.__v42.skipToDemo()" class="w-full py-2 rounded-md border border-slate-600 text-slate-300 hover:border-cyan-400 hover:text-white text-sm transition">
                     以演示模式（总部）继续 →
@@ -750,6 +757,14 @@
         <div class="absolute inset-0" style="background:rgba(3,7,18,0.72)" data-cl-close></div>
         <div class="relative mx-auto mt-[3vh] w-[min(980px,95vw)] max-h-[92vh] overflow-y-auto rounded-2xl" style="background:linear-gradient(180deg, rgba(23,35,56,0.99), rgba(13,20,35,0.99)); border:1px solid rgba(148,163,184,0.2); box-shadow:0 24px 60px -20px rgba(0,0,0,0.9)">
             <div id="clDrawerBody"></div>
+        </div>
+    </div>
+
+    <!-- v4.15：晨会 / 夕会报表抽屉（销售店长 · 人员逐日表入口，只读查看） -->
+    <div id="meetDrawer" class="hidden fixed inset-0 z-[96]">
+        <div class="absolute inset-0" style="background:rgba(3,7,18,0.72)" data-meet-close></div>
+        <div class="relative mx-auto mt-[3vh] w-[min(880px,95vw)] max-h-[92vh] overflow-y-auto rounded-2xl" style="background:linear-gradient(180deg, rgba(23,35,56,0.99), rgba(13,20,35,0.99)); border:1px solid rgba(148,163,184,0.2); box-shadow:0 24px 60px -20px rgba(0,0,0,0.9)">
+            <div id="meetDrawerBody"></div>
         </div>
     </div>
 
@@ -793,6 +808,35 @@
             arrivals: '#3b82f6', testDrives: '#06b6d4', testReviews: '#22d3ee', returnVisits: '#8b5cf6', opportunities: '#10b981',
             locked: '#10b981', delivered: '#ec4899', points: '#f59e0b'
         };
+        // 指标环比矩阵列定义：行=大区/小区/门店…，列=核心指标，每格=数值+环比
+        const DRILL_MATRIX_COLS = [
+            { key: 'leads', label: '线索量' },
+            { key: 'intentLeads', label: '邀约转化' },
+            { key: 'arrivals', label: '到店量' },
+            { key: 'testDrives', label: '有效试驾' },
+            { key: 'testReviews', label: '试驾点评数' },
+            { key: 'locked', label: '锁单量' },
+            { key: 'delivered', label: '交车量' }
+        ];
+        // 门店 → 岗位 下钻时的列定义（核心指标消失，改为单列积分达成率）
+        const DRILL_MATRIX_COLS_POST = [
+            { key: 'points', label: '积分达成率' }
+        ];
+        // 格式化单个环比格：返回 { html, cls }；cls 控制涨跌颜色
+        function fmtMatrixCell(curVal, prevVal) {
+            const valText = fmt(curVal);
+            if (!prevVal || prevVal <= 0) {
+                return { html: '<div class="text-slate-100 text-sm font-semibold leading-tight">' + valText + '</div>' +
+                    '<div class="text-xs mt-0.5" style="color:#64748b">—</div>', cls: '' };
+            }
+            const pct = (curVal - prevVal) / prevVal * 100;
+            const absPct = Math.abs(pct);
+            const arrow = pct > 0 ? '↑' : (pct < 0 ? '↓' : '—');
+            const color = absPct < 0.5 ? '#64748b' : (pct > 0 ? '#ef4444' : '#10b981');
+            const txt = (pct > 0 ? '+' : '') + pct.toFixed(1) + '%';
+            return { html: '<div class="text-slate-100 text-sm font-semibold leading-tight">' + valText + '</div>' +
+                '<div class="text-xs mt-0.5 font-medium" style="color:' + color + '">' + arrow + ' ' + txt + '</div>', cls: '' };
+        }
         // 经营结果趋势分析可选指标（type='abs' 绝对量 / type='rate' 阶段转化率）
         const TREND_METRICS = [
             { key: 'intentLeads', type: 'abs', label: '意向线索', color: METRIC_COLOR.intentLeads },
@@ -828,35 +872,88 @@
             { key: 'locked', name: '锁单', color: '#f59e0b' },
             { key: 'delivered', name: '交付', color: '#ec4899' }
         ];
-        // 岗位规则：10 岗位体系；店长/经理类一岗一人，专员/专家类一岗多人；数营专家、直播专员、新媒体运营在部分门店空缺
+        // 岗位规则：8 岗位体系（v4.11 起以业务岗位职责文本为准）；店长/经理类一岗一人，专员/专家类一岗多人；数营专家、直播专员、新媒体&市场经理在部分门店空缺
+        // v4.11 口径调整：销售专员归入产品专家（人数区间合并）；市场经理 + 新媒体运营合并为「新媒体&市场经理」；客户管家/经理改名为「客关经理」
         // pw：积分权重覆盖（按岗位差异化，让散点图的 X = 累计积分 与 Y = 锁单量 非线性相关）
         const POSTS = [
-            { key: 'dataExpert', name: '数营专家', color: '#22d3ee', leadFactor: 1.30, damp: 1.00, min: 0, max: 1, note: '部分门店空缺',
-              blankStores: ['上海徐汇中心店', '杭州钱江新城店', '北京朝阳店', '重庆渝北店', '成都锦江店'],
-              pw: { locked: 22, delivered: 30, testDrives: 8, invites: 6, returnVisits: 6, opportunities: 10 } },
+            { key: 'productExpert', name: '产品专家', color: '#06b6d4', leadFactor: 1.10, damp: 1.06, min: 4, max: 7, note: '一岗多人（含原销售专员）',
+              pw: { locked: 28, delivered: 40, testDrives: 12, invites: 5, returnVisits: 7, opportunities: 10 } },
             { key: 'salesManager', name: '销售店长', color: '#8b5cf6', leadFactor: 0.42, damp: 1.05, min: 1, max: 1, note: '一岗一人',
               pw: { locked: 36, delivered: 55, testDrives: 5, invites: 4, returnVisits: 4, opportunities: 7 } },
-            { key: 'salesSpecialist', name: '销售专员', color: '#3b82f6', leadFactor: 1.00, damp: 1.00, min: 2, max: 4, note: '一岗多人',
-              pw: { locked: 30, delivered: 50, testDrives: 6, invites: 4, returnVisits: 5, opportunities: 8 } },
-            { key: 'productExpert', name: '产品专家', color: '#06b6d4', leadFactor: 1.15, damp: 1.12, min: 2, max: 3, note: '一岗多人',
-              pw: { locked: 28, delivered: 40, testDrives: 12, invites: 5, returnVisits: 7, opportunities: 10 } },
+            { key: 'dataExpert', name: '数营专家', color: '#22d3ee', leadFactor: 1.30, damp: 1.00, min: 0, max: 1, note: '部分门店空缺',
+              pw: { locked: 22, delivered: 30, testDrives: 8, invites: 6, returnVisits: 6, opportunities: 10 } },
             { key: 'deliveryManager', name: '交付店长', color: '#a78bfa', leadFactor: 0.38, damp: 1.08, min: 1, max: 1, note: '一岗一人',
               pw: { locked: 20, delivered: 70, testDrives: 4, invites: 3, returnVisits: 6, opportunities: 9 } },
             { key: 'deliverySpecialist', name: '交付专员', color: '#c084fc', leadFactor: 0.92, damp: 1.04, min: 2, max: 3, note: '一岗多人',
               pw: { locked: 24, delivered: 60, testDrives: 5, invites: 4, returnVisits: 5, opportunities: 8 } },
+            { key: 'mediaMarketManager', name: '新媒体&市场经理', color: '#f59e0b', leadFactor: 1.00, damp: 0.92, min: 0, max: 2, note: '部分门店空缺（原市场经理 + 新媒体运营）',
+              pw: { locked: 23, delivered: 39, testDrives: 5, invites: 7, returnVisits: 5, opportunities: 8 } },
             { key: 'liveStreamer', name: '直播专员', color: '#ec4899', leadFactor: 1.62, damp: 0.55, min: 0, max: 2, note: '部分门店空缺',
-              blankStores: ['上海徐汇中心店', '杭州西湖店', '深圳南山店', '广州天河店', '成都高新店', '重庆渝北店'],
               pw: { locked: 26, delivered: 45, testDrives: 7, invites: 8, returnVisits: 4, opportunities: 9 } },
-            { key: 'newMedia', name: '新媒体运营', color: '#f472b6', leadFactor: 1.18, damp: 0.78, min: 0, max: 1, note: '部分门店空缺',
-              blankStores: ['上海浦东旗舰店', '杭州钱江新城店', '深圳宝安店', '北京朝阳店', '广州天河店', '重庆渝北店', '成都锦江店'],
-              pw: { locked: 22, delivered: 36, testDrives: 5, invites: 7, returnVisits: 5, opportunities: 8 } },
-            { key: 'marketManager', name: '市场经理', color: '#f59e0b', leadFactor: 0.86, damp: 1.02, min: 1, max: 1, note: '一岗一人',
-              pw: { locked: 24, delivered: 42, testDrives: 5, invites: 8, returnVisits: 5, opportunities: 7 } },
-            { key: 'customerManager', name: '客户管家/经理', color: '#10b981', leadFactor: 1.05, damp: 1.10, min: 2, max: 3, note: '一岗多人',
+            { key: 'customerManager', name: '客关经理', color: '#10b981', leadFactor: 1.05, damp: 1.10, min: 2, max: 3, note: '一岗多人',
               pw: { locked: 30, delivered: 48, testDrives: 6, invites: 9, returnVisits: 8, opportunities: 10 } }
         ];
         const POSTS_BY_KEY = {};
         POSTS.forEach(function (p) { POSTS_BY_KEY[p.key] = p; });
+        // 岗位职责说明表：岗位 key → [{ action: 关键动作, detail: 具体内容 }]（示意文案，待业务确认）
+        const POST_DUTIES = {
+            productExpert: [
+                { action: '线索预约', detail: '接收分配线索后第一时间外呼，确认购车意向并预约到店时间，预约信息回填系统' },
+                { action: '到店接待', detail: '按接待流程完成迎宾、需求探询、车型讲解与试驾邀约，登记接待记录' },
+                { action: '试乘试驾', detail: '按标准路线与话术执行试驾，完成安全确认、功能演示与试驾反馈登记' },
+                { action: '锁单', detail: '协助客户确认配置与报价、收取定金，在系统完成锁单并同步至交付群' }
+            ],
+            salesManager: [
+                { action: '晨会管理', detail: '主持晨会，对齐当日目标与线索分配，检查出勤与展厅状态' },
+                { action: '夕会管理', detail: '主持夕会，复盘当日线索、到店与锁单达成，输出次日改善动作' },
+                { action: '邀约管理', detail: '抽查邀约记录与到店预约达成率，对低效邀约人员做一对一辅导' },
+                { action: '接待管理', detail: '巡查接待规范执行（迎宾、需求探询、留档），纠正违规动作' },
+                { action: '试驾管理', detail: '检查试驾执行率与试驾点评，确保试驾路线与安全话术落地' },
+                { action: '成交管理', detail: '跟进意向客户转化，审核报价与优惠申请，推进锁单成交' },
+                { action: '满意度管理', detail: '关注回访结果与投诉工单，对不满意客户介入处理并跟进闭环' }
+            ],
+            dataExpert: [
+                { action: '线索处理', detail: '承接并清洗各渠道线索，去重判重后按规则分配至门店' },
+                { action: '线索判定', detail: '依据线索质量规则判定有效/无效，标记异常与疑似虚假线索' },
+                { action: '垂媒发布', detail: '按排期在汽车之家、懂车帝等垂媒平台发布内容与活动信息' },
+                { action: '线索日报', detail: '汇总当日线索量、来源与转化情况，输出日报并同步相关岗位' }
+            ],
+            deliveryManager: [
+                { action: '交付群抽查', detail: '抽查锁单客户交付群分配、入群、自我介绍和问题响应' },
+                { action: '首访核查', detail: '核查交付首访是否按标准话术与时限完成，记录缺失项并督促整改' },
+                { action: '跟进抽检', detail: '抽检交付跟进记录的完整性与及时性，对未达标人员做辅导' },
+                { action: '交付计划', detail: '制定并滚动更新交付排程计划，协调车源与交付节奏' },
+                { action: '交付准备', detail: '检查车辆整备、资料准备与上牌、保险等交付前置事项' },
+                { action: '走动管理', detail: '现场走动巡店，观察交付环节执行情况并即时纠偏' },
+                { action: '异常处置', detail: '处理交付过程中的异常（延期、车辆问题、客户异议）并跟进闭环' },
+                { action: '首访', detail: '亲自完成重点客户交付首访，确认客户需求与期望管理' },
+                { action: '配车转采', detail: '跟进配车与转采流程，确保订单按节奏推进至可交付状态' }
+            ],
+            deliverySpecialist: [
+                { action: '物流提醒', detail: '跟踪车辆物流状态，遇异常或到店前及时提醒客户与店端' },
+                { action: '交付排程', detail: '与客户确认交付时间，排定交付工位与人力安排' },
+                { action: '车辆讲解', detail: '按交付标准完成车辆功能讲解与操作演示' },
+                { action: '交付仪式', detail: '按交付仪式流程完成交车环节并留存影像记录' },
+                { action: '企微应答', detail: '在企微群内及时响应客户咨询，同步交付进度' }
+            ],
+            mediaMarketManager: [
+                { action: '企微应答', detail: '负责企微客户群与私信的及时应答与线索承接，避免遗漏' },
+                { action: '直播勤勉', detail: '按排期完成直播场次与时长，保证直播勤勉度达标' },
+                { action: '内容勤勉', detail: '按计划完成图文、短视频内容产出与发布，保证更新频次' },
+                { action: '私信回复', detail: '及时回复各平台私信，识别高意向客户并转为线索' },
+                { action: '线索获取', detail: '通过内容与投放获取线索，登记来源并完成分发' }
+            ],
+            liveStreamer: [
+                { action: '直播勤勉', detail: '按排班完成直播时长与场次，遵守直播规范与话术要求' },
+                { action: '线索获取', detail: '直播中引导客户留资，收集并登记线索信息' }
+            ],
+            customerManager: [
+                { action: '回访数据', detail: '汇总回访数据与达成率，输出问题清单并推动改善' },
+                { action: '客户分层', detail: '按客户价值与购车阶段维护分层标签，指导差异化管理' },
+                { action: '满意度管理', detail: '跟踪满意度调研与投诉闭环，落实改善措施' },
+                { action: '夕会教练', detail: '在夕会上做客户满意度与回访话术的教练辅导' }
+            ]
+        };
         const DAMP_FROM = ['arrivals', 'testDrives', 'returnVisits', 'opportunities', 'locked', 'delivered'];
 
         function hashSeed(str) {
@@ -869,7 +966,7 @@
             if (s <= 0) s += 2147483646;
             return function () { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
         }
-        // 默认积分权重（销售专员沿用此口径），POSTS[*].pw 可覆盖
+        // 默认积分权重（产品专家沿用此口径），POSTS[*].pw 可覆盖
         const DEFAULT_POINTS_W = { locked: 30, delivered: 50, testDrives: 6, invites: 4, returnVisits: 5, opportunities: 8 };
         // 原始（未取整）积分计算 — 用于按日写入 series.points，保证逐日小数不被抹平
         function pointsOfRaw(m, postKey) {
@@ -930,25 +1027,87 @@
         }
 
         // ==================== PART2：六级组织树（全国 → 大区 → 小区 → 门店 → 岗位 → 人员）====================
+        // v5.0：真实组织树（数据源：专营店20260918175014.xls，经 v4.17 店名匹配重映射；393 家门店 × 55 个出现过的销售小区）
         const ORG_SPEC = [
-            { region: '华东大区', areas: [
-                { area: '上海一区', stores: ['上海浦东旗舰店', '上海徐汇中心店'] },
-                { area: '杭州小区', stores: ['杭州西湖店', '杭州钱江新城店'] }
+            { region: '华东一区', areas: [
+                { area: '上海区', stores: ['上海东风南方威铭', '上海东风南方威顺', '上海奉贤', '上海安吉普陀', '上海松江', '东风日产新能源体验中心（上海尚悦湾店）', '新能源上海东风南方虹桥零售交付中心'] },
+                { area: '杭州区', stores: ['杭州东风南方宁围', '杭州东风南方杭城', '杭州东风南方金沙', '杭州元通城北', '湖州东风南方金恒德'] },
+                { area: '浙东区', stores: ['台州临海康富', '台州刚泰路桥', '嘉兴之远', '宁波元通友和', '宁波友祥', '慈溪飞跃'] },
+                { area: '浙南区', stores: ['义乌元通广通', '温州华鸿', '衢州德众', '金华大昌'] },
+                { area: '福建区', stores: ['厦门信达国贸启帆', '厦门信达国贸启航', '宁德中域东侨', '泉州亿兴', '漳州万事达众保', '漳州聚力', '莆田华宝', '龙岩汇京龙兴'] },
             ]},
-            { region: '华南大区', areas: [
-                { area: '广州小区', stores: ['广州天河店', '广州番禺店'] },
-                { area: '深圳小区', stores: ['深圳南山店', '深圳宝安店'] }
+            { region: '华东二区', areas: [
+                { area: '安徽区', stores: ['合肥伟业', '合肥伟盛行', '合肥小小宝湾', '合肥恒信东顺合肥北', '安庆恒业', '宣城东风南方宣州', '芜湖东风南方鸠江'] },
+                { area: '常锡区', stores: ['常州中天', '常州中天日新', '常州中天日昇', '常州中天日晟', '无锡威邦新区', '无锡明乐', '无锡汇鑫先锋', '无锡盛岸西路', '江阴海华', '溧阳中天日盛'] },
+                { area: '苏中区', stores: ['南通名尼威', '南通太平洋', '南通太平洋启东', '南通太平洋如东', '南通太平洋如皋', '南通太平洋开发区', '南通太平洋海安', '南通海通', '盐城苏缘'] },
+                { area: '苏北区', stores: ['南京东风南方东麒', '南京文华', '宿迁金奥', '徐州尊悦', '扬州东风南方东峻', '扬州东风南方扬辰', '泰州东风南方天辰', '泰州东风南方泰兴', '连云港中信华耀', '镇江东风南方新区'] },
+                { area: '苏州区', stores: ['吴江连诚', '太仓诚茂', '昆山华明', '昆山昆众中华园路', '苏州伟海'] },
             ]},
-            { region: '华北大区', areas: [
-                { area: '北京一区', stores: ['北京朝阳店', '北京亦庄店'] },
-                { area: '天津小区', stores: ['天津滨海店'] }
+            { region: '华东三区', areas: [
+                { area: '鲁东区', stores: ['威海世通', '烟台天航', '烟台富嘉', '荣成海源', '青岛东风南方吉源', '青岛天也', '青岛珠峰城阳', '青岛珠峰平度', '青岛珠峰胶州'] },
+                { area: '鲁北区', stores: ['东营兴达', '东营百川凌云西城', '东营百川青云', '德州华丰', '淄博泰达', '淄博泰通', '滨州远泰', '潍坊恒安', '潍坊玉山'] },
+                { area: '鲁南区', stores: ['临沂易利', '临沂易华', '曲阜新圣达', '枣庄远方', '泰安德义', '济宁华源', '济宁华源通达梁山'] },
+                { area: '鲁西区', stores: ['济南匡山', '济南卓联卓正', '济南卓联卓风', '聊城东风南方金天瑞', '莱芜顺通', '菏泽东风南方定陶', '菏泽东风南方开源'] },
             ]},
-            { region: '西南大区', areas: [
-                { area: '成都小区', stores: ['成都高新店', '成都锦江店'] },
-                { area: '重庆小区', stores: ['重庆渝北店'] }
-            ]}
+            { region: '华中一区', areas: [
+                { area: '武汉区', stores: ['武汉三环劲通', '武汉三环华通', '武汉三环轩通', '武汉卓联关山', '武汉裕信'] },
+                { area: '豫东区', stores: ['周口宏诚', '商丘威佳宏祥', '开封威瑞'] },
+                { area: '豫北区', stores: ['安阳威佳文峰', '新乡威兴', '济源威源', '濮阳威佳高新'] },
+                { area: '豫西区', stores: ['三门峡威顺', '信阳威通', '南阳威佳宏昌', '平顶山威泰', '洛阳威丰'] },
+                { area: '郑州区', stores: ['郑州威佳', '郑州威佳圃田', '郑州威佳宏远', '郑州威佳宏鹏', '郑州威佳新郑'] },
+                { area: '鄂北区', stores: ['仙桃三环劲通', '十堰东贸轩威', '孝感裕丰', '襄阳樊城', '襄阳车城', '鄂州三环劲通', '随州东盛', '黄冈恒信德龙'] },
+                { area: '鄂南区', stores: ['宜昌交运', '恩施麟觉', '荆州宏道', '荆州恒信', '荆门风雅'] },
+            ]},
+            { region: '华中二区', areas: [
+                { area: '广西区', stores: ['北海新兴盛', '南宁兴宁邕宾', '南宁利泰五象', '南宁恒信东顺', '南宁润轩江南白沙', '柳州丰正华', '梧州雄利'] },
+                { area: '江西区', stores: ['上饶东信', '九江东浔', '南昌东维高鑫', '南昌泰辰洪都', '吉安通九州青原', '宜春利泰袁州', '宜春利隆丰樟高', '抚州利泰文昌', '赣州东维', '赣州东维红金', '赣州利隆章贡', '赣州昌泰南康'] },
+                { area: '湘北区', stores: ['吉首吉日', '岳阳东风卓联', '常德日丰', '张家界华盛', '益阳兰天'] },
+                { area: '湘南区', stores: ['娄底兰天', '武冈兰天', '邵阳兰天佳旭', '郴州高卫'] },
+                { area: '长株潭区', stores: ['宁乡中拓瑞宁', '株洲兰天海联', '浏阳兰天集里', '湘潭兰天九华', '长沙兰天城西', '长沙兰天星沙', '长沙兰天河西', '长沙兰天雨花', '长沙兰天麓谷'] },
+            ]},
+            { region: '华南区', areas: [
+                { area: '东莞区', stores: ['东莞东风南方万江', '东莞东风南方塘厦', '东莞东风南方振安', '东莞东风南方莞太', '东莞东风南方莞樟', '东莞东风南方莞龙'] },
+                { area: '佛肇区', stores: ['佛山利泰', '佛山利隆', '佛山吉泰', '佛山禅车城', '肇庆锦利', '顺德协力', '顺德金桂'] },
+                { area: '广州区', stores: ['广州东风南方中大', '广州东风南方南沙', '广州东风南方广辰', '广州东风南方新塘', '广州珠峰黄埔', '广州绿日', '广州耀骏', '广州风日', '广州龙日'] },
+                { area: '海粤区', stores: ['三亚东风南方海燕', '儋州东风南方海星', '海口东风南方海神', '海口东风南方海鹏', '湛江东升行', '湛江东风南方海田', '茂名东风南方茂南', '茂名东风南方金泰', '阳江金山'] },
+                { area: '深圳区', stores: ['深圳东风南方华新', '深圳东风南方华瑞福田', '深圳东风南方华翔', '深圳金源'] },
+                { area: '粤东区', stores: ['惠州俊通', '惠州南菱君达', '惠州永惠金泽', '梅州春天', '汕头东风南方华茂', '汕尾佳艺', '河源合利丰'] },
+                { area: '粤中区', stores: ['中山东日', '中山中裕黄圃', '中山众杰', '云浮罗定怡诚', '江门丰泰', '江门怡泰恩城', '江门江沙', '清远金江', '清远银山英德', '珠海明珠', '珠海黄浦金湾', '韶关通九州', '韶关通九州韶冶'] },
+            ]},
+            { region: '华北区', areas: [
+                { area: '冀北区', stores: ['唐山京佰朋昇', '唐山冀东', '唐山鸿业智途', '张家口北榕胜兴', '承德万焱', '秦皇岛京佰', '秦皇岛京德', '秦皇岛佳浩'] },
+                { area: '冀南区', stores: ['保定东风南方和顺', '保定东风南方定州', '保定东风南方涿州', '保定东风南方竞秀', '沧州东风南方任丘', '沧州东风南方瑞鑫', '石家庄东风南方新华', '石家庄东风南方联德', '石家庄东风南方裕华', '石家庄东风南方长安', '衡水蓝池泽龙桃城', '邢台圣士龙', '邯郸东风南方南环'] },
+                { area: '北京区', stores: ['北京东方华中', '北京东风南方三合', '北京东风南方丽泽', '北京东风南方亮马', '北京东风南方大兴', '北京东风南方大成', '北京华盛昌', '北京华盛昌四季青', '北京华盛昌百旺', '北京君诚驰悦', '北京福源', '北京福源平谷', '北京福源易众', '北京鑫达润城', '廊坊华盛昌广阳'] },
+                { area: '天津区', stores: ['天津名宣', '天津名达', '天津宝静武清', '天津滨海', '天津鹏兴鑫达蓟州'] },
+                { area: '山西区', stores: ['临汾东盛源', '太原东风南方汇泽', '太原东风南方龙城', '太原大源', '忻州东风南方汇润', '晋中东风南方汇盛', '晋城华洋', '朔州汇海', '运城瑞盈', '阳泉东风南方太行'] },
+            ]},
+            { region: '东北区', areas: [
+                { area: '内蒙古区', stores: ['乌兰察布佰会', '兴安盟华楠', '包头恒通新茗领', '包头金达', '呼伦贝尔星跃', '呼和浩特世通', '呼和浩特嘉丰', '通辽龙兴伟业', '鄂尔多斯银达', '锡林浩特嘉洋'] },
+                { area: '吉林区', stores: ['吉林裕富', '延吉裕富', '长春恒瑞'] },
+                { area: '沈阳区', stores: ['沈阳东风南方辽沈', '沈阳中晨诚隆', '沈阳新世纪', '沈阳新世纪浑南'] },
+                { area: '辽东区', stores: ['抚顺东风南方沈抚', '鞍山亿通东尼'] },
+                { area: '辽西区', stores: ['大连佳艺', '葫芦岛川达'] },
+                { area: '黑龙江区', stores: ['佳木斯凯华运通', '双鸭山凯华运通', '哈尔滨东风南方先锋路', '哈尔滨东风南方机场路', '哈尔滨中基展航', '绥化东风南方鸿运', '鸡西吉顺达'] },
+            ]},
+            { region: '西北区', areas: [
+                { area: '新疆区', stores: ['乌鲁木齐卓辉', '乌鲁木齐博望', '乌鲁木齐开发区迎宾路', '乌鲁木齐赛博特', '乌鲁木齐骐辉', '伊犁元辉', '伊犁港裕', '克拉玛依浩辉', '吐鲁番火辉', '哈密泰辉', '喀什卓辉', '奎屯盈辉', '库尔勒瑞丰', '石河子升辉', '阿克苏奕辉', '阿勒泰祥辉'] },
+                { area: '甘青区', stores: ['临夏环球万腾', '平凉恒信东顺东湖', '庆阳东风南方陇东汽车城', '武威鑫成', '西宁翔鹏', '西宁青鹏', '酒泉东风南方肃州高新', '金昌金奥顺驰'] },
+                { area: '陕宁区', stores: ['咸阳秦汉新城万沣', '固原鸿源', '宝鸡东风南方高新', '西安东风南方三桥', '西安东风南方未央汉城', '西安东风南方浐灞佳泰', '银川京胜', '银川德胜', '银川恒晟', '银川添星创翼'] },
+            ]},
+            { region: '西南区', areas: [
+                { area: '云南区', stores: ['保山弘信永昌', '大理东风南方苍山路', '文山东风南方腾龙', '昆明东风南方三佳', '昆明东风南方龙泉', '版纳东风南方佳旺', '玉溪东风南方太极路'] },
+                { area: '川北区', stores: ['南充东风南方潆溪树生', '南充东风南方高坪', '巴中东恒云峰', '绵阳东风南方机场绵东', '绵阳东风南方绵兴', '达州东风南方新川'] },
+                { area: '川南区', stores: ['宜宾河田翠屏'] },
+                { area: '川藏区', stores: ['德阳东风南方西林', '眉山超越', '遂宁东风南方遂发', '雅安超越雨城'] },
+                { area: '成都区', stores: ['成都东风南方双流成发', '成都东风南方成华龙潭', '成都东风南方机场路', '成都东风南方青羊苏坡'] },
+                { area: '贵州区', stores: ['六盘水东风南方黔旺', '兴义恒信东顺', '安顺恒信东顺', '毕节东风南方金海湖', '贵阳东风南方孟关', '贵阳东风南方黔兴', '遵义东风南方黔发'] },
+                { area: '重庆区', stores: ['涪陵文化', '重庆东新', '重庆东风南方海峡', '重庆东风南方渝东', '重庆东风南方渝兴', '重庆东风南方盛泰', '重庆东风南方西南汽贸城'] },
+            ]},
+            { region: '待确认', areas: [
+                { area: '待确认', stores: ['东莞汇京长海', '十堰东风大道', '唐山汇京唐信', '宿州东十里', '泉州汇京南环路', '泉州汇京友联', '温州新成', '福州汇京福飞北', '福州汇京金山', '肇庆合利恒四会', '菏泽东风南方佳达', '衡水圣启龙', '西安精英', '运城瑞盈河津'] },
+            ]},
         ];
-        // 配备「部分门店空缺」类岗位（数营专家/直播专员/新媒体运营）的空缺白名单
+        // 配备「部分门店空缺」类岗位（数营专家/直播专员/新媒体&市场经理）的空缺白名单
         // 已合并到 POSTS[*].blankStores；此处保留说明，本常量不再使用
         const SURNAMES = ['张', '李', '王', '刘', '陈', '赵', '孙', '周', '吴', '郑', '冯', '许', '何', '吕', '施', '曹', '袁', '邓', '沈', '韩', '杨', '朱', '秦', '尤'];
         const GIVEN_NAMES = ['伟', '娜', '强', '洋', '静', '敏', '磊', '婷', '鹏', '爽', '雪', '晨', '辉', '琳', '涛', '倩', '宁', '超', '梅', '俊', '峰', '丽', '斌', '霞', '坤', '颖', '昊', '萍', '浩', '丹'];
@@ -1052,7 +1211,7 @@
         }
 
         const metricCache = new Map();
-        function clearMetricCache() { metricCache.clear(); }
+        function clearMetricCache() { metricCache.clear(); clearDutyCache(); }
         function metricsOf(node, i0, i1) {
             if (!node) return null;
             // API 模式：未加载逐日序列的节点走服务端区间合计缓存
@@ -1070,6 +1229,114 @@
             m.points = Math.round(sumIdx(node.series.points, i0, i1));
             metricCache.set(key, m);
             return m;
+        }
+
+        // ==================== v4.13：产品专家下钻四象限图（达成率 × 交付量）====================
+        // 区间积分满分梯度：mock 每人独立梯度，hashSeed 确定性生成（1100~2500），保证刷新稳定；
+        // 区间宽度 1400 ≈ 30 天产品专家积分上量（区间积分通常落在 600~2200，达成率分布合理）
+        const PRODUCT_EXPERT_CAP_MIN = 1100;
+        const PRODUCT_EXPERT_CAP_MAX = 2500;
+        const personCapCache = new Map();
+        function productExpertFullScore(person) {
+            if (!person || !person.id) return PRODUCT_EXPERT_CAP_MIN;
+            if (personCapCache.has(person.id)) return personCapCache.get(person.id);
+            const span = PRODUCT_EXPERT_CAP_MAX - PRODUCT_EXPERT_CAP_MIN;
+            const cap = PRODUCT_EXPERT_CAP_MIN + (hashSeed('pe-cap|' + person.id) % span);
+            personCapCache.set(person.id, cap);
+            return cap;
+        }
+
+        // ==================== v4.12：岗位关键动作得分率（演示数据层）====================
+        // 口径：得分率 = 该动作「完成量 ÷ 该人被分配的任务量」（满分 = 分配任务量，随人、随日不同）
+        // 数据：纯演示假数据，确定性生成（同一人 + 同一动作 → 同一序列），与闭环看板（单日口径）解耦，后续可替换为真实接口
+        const DUTY_CACHE = new Map();              // node.id|i0|i1 → 区间聚合结果
+        function clearDutyCache() { DUTY_CACHE.clear(); }
+        // 人员节点所属岗位 key：优先自身 postKey，其次沿父链向上取，最后兜底首个岗位
+        function postKeyOfPerson(node) {
+            if (!node) return POSTS[0].key;
+            if (node.postKey) return node.postKey;
+            let p = node.parent;
+            while (p) { if (p.postKey) return p.postKey; p = p.parent; }
+            return POSTS[0].key;
+        }
+        function dutyActionsOf(postKey) { return POST_DUTIES[postKey] || POST_DUTIES[POSTS[0].key] || []; }
+        // 单人 × 各动作 × 逐日序列：assign=分配任务量（满分基准）、done=实际完成量（整数，区间求和后比率天然自洽）
+        function buildDutySeries(node) {
+            const postKey = postKeyOfPerson(node);
+            const actions = dutyActionsOf(postKey);
+            const seedName = (node && (node.fullName || node.name)) || 'anon';
+            const rnd = seededRandom(hashSeed('duty|' + seedName + '|' + postKey));
+            const talent = 0.60 + rnd() * 0.36;                        // 个人整体得分率水平（60%~96%）
+            const phase = rnd() * 6.28;
+            const assign = [], done = [];
+            actions.forEach(function (a) {
+                const aRnd = seededRandom(hashSeed('dutyact|' + seedName + '|' + postKey + '|' + a.action));
+                const base = 2 + Math.round(aRnd() * 7);               // 该动作每日基准任务量（2~9）
+                const diff = 0.88 + aRnd() * 0.2;                      // 动作难度系数（越高越容易拿满）
+                const aPhase = aRnd() * 6.28;                          // 该动作自身的波动相位（让各动作环比方向可不同）
+                const as = new Float64Array(DAYS), dn = new Float64Array(DAYS);
+                for (let i = 0; i < DAYS; i++) {
+                    const d = new Date(START_DATE.getTime() + i * ONE_DAY);
+                    const wd = d.getDay();
+                    const weekend = (wd === 0 || wd === 6) ? 0.7 : (wd === 1 ? 0.95 : 1);
+                    const wave = 1 + Math.sin(i * 0.31 + phase) * 0.14 + Math.sin(i * 0.07) * 0.08;
+                    const noise = 0.86 + aRnd() * 0.28;
+                    const n = Math.max(0, Math.round(base * weekend * wave * noise));
+                    as[i] = n;
+                    // 低频漂移：让不同日期区间的得分率产生可见的环比差异
+                    const drift = 1 + Math.sin(i * 0.11 + aPhase) * 0.13;
+                    const rate = Math.max(0.05, Math.min(1, talent * diff * drift * (0.9 + aRnd() * 0.2)));
+                    dn[i] = Math.min(n, Math.round(n * rate));
+                }
+                assign.push(as); done.push(dn);
+            });
+            return { postKey: postKey, actions: actions, assign: assign, done: done };
+        }
+        function dutySeriesOf(node) {
+            if (!node) return null;
+            if (!node.dutySeries) node.dutySeries = buildDutySeries(node);
+            return node.dutySeries;
+        }
+        // 区间聚合：返回 { postKey, items:[{action, detail, assign, done, rate}], totalAssign, totalDone, rate }
+        function dutyRateOf(node, i0, i1) {
+            if (!node) return null;
+            const key = node.id + '|' + i0 + '|' + i1;
+            const hit = DUTY_CACHE.get(key);
+            if (hit) return hit;
+            const s = dutySeriesOf(node);
+            const items = s.actions.map(function (a, ai) {
+                const assign = Math.round(sumIdx(s.assign[ai], i0, i1));
+                const done = Math.round(sumIdx(s.done[ai], i0, i1));
+                return {
+                    action: a.action, detail: a.detail, assign: assign, done: done,
+                    rate: assign > 0 ? (done / assign) * 100 : null
+                };
+            });
+            const totalAssign = items.reduce(function (t, it) { return t + it.assign; }, 0);
+            const totalDone = items.reduce(function (t, it) { return t + it.done; }, 0);
+            const res = {
+                postKey: s.postKey, items: items,
+                totalAssign: totalAssign, totalDone: totalDone,
+                rate: totalAssign > 0 ? (totalDone / totalAssign) * 100 : null
+            };
+            DUTY_CACHE.set(key, res);
+            return res;
+        }
+        // 得分率单元格：主值 = 得分率%，副值 = 环比（百分点差；配色与指标矩阵保持一致：红色提升 / 绿色下降）
+        function fmtRateCell(curRate, prevRate) {
+            if (curRate === null || curRate === undefined) {
+                return { html: '<div class="text-slate-500 text-sm leading-tight">—</div>' +
+                    '<div class="text-xs mt-0.5" style="color:#64748b">无分配</div>' };
+            }
+            const valText = curRate.toFixed(1) + '%';
+            let sub = '<div class="text-xs mt-0.5" style="color:#64748b">—</div>';
+            if (prevRate !== null && prevRate !== undefined) {
+                const d = curRate - prevRate;
+                const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                sub = '<div class="text-xs mt-0.5 font-medium" style="color:' + color + '">' +
+                    (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</div>';
+            }
+            return { html: '<div class="text-slate-100 text-sm font-semibold leading-tight">' + valText + '</div>' + sub };
         }
         function collectLevel(node, level, out) {
             out = out || [];
@@ -1205,6 +1472,28 @@
         function showChangePwd() { const m = document.getElementById('changePwdModal'); if (m) m.classList.remove('hidden'); }
         function hideChangePwd() { const m = document.getElementById('changePwdModal'); if (m) m.classList.add('hidden'); }
 
+        // v5.1 鉴权模式开关（由服务端 .env AUTH_MODE 经 /api/health 下发：password=工号+密码 / emp_only=仅工号免密）
+        let AUTH_MODE = 'password';
+        async function fetchAuthMode() {
+            try {
+                const r = await fetch(API_BASE + '/api/health');
+                const d = await r.json();
+                if (d && d.authMode) AUTH_MODE = d.authMode;
+            } catch (e) { /* 探测失败按默认 password 处理 */ }
+            applyAuthModeToLogin();
+        }
+        function applyAuthModeToLogin() {
+            const empOnly = AUTH_MODE === 'emp_only';
+            const pwdRow = document.getElementById('loginPwdRow');
+            if (pwdRow) pwdRow.classList.toggle('hidden', empOnly);
+            const desc = document.getElementById('loginDesc');
+            if (desc) desc.textContent = empOnly ? '输入工号直接登录（当前为免密码试用模式：仅凭工号识别身份，请勿将本人工号借予他人）。' : '输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。';
+            const sub = document.getElementById('loginSubTitle');
+            if (sub) sub.textContent = empOnly ? 'V5.4 · 工号登录（免密码）' : 'V5.4 · 工号密码登录';
+            const forgot = document.getElementById('loginForgotHint');
+            if (forgot) forgot.classList.toggle('hidden', empOnly);
+        }
+
         // 直接 fetch（不走 fetchJson，避免 401 循环触发跳登录）
         async function loginApi(empNo, pwd) {
             const r = await fetch(API_BASE + '/api/auth/login', {
@@ -1237,8 +1526,9 @@
         window.__v42 = {
             doLogin: function () {
                 const emp = (document.getElementById('loginEmpNo').value || '').trim();
-                const pwd = document.getElementById('loginPwd').value || '';
-                if (!emp || !pwd) { document.getElementById('loginError').textContent = '请输入工号与密码'; return; }
+                const pwd = AUTH_MODE === 'emp_only' ? '' : (document.getElementById('loginPwd').value || '');
+                if (!emp) { document.getElementById('loginError').textContent = '请输入工号'; return; }
+                if (AUTH_MODE !== 'emp_only' && !pwd) { document.getElementById('loginError').textContent = '请输入密码'; return; }
                 // mock 模式：内置演示账号纯前端校验（线上 Pages 无后端也能走通登录 → 看板流程）
                 if (DATA_MODE === 'mock') {
                     if (emp === DEMO_ACCOUNT.emp && pwd === DEMO_ACCOUNT.pwd) {
@@ -1469,8 +1759,11 @@
         // API 模式启动：v4.2 先校验登录态（有 token → /api/auth/me → 加载树；无 token → 弹登录）
         function bootApi() {
             if (!getToken()) {
-                showLogin('请使用工号与密码登录');
-                return Promise.reject(new Error('未登录'));
+                // v5.1：先探测鉴权模式（emp_only 时隐藏密码框），再弹登录浮层
+                return fetchAuthMode().then(function () {
+                    showLogin(AUTH_MODE === 'emp_only' ? '请输入工号登录' : '请使用工号与密码登录');
+                    throw new Error('未登录');
+                });
             }
             apiLoading(true, '正在校验登录态…');
             return meApi().then(function (d) {
@@ -1489,7 +1782,12 @@
                 TODAY = endD;
                 apiLoading(false);
                 startApp();
-            }).catch(apiError);
+            }).catch(function (e) {
+                // v5.4：token 过期/失效（401）时 fetchJson 已清 token 并弹回登录浮层，这里静默停止即可
+                const msg = e && e.message ? String(e.message) : '';
+                if (/HTTP 401/.test(msg)) { apiLoading(false); return; }
+                apiError(e);
+            });
         }
 
         let tree = null;
@@ -1519,6 +1817,8 @@
             pkIds: [],
             pkBase: null,
             drillIds: [],
+            drillSelectedId: null,            // v4.9：左柱图 / drillList 共享的选中态（节点 id；null = 无选中）
+            drillPersonId: null,              // v4.14：人员层下钻后，区间动作得分率汇总（#drillDutyDetail）对应的人员节点 id
             trendMode: 'day',
             trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营总览趋势分析默认指标
             trendNorm: null,   // 绝对量归一化：null=自动, true=强制, false=强制关闭
@@ -1565,6 +1865,37 @@
             });
             return last;
         }
+        // 「返回上级」辅助：返回顶栏筛选中最深选中层级在 SEL_ORDER 中的下标；全为 __all__（全国）返回 -1
+        const SEL_ORDER = ['region', 'area', 'store', 'post', 'person'];
+        function drillDeepestSelIdx() {
+            for (let i = SEL_ORDER.length - 1; i >= 0; i--) {
+                if (state.sel[SEL_ORDER[i]] && state.sel[SEL_ORDER[i]] !== '__all__') return i;
+            }
+            return -1;
+        }
+        // v5.2：级联回填 —— 选中下级节点（小区/门店）后，沿 parent 链自动把上级大区/小区勾上。
+        // 只补「__all__」空位，不覆盖用户已显式选择的层级；保证筛选区始终呈现完整的逐级路径
+        const LEVEL_STATE_KEY = { '大区': 'region', '小区': 'area', '门店': 'store', '岗位': 'post', '人员': 'person' };
+        function backfillAncestors(node) {
+            let n = node && node.parent;
+            while (n) {
+                const key = LEVEL_STATE_KEY[n.level];
+                if (key && (!state.sel[key] || state.sel[key] === '__all__')) state.sel[key] = n.id;
+                n = n.parent;
+            }
+        }
+        // v5.2：登录默认范围 —— 按自动派生的范围根，把组织筛选预勾到本人管理层级：
+        // 员工→本人、店长→门店、小区主管→小区、大区总监→大区（祖先链由级联回填补齐）；
+        // 总部（无范围根）保持全国；显式多根授权无法映射单一链路，保持全国由用户自行筛选
+        function initOrgSelDefaults() {
+            if (DATA_MODE !== 'api' || !cachedUser || !cachedUser.scopeRootId) return;
+            if (cachedUser.scopeMode === 'explicit') return;
+            const node = NODE_BY_ID.get('n' + cachedUser.scopeRootId);
+            if (!node) return;
+            const key = LEVEL_STATE_KEY[node.level];
+            if (key) state.sel[key] = node.id;
+            backfillAncestors(node);
+        }
 
         // ---------- 下拉框填充 ----------
         function fillSelect(el, list, allLabel, current, placeholder) {
@@ -1579,13 +1910,15 @@
             const picked = el.options[el.selectedIndex];
             if (!picked || picked.disabled || el.value !== (current || '__all__')) el.value = '__all__';
         }
+        // v5.3：候选改为按 level 语义收集（collectLevel）而非直接 children ——
+        // 树中存在「虚拟区→虚拟1区(华东大区)」这类大区套大区的归整结构，直取 children 会整级错位
         function storesOfArea(areaId) {
             const area = areaId === '__all__' ? null : nodeById(areaId);
-            return area ? area.children.slice() : [];
+            return area ? collectLevel(area, '门店') : [];
         }
         function areasOfRegion(regionId) {
             const region = regionId === '__all__' ? null : nodeById(regionId);
-            return region ? region.children.slice() : [];
+            return region ? collectLevel(region, '小区') : [];
         }
         function renderOrgSelectors() {
             // 大区
@@ -1607,7 +1940,8 @@
             }
             if (storeNode) {
                 const existKeys = {};
-                storeNode.children.forEach(function (p) { existKeys[p.postKey] = p; });
+                // v5.3：只取「岗位」层子节点（防归整/异常结构下非岗位节点混入导致全列「本店暂无」）
+                collectLevel(storeNode, '岗位', []).forEach(function (p) { existKeys[p.postKey] = p; });
                 const posts = POSTS.map(function (p) {
                     const node = existKeys[p.key];
                     if (node) return { id: node.id, name: p.name + (node.status === 0 ? '（已停用）' : ''), status: node.status };
@@ -1626,8 +1960,8 @@
                 fillSelect($selPerson, postNode.children, '全部人员', state.sel.person);
                 $selPerson.disabled = false;
             } else if (storeNode) {
-                const persons = [];
-                storeNode.children.forEach(function (p) { p.children.forEach(function (c) { persons.push(c); }); });
+                // v5.3：按 level 语义收集门店下全部人员（原双层 children 遍历会漏/错层级）
+                const persons = collectLevel(storeNode, '人员', []);
                 fillSelect($selPerson, persons, '全部人员', state.sel.person);
                 $selPerson.disabled = false;
             } else {
@@ -1690,7 +2024,7 @@
 
         // ---------- PK 候选 ----------
         // v4.3：候选严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；
-        // 岗位层级 = 跨店同岗对比：候选为范围内各门店的「同一岗位」节点（如 上海浦东旗舰店 · 销售店长）
+        // 岗位层级 = 跨店同岗对比：候选为范围内各门店的「同一岗位」节点（如 上海东风南方威铭 · 销售店长）
         function pkCandidates() {
             let list;
             if (state.pkLevel === '岗位') {
@@ -1731,7 +2065,7 @@
             // 空缺岗位置灰展示（体现「本店暂无」而非 0）— 仅针对当前选中的对比岗位
             if (state.pkLevel === '岗位') {
                 const postDef = POSTS_BY_KEY[state.pkPost];
-                if (postDef && Array.isArray(postDef.blankStores)) {
+                if (postDef) {   // v5.0：空缺改为 min:0 岗位确定性随机生成，postStats.missing 依旧准确
                     const scopeRoot = currentNode().level === '门店' ? currentNode().parent : currentNode();
                     const storeNodes = collectLevel(scopeRoot, '门店', []);
                     const missing = storeNodes.filter(function (s) { return (s.postStats.missing || []).indexOf(state.pkPost) >= 0; });
@@ -2116,6 +2450,7 @@
             if (!extCharts[id]) extCharts[id] = echarts.init(el);
             return extCharts[id];
         }
+        // v4.9：左柱图已移除，drillList 独占整行；此处仅保留选中态辅助函数
         const AXIS_STYLE = {
             axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
             axisTick: { show: false },
@@ -2190,9 +2525,60 @@
             });
             return node;
         }
+
+        // v4.16：下钻 ↔ 顶栏「组织范围」双向同步 —— 把当前下钻节点路径写入 state.sel
+        // 直接改 state.sel 后由 renderAll 的 fillSelect 回显下拉，不派发 change 事件
+        //（change 监听会清空下钻栈，见 $selRegion 等监听器），nodePath 保证父层先设置，依赖链天然合法。
+        function syncSelToDrill(node) {
+            if (!node) return;
+            const LV = { '大区': 'region', '小区': 'area', '门店': 'store', '岗位': 'post', '人员': 'person' };
+            const sel = { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' };
+            nodePath(node).forEach(function (n) { if (LV[n.level]) sel[LV[n.level]] = n.id; });
+            state.sel = sel;
+        }
+
+        // ==================== v4.9：下钻区选中态 + 列表联动 ====================
+        // 统一管理 state.drillSelectedId，让 drillList 行保持高亮（柱状图已移除）
+        function setDrillSelected(id) {
+            state.drillSelectedId = id;
+            applyListSelection();
+        }
+        function applyListSelection() {
+            const list = document.getElementById('drillList');
+            if (!list) return;
+            const sel = state.drillSelectedId || '';
+            // 兼容列表 button 与矩阵 tr 两种行结构
+            list.querySelectorAll('button[data-id], tr[data-id]').forEach(function (el) {
+                if (el.dataset.id === sel) {
+                    el.classList.add('bg-cyan-500/15', 'ring-1', 'ring-cyan-400/40');
+                } else {
+                    el.classList.remove('bg-cyan-500/15', 'ring-1', 'ring-cyan-400/40');
+                }
+            });
+        }
+        // 点击左柱图柱条 / drillList 行的统一入口：
+        //   - 与当前选中相同时：取消选中
+        //   - 选中后自动下钻（保留原「点击继续下钻」行为）
+        function selectOrDrill(id) {
+            if (!id) return;
+            if (state.drillSelectedId === id) {
+                setDrillSelected(null);
+                return;
+            }
+            setDrillSelected(id);
+            const n = nodeById(id);
+            // v4.14：人员（叶子节点）也允许下钻 —— 进入该人的区间逐日动作积分完成率表
+            const isPersonLeaf = n && n.level === '人员';
+            if (n && (n.children.length > 0 || isPersonLeaf)) {
+                // 逐级压栈：保留中间层级，便于「返回上级」逐层回退；先裁掉不在当前路径上的残留 id
+                const chainIds = nodePath(n).map(function (x) { return x.id; });
+                state.drillIds = state.drillIds.filter(function (x) { return chainIds.indexOf(x) >= 0; });
+                if (state.drillIds.indexOf(n.id) < 0) state.drillIds.push(n.id);
+                syncSelToDrill(n);   // v4.16：每次下钻同步收窄顶栏组织范围（全页看板随下钻范围联动）
+                renderAll();
+            }
+        }
         function renderDrill() {
-            const $metric = document.getElementById('drillMetric');
-            const metric = $metric.value || 'leads';
             const r = currentIdx(), pr = prevRange();
             const bc = document.getElementById('drillBreadcrumb');
             const subEl = document.getElementById('drillSubtitle');
@@ -2202,15 +2588,11 @@
                 if (nodes.length < 2) {
                     bc.innerHTML = '';
                     document.getElementById('drillList').innerHTML = '<div class="text-xs text-slate-500 py-2">PK 模式下请先勾选 2 ~ 6 个对象</div>';
-                    const c0 = chart('drillChart');
-                    if (c0) c0.clear();
-                    document.getElementById('drillSummary').innerHTML = '';
-                    document.getElementById('drillSummaryTitle').textContent = 'PK 模式下钻';
                     subEl.textContent = 'PK 模式 · 展示各对象在所选指标上的下级构成并列';
                     return;
                 }
                 const level = NEXT_LEVEL[nodes[0].level];
-                subEl.textContent = 'PK 模式 · ' + (level || '已到末级') + '构成对比 · 指标：' + METRIC_LABEL[metric] + '（空缺处不画柱）';
+                subEl.textContent = 'PK 模式 · ' + (level || '已到末级') + '构成对比';
                 bc.innerHTML = nodes.map(function (n, i) {
                     return '<span class="px-2 py-1 rounded-md" style="background:' + scaleColor(pkColorOf(n), 0.14) + ';color:' + pkColorOf(n) + '">' + n.name + '</span>';
                 }).join('<span class="text-slate-600">/</span>');
@@ -2220,47 +2602,38 @@
                         n.children.forEach(function (c) { if (childNames.indexOf(c.name) < 0) childNames.push(c.name); });
                     });
                 }
-                const c = chart('drillChart');
-                if (c) {
-                    c.off('click');
-                    c.setOption({
-                        grid: { left: 10, right: 22, top: 34, bottom: 6, containLabel: true },
-                        legend: { data: childNames, top: 0, textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
-                        tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE },
-                        xAxis: { type: 'category', data: nodes.map(function (n) { return n.name; }), ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: 0, rotate: nodes.length > 4 ? 16 : 0 } },
-                        yAxis: { type: 'value', ...AXIS_STYLE },
-                        series: childNames.map(function (cn, ci) {
-                            return {
-                                name: cn,
-                                type: 'bar',
-                                barMaxWidth: 26,
-                                itemStyle: { borderRadius: [4, 4, 0, 0], color: PK_PALETTE[(ci + 3) % PK_PALETTE.length] },
-                                data: nodes.map(function (n) {
-                                    const ch = n.children.filter(function (x) { return x.name === cn; })[0];
-                                    return ch ? metricsOf(ch, r[0], r[1])[metric] : null;
-                                })
-                            };
-                        })
-                    }, true);
-                }
-                document.getElementById('drillSummaryTitle').textContent = 'PK 对象合计对比';
-                document.getElementById('drillSummary').innerHTML = nodes.map(function (n) {
-                    const m = metricsOf(n, r[0], r[1]);
-                    return '<div class="flex items-center justify-between text-xs"><span class="flex items-center gap-2 text-slate-300 truncate">' +
-                        '<span style="width:8px;height:8px;border-radius:2px;background:' + pkColorOf(n) + ';display:inline-block"></span>' + n.name + '</span>' +
-                        '<span class="text-white font-semibold">' + fmt(m[metric]) + ' ' + (METRIC_UNIT[metric] || '') + '</span></div>';
-                }).join('') +
-                    '<div class="pt-2 mt-2 border-t border-white/5 text-[11px] text-slate-500">PK 模式不做合计，各对象独立统计</div>';
                 const listEl = document.getElementById('drillList');
                 listEl.innerHTML = '<div class="text-xs text-slate-500 py-2">PK 模式下已锁定对比范围，如需单对象下钻请切回单选模式</div>';
+                const matrixSubEl = document.getElementById('drillMatrixSub');
+                if (matrixSubEl) matrixSubEl.textContent = 'PK 模式 · 矩阵已锁定多对象对比';
                 document.getElementById('drillBack').style.opacity = '.45';
                 return;
             }
 
             const cur = drillNode();
-            const color = METRIC_COLOR[metric];
-            const unit = METRIC_UNIT[metric];
-            subEl.textContent = '全国 → 大区 → 小区 → 门店 → 岗位 → 人员 · 点击柱子或列表继续下钻';
+            // 渲染期校验 drillSelectedId 是否落在当前 cur.children 范围内，跨层级残留则清空
+            const _curChildrenIds = (cur.children || []).map(function (n) { return n.id; });
+            if (state.drillSelectedId && _curChildrenIds.indexOf(state.drillSelectedId) < 0) {
+                state.drillSelectedId = null;
+            }
+            // v4.12：人员动作明细展开态同样按当前层级校验，跨层残留则收起
+            if (state.drillPersonId && _curChildrenIds.indexOf(state.drillPersonId) < 0) {
+                state.drillPersonId = null;
+            }
+            subEl.textContent = '全国 → 大区 → 小区 → 门店 → 岗位 → 人员 · 点击列表行继续下钻';
+            // 岗位 → 人员（含顶栏直接筛到人员）：矩阵切换为「人员 × 关键动作得分率」
+            const isDutyLevel = (cur.level === '岗位' || cur.level === '人员');
+            const matrixTitleEl = document.getElementById('drillMatrixTitle');
+            if (matrixTitleEl) matrixTitleEl.textContent = isDutyLevel ? '关键动作得分率矩阵' : '指标环比矩阵';
+            const matrixSubEl = document.getElementById('drillMatrixSub');
+            if (matrixSubEl) {
+                const pathText = nodePath(cur).map(function (n) { return n.name; }).join(' → ');
+                matrixSubEl.textContent = (cur.level === '人员')
+                    ? pathText + ' · 已到人员级 · 区间逐日动作积分完成率见下方（完成率 = 当日积分 ÷ 已评估拿分项封顶）'
+                    : (isDutyLevel
+                        ? pathText + ' · 人员 × 关键动作 · 得分率 = 完成量 ÷ 分配任务量 · 环比 = 对比上一等长周期（百分点）· 点击人员行下钻查看逐日积分'
+                        : pathText + ' · 按所选范围 · 环比 = 对比上一等长周期 · 点击行继续下钻（至人员级）');
+            }
             bc.innerHTML = nodePath(cur).map(function (n, i, arr) {
                 const active = i === arr.length - 1;
                 return '<button data-idx="' + i + '" class="px-2 py-1 rounded-md transition ' +
@@ -2271,110 +2644,729 @@
                 b.addEventListener('click', function () {
                     const idx = parseInt(b.dataset.idx, 10);
                     const target = pathNodes[idx];
-                    const startNode = currentNode();
-                    state.drillIds = target === startNode ? [] : [target.id];
+                    // 点面包屑即跳转对应层级；跳转后清掉左柱图与列表的旧选中，避免视觉残留
+                    state.drillSelectedId = null;
+                    state.drillPersonId = null;
+                    state.drillIds = nodePath(target).slice(1).map(function (n) { return n.id; });
+                    syncSelToDrill(target);   // v4.16：面包屑跳转同步放宽顶栏组织范围到该层级
                     renderAll();
                 });
             });
             const backBtn = document.getElementById('drillBack');
-            const canBack = pathNodes.length > nodePath(currentNode()).length;
+            // 可返回 = 下钻栈非空（点击行下钻过） 或 顶栏筛选已选到具体层级（可回退一层筛选）
+            const canBack = state.drillIds.length > 0 || drillDeepestSelIdx() >= 0;
             backBtn.style.opacity = canBack ? '1' : '.45';
             backBtn.dataset.enabled = canBack ? '1' : '0';
 
-            const children = cur.children.slice().sort(function (a, b) {
-                return metricsOf(b, r[0], r[1])[metric] - metricsOf(a, r[0], r[1])[metric];
-            });
-            const hasChild = children.length > 0;
-            const names = hasChild ? children.map(function (c) { return c.name; }) : [cur.name];
-            const values = hasChild ? children.map(function (c) { return metricsOf(c, r[0], r[1])[metric]; }) : [metricsOf(cur, r[0], r[1])[metric]];
-            const total = values.reduce(function (s, v) { return s + v; }, 0) || 1;
-
-            const c1 = chart('drillChart');
-            if (c1) {
-                c1.off('click');
-                c1.setOption({
-                    grid: { left: 10, right: 22, top: 34, bottom: 6, containLabel: true },
-                    tooltip: {
-                        trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE,
-                        formatter: function (p) {
-                            const node = hasChild ? children[p[0].dataIndex] : cur;
-                            const m = metricsOf(node, r[0], r[1]);
-                            const pm = metricsOf(node, pr.i0, pr.i1);
-                            const d = pct(m[metric], pm[metric]);
-                            return node.name + '（' + node.level + '）<br/><b style="color:' + color + '">' + METRIC_LABEL[metric] + '：' + fmt(m[metric]) + ' ' + unit + '</b>' +
-                                '<br/>同级占比：' + ((m[metric] / total) * 100).toFixed(1) + '%' +
-                                '<br/>环比：' + fmtSigned(d, 1) + '%';
-                        }
-                    },
-                    xAxis: {
-                        type: 'category', data: names, ...AXIS_STYLE,
-                        splitLine: { show: false },
-                        axisLabel: { color: '#94a3b8', fontSize: 11, interval: 0, rotate: names.length > 6 ? 24 : 0 }
-                    },
-                    yAxis: { type: 'value', ...AXIS_STYLE },
-                    series: [{
-                        type: 'bar', data: values, barMaxWidth: 44,
-                        cursor: hasChild ? 'pointer' : 'default',
-                        itemStyle: {
-                            borderRadius: [6, 6, 0, 0],
-                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: color },
-                                { offset: 1, color: scaleColor(color, 0.2) }
-                            ])
-                        },
-                        label: { show: true, position: 'top', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return fmt(p.value); } }
-                    }]
-                }, true);
-                if (hasChild) {
-                    c1.on('click', function (p) {
-                        if (children[p.dataIndex]) {
-                            state.drillIds.push(children[p.dataIndex].id);
-                            renderAll();
-                        }
-                    });
-                }
+            // 排序：岗位级（人员列表）按综合得分率降序；门店级按积分；其余按线索量（均与各自矩阵首列一致）
+            const children = cur.children.slice();
+            if (isDutyLevel) {
+                children.sort(function (a, b) {
+                    const ra = dutyRateOf(a, r[0], r[1]).rate, rb = dutyRateOf(b, r[0], r[1]).rate;
+                    return (rb === null ? -1 : rb) - (ra === null ? -1 : ra);
+                });
+            } else {
+                const sortKey = (cur.level === '门店') ? 'points' : 'leads';
+                children.sort(function (a, b) {
+                    return metricsOf(b, r[0], r[1])[sortKey] - metricsOf(a, r[0], r[1])[sortKey];
+                });
             }
-
-            const cm = metricsOf(cur, r[0], r[1]);
-            const cpm = metricsOf(cur, pr.i0, pr.i1);
-            document.getElementById('drillSummaryTitle').textContent =
-                cur.name + ' · ' + cur.level + '层级合计' + (hasChild ? '（下级：' + NEXT_LEVEL[cur.level] + '）' : '（已到末级）');
-            const sumRows = ['leads', 'arrivals', 'locked', 'delivered', 'points'];
-            document.getElementById('drillSummary').innerHTML = sumRows.map(function (k) {
-                const d = pct(cm[k], cpm[k]);
-                return '<div class="flex items-center justify-between gap-2">' +
-                    '<span class="text-xs" style="color:' + METRIC_COLOR[k] + '">' + METRIC_LABEL[k] + '</span>' +
-                    '<span class="flex items-center gap-2">' +
-                    '<span class="font-semibold text-white">' + fmt(cm[k]) + '<span class="text-[11px] text-slate-500 ml-0.5">' + METRIC_UNIT[k] + '</span></span>' +
-                    '<span class="chip ' + (d >= 0 ? 'up' : 'down') + '">' + (d >= 0 ? '↑' : '↓') + ' ' + Math.abs(d).toFixed(1) + '%</span>' +
-                    '</span></div>';
-            }).join('') +
-                '<div class="pt-2 mt-2 border-t border-white/5 flex items-center justify-between text-xs text-slate-400">' +
-                '<span>线索到店率</span><span class="text-slate-200 font-medium">' + (cm.leads ? (cm.arrivals / cm.leads * 100).toFixed(1) : '0.0') + '%</span></div>' +
-                '<div class="flex items-center justify-between text-xs text-slate-400 mt-1">' +
-                '<span>线索转化率</span><span class="text-slate-200 font-medium">' + (cm.leads ? (cm.delivered / cm.leads * 100).toFixed(1) : '0.0') + '%</span></div>';
+            const hasChild = children.length > 0;
 
             const list = document.getElementById('drillList');
+            const dutyDetailEl = document.getElementById('drillDutyDetail');
+            if (!isDutyLevel && dutyDetailEl) dutyDetailEl.innerHTML = '';   // 离开岗位级时收起人员动作明细
+            // v4.13：进入 renderDrill 时统一清掉四象限容器与图表实例，仅在产品专家岗位分支重新渲染
+            const quadEl = document.getElementById('drillPostQuad');
+            if (quadEl) quadEl.innerHTML = '';
+            clDisposeChart('drillPostQuad');
             if (!hasChild) {
+                if (cur.level === '人员') {
+                    // v4.14：人员层（含顶栏直接筛到人员 / 从岗位矩阵点击人员行下钻）→ 区间逐日动作积分完成率表
+                    renderDrillPersonDaily(cur, r);
+                    return;
+                }
                 list.innerHTML = '<div class="text-xs text-slate-500 py-2">已到达最末级（人员），无下级数据</div>';
                 return;
             }
-            list.innerHTML = children.map(function (c, i) {
-                const mv = metricsOf(c, r[0], r[1])[metric];
-                const share = (mv / total) * 100;
-                return '<button data-i="' + i + '" class="w-full text-left px-2 py-2 rounded-lg hover:bg-white/5 transition">' +
-                    '<div class="flex items-center justify-between text-xs gap-2">' +
-                    '<span class="text-slate-300 truncate"' + (c.status === 0 ? ' style="color:#64748b"' : '') + '>' + c.name + '<span class="text-slate-600 ml-1">' + c.level + '</span></span>' +
-                    '<span class="text-slate-100 font-medium">' + fmt(mv) + '</span></div>' +
-                    '<div class="mt-1 h-1 rounded bg-white/5 overflow-hidden">' +
-                    '<div style="width:' + share.toFixed(1) + '%;background:' + color + ';height:100%"></div></div></button>';
+            // 岗位 → 人员：矩阵列切换为该岗位的关键动作（单元格 = 得分率 + 环比）
+            if (isDutyLevel) {
+                renderDutyMatrix(cur, children, r, pr);
+                // v4.13：产品专家额外追加「达成率 × 交付量」四象限散点；其它岗位清空容器 + 销毁图表
+                const postKey = cur.postKey || (children[0] && postKeyOfPerson(children[0])) || '';
+                if (postKey === 'productExpert') {
+                    renderDrillPostQuad(cur, children, r, pr);
+                } else {
+                    clDisposeChart('drillPostQuad');
+                    const quadEl = document.getElementById('drillPostQuad');
+                    if (quadEl) quadEl.innerHTML = '';
+                }
+                return;
+            }
+            const cols = (cur.level === '门店') ? DRILL_MATRIX_COLS_POST : DRILL_MATRIX_COLS;
+            const headHtml = '<tr>' +
+                    '<th class="sticky left-0 top-0 z-20 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:160px">下级</th>' +
+                    cols.map(function (col) {
+                        return '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:104px">' +
+                            col.label + '</th>';
+                    }).join('') + '</tr>';
+            const bodyHtml = children.map(function (c, i) {
+                const curM = metricsOf(c, r[0], r[1]);
+                const prevM = metricsOf(c, pr.i0, pr.i1);
+                const cells = cols.map(function (col) {
+                    const cell = fmtMatrixCell(curM[col.key] || 0, prevM[col.key] || 0);
+                    return '<td class="px-3 py-2.5 text-right whitespace-nowrap border-b border-white/5">' + cell.html + '</td>';
+                }).join('');
+                const dim = c.status === 0 ? ' style="color:#64748b"' : '';
+                // v4.12：岗位行也可下钻（进入人员 × 关键动作得分率）
+                const drillable = (c.level === '大区' || c.level === '小区' || c.level === '门店' || c.level === '岗位');
+                const rowCls = drillable ? 'cursor-pointer hover:bg-white/5 transition selectOrDrill-row' : '';
+                return '<tr data-id="' + c.id + '" data-i="' + i + '" data-drillable="' + (drillable ? '1' : '0') + '" class="' + rowCls + '">' +
+                    '<td class="sticky left-0 z-10 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5"' + dim + '>' +
+                    '<div class="flex items-center gap-2"><span class="font-medium">' + c.name + '</span>' +
+                    '<span class="text-slate-500 text-[11px]">' + c.level + '</span></div></td>' + cells + '</tr>';
             }).join('');
-            list.querySelectorAll('button').forEach(function (b) {
-                b.addEventListener('click', function () {
-                    state.drillIds.push(children[parseInt(b.dataset.i, 10)].id);
-                    renderAll();
+            list.innerHTML = '<table class="min-w-full border-collapse text-sm">' +
+                '<thead>' + headHtml + '</thead>' +
+                '<tbody>' + bodyHtml + '</tbody></table>';
+            list.querySelectorAll('tr[data-id][data-drillable="1"]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    selectOrDrill(tr.dataset.id);
                 });
             });
+            applyListSelection();
+        }
+
+        // ---------- v4.12：岗位 → 人员 动作得分率矩阵 ----------
+        // 行 = 该岗位下的每位人员，列 = 该岗位的关键动作（取岗位职责说明表同一份文案）
+        // 单元格 = 得分率（完成量 ÷ 该人被分配的任务量）+ 环比（与上一等长周期的百分点差）
+        function renderDutyMatrix(postNode, children, r, pr) {
+            const list = document.getElementById('drillList');
+            const detailEl = document.getElementById('drillDutyDetail');
+            if (detailEl) detailEl.innerHTML = '';        // 重绘矩阵时收起旧的人员明细
+            const postKey = postNode.postKey || (children[0] && postKeyOfPerson(children[0])) || POSTS[0].key;
+            const meta = POSTS_BY_KEY[postKey] || { name: postNode.name, color: '#38bdf8' };
+            const actions = dutyActionsOf(postKey);
+            const accent = meta.color || '#38bdf8';
+            const headHtml = '<tr>' +
+                '<th class="sticky left-0 top-0 z-20 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:150px">人员</th>' +
+                '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold whitespace-nowrap border-b border-white/10" style="min-width:112px;color:' + accent + '" title="该人全部关键动作合计：完成量 ÷ 分配任务量">综合得分率</th>' +
+                actions.map(function (a) {
+                    return '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:104px" title="' + a.detail + '">' +
+                        a.action + '</th>';
+                }).join('') + '</tr>';
+            const bodyHtml = children.map(function (c, i) {
+                const curD = dutyRateOf(c, r[0], r[1]);
+                const prevD = dutyRateOf(c, pr.i0, pr.i1);
+                const totalCell = fmtRateCell(curD.rate, prevD.rate);
+                const cells = curD.items.map(function (it, ai) {
+                    const prevRate = prevD.items[ai] ? prevD.items[ai].rate : null;
+                    const cell = fmtRateCell(it.rate, prevRate);
+                    const tip = it.assign > 0
+                        ? it.action + '：完成 ' + it.done + ' / 分配 ' + it.assign
+                        : it.action + '：本期无分配任务';
+                    return '<td class="px-3 py-2.5 text-right whitespace-nowrap border-b border-white/5" title="' + tip + '">' + cell.html + '</td>';
+                }).join('');
+                const dim = c.status === 0 ? ' style="color:#64748b"' : '';
+                return '<tr data-person-id="' + c.id + '" data-i="' + i + '" class="cursor-pointer hover:bg-white/5 transition">' +
+                    '<td class="sticky left-0 z-10 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5"' + dim + '>' +
+                    '<div class="flex items-center gap-2"><span class="font-medium">' + c.name + '</span>' +
+                    '<span class="text-slate-500 text-[11px]">完成 ' + curD.totalDone + ' / 分配 ' + curD.totalAssign + '</span></div></td>' +
+                    '<td class="px-3 py-2.5 text-right whitespace-nowrap border-b border-white/5">' + totalCell.html + '</td>' +
+                    cells + '</tr>';
+            }).join('');
+            list.innerHTML = '<table class="min-w-full border-collapse text-sm">' +
+                '<thead>' + headHtml + '</thead>' +
+                '<tbody>' + bodyHtml + '</tbody></table>';
+            list.querySelectorAll('tr[data-person-id]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    // v4.14：点击人员行下钻 → 该人的区间逐日动作积分完成率表（替代旧的行内展开明细）
+                    selectOrDrill(tr.dataset.personId);
+                });
+            });
+            applyListSelection();
+        }
+
+        // 单人动作得分率明细（点击人员行展开）：动作名 + 进度条 + 完成/分配 + 得分率 + 环比
+        function renderDutyPersonDetail() {
+            const box = document.getElementById('drillDutyDetail');
+            const list = document.getElementById('drillList');
+            if (!box) return;
+            const id = state.drillPersonId;
+            if (list) {
+                list.querySelectorAll('tr[data-person-id]').forEach(function (tr) {
+                    tr.classList.toggle('bg-cyan-500/10', tr.dataset.personId === id);
+                });
+            }
+            const node = id ? nodeById(id) : null;
+            if (!node) { box.innerHTML = ''; return; }
+            const r = currentIdx(), pr = prevRange();
+            const curD = dutyRateOf(node, r[0], r[1]);
+            const prevD = dutyRateOf(node, pr.i0, pr.i1);
+            const rows = curD.items.map(function (it, ai) {
+                const prevRate = prevD.items[ai] ? prevD.items[ai].rate : null;
+                const w = it.rate === null ? 0 : Math.max(2, Math.min(100, it.rate));
+                const barColor = it.rate === null ? '#475569'
+                    : (it.rate >= 90 ? '#22c55e' : (it.rate >= 75 ? '#38bdf8' : (it.rate >= 60 ? '#f59e0b' : '#ef4444')));
+                let deltaHtml = '<span class="text-slate-500">—</span>';
+                if (it.rate !== null && prevRate !== null && prevRate !== undefined) {
+                    const d = it.rate - prevRate;
+                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
+                }
+                return '<div class="flex items-center gap-3 py-1.5">' +
+                    '<div class="text-xs text-slate-300 whitespace-nowrap" style="width:96px" title="' + it.detail + '">' + it.action + '</div>' +
+                    '<div class="flex-1 h-2 rounded-full" style="background:rgba(148,163,184,0.18)">' +
+                        '<div class="h-2 rounded-full" style="width:' + w + '%;background:' + barColor + '"></div></div>' +
+                    '<div class="text-xs text-slate-400 whitespace-nowrap" style="width:88px;text-align:right">完成 ' + it.done + ' / 分配 ' + it.assign + '</div>' +
+                    '<div class="text-xs font-semibold text-slate-100 whitespace-nowrap" style="width:60px;text-align:right">' + (it.rate === null ? '—' : it.rate.toFixed(1) + '%') + '</div>' +
+                    '<div class="text-xs whitespace-nowrap" style="width:66px;text-align:right">' + deltaHtml + '</div>' +
+                    '</div>';
+            }).join('');
+            const totalDelta = (curD.rate !== null && prevD.rate !== null) ? (curD.rate - prevD.rate) : null;
+            box.innerHTML = '<div class="rounded-xl p-4" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.15)">' +
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">' + node.name + ' · 动作得分率明细</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + (node.storeName || '') + ' · ' + (node.postName || '') + '</span></div>' +
+                    '<div class="text-[11px] text-slate-400">综合得分率 <b class="text-slate-100">' + (curD.rate === null ? '—' : curD.rate.toFixed(1) + '%') + '</b>' +
+                    ' · 完成 ' + curD.totalDone + ' / 分配 ' + curD.totalAssign +
+                    (totalDelta === null ? '' : ' · 环比 ' + (totalDelta > 0 ? '+' : '') + totalDelta.toFixed(1) + 'pt') + '</div>' +
+                '</div>' + rows + '</div>';
+        }
+
+        // ==================== v4.14：人员层下钻 · 区间逐日动作积分完成率 ====================
+        // 点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏区间内逐日的动作积分完成率表；
+        // 点击某日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（取数 = 该行单日）。
+        // 数据说明：下钻组织树为演示树（树人员无真实工号）。真实评分岗位按 hashSeed(人员id) 确定性映射到
+        // 灯塔数据中同岗位的一名人员取数 —— 同一人员刷新后数据稳定，且明细结构与真实数据完全一致；
+        // 模拟岗位按 (人员id + 日期) seed 规则驱动生成（参照 clMockPoints 的扣分证据格式）。
+
+        // 单人单日得分点：真实岗位走灯塔单日索引；模拟岗位规则驱动生成；无数据日期返回 null
+        function drillDailyPoint(personNode, ds) {
+            const postKey = personNode.postKey || postKeyOfPerson(personNode) || POSTS[0].key;
+            const rule = clRuleFor(postKey);
+            const items = rule.scoreItems;
+            const storeName = personNode.storeName || '';
+            if (LH_OK && rule.real) {
+                if (CL_DATES.indexOf(ds) < 0) return null;          // 该日无灯塔日报 → 表格置灰行
+                const idx = clDataIndexFor([ds]);
+                const cand = (idx.byPost[rule.postKey] || []);
+                if (!cand.length) return null;
+                // 确定性映射：同一树人员永远取同一名灯塔人员（刷新稳定）
+                const pi = cand[hashSeed(personNode.id) % cand.length];
+                const p = idx.persons[pi];
+                const st = LH.stores[p.storeIdx] || { code: '', name: storeName, region: '', area: '', idx: p.storeIdx };
+                return clMakePoint(rule, items, {
+                    idx: pi, name: personNode.name, code: p.code, store: st, real: true,
+                    itemOf: function (nm) { return p.items[nm]; },
+                    deductions: p.deductions, dedRows: p.dedRows, delivered: p.delivered
+                });
+            }
+            // 模拟岗位：seed = 人员 + 日期（drillday| 前缀与闭环 mock| 前缀隔离）
+            const rnd = clRng('drillday|' + personNode.id + '|' + ds);
+            const quality = 0.42 + rnd() * 0.58;
+            const itemOf = {}, deds = [];
+            items.forEach(function (it) {
+                const cap = it.cap || 1;
+                const step = cap <= 1 ? 0.5 : Math.round(cap / 4 * 100) / 100;
+                let v = quality * cap * (0.62 + rnd() * 0.5);
+                v = Math.round(Math.min(cap, Math.max(0, v)) / step) * step;
+                v = Math.round(v * 100) / 100;
+                itemOf[it.name] = { score: v, count: Math.max(1, Math.round((cap <= 1 ? (v > 0 ? 1 : 0) : v) + rnd() * 3)), hasSum: true };
+                if (v < cap - 1e-6) {
+                    const cnt = 1 + Math.floor(rnd() * 2);
+                    const reason = String(it.noScore || it.judge || '未达到该项拿分条件').replace(/\s+/g, ' ').slice(0, 56);
+                    deds.push({
+                        item: it.name, action: it.name, per: it.per || 0.5, count: cnt,
+                        total: Math.round((it.per || 0.5) * cnt * 100) / 100, mock: true,
+                        evidence: ['判定=未满足|原因=' + reason + '|样本=' + cnt + '单'], orders: []
+                    });
+                }
+            });
+            deds.sort(function (a, b) { return b.total - a.total; });
+            return clMakePoint(rule, items, {
+                idx: -1, name: personNode.name, code: '', store: { code: '', name: storeName, region: '', area: '', idx: -1 }, real: false,
+                itemOf: function (nm) { return itemOf[nm]; },
+                deductions: deds, dedRows: [], delivered: 1 + Math.floor(rnd() * 12)
+            });
+        }
+
+        // 人员层主渲染：区间逐日完成率表（列表区）+ 区间动作得分率汇总（#drillDutyDetail，复用 renderDutyPersonDetail）
+        // v5.4：人员层主渲染 · 区间逐日动作积分完成率（接入动作评分导入数据）
+        // 取数优先级：
+        //   1) LH 真实日报路径（交付专员/店长）—— 走原 drillDailyPoint，CL_DATES 置灰；
+        //   2) 接口真实区间（/api/scoring/range）—— 有数据日期显示真实积分/完成率，无数据日期置灰；
+        //   3) 其余 —— 走 drillDailyPoint 的规则驱动模拟分支（确定性生成），并在 dataNote 标明「规则驱动模拟数据（确定性生成）」。
+        // 行点击：真实数据来源异步补充 /scoring/details 证据链再打开诊断抽屉。
+        function drillRealPoint(personNode, rule, day) {
+            const itemMap = {};
+            (day.items || []).forEach(function (it) { itemMap[it.item] = it; });
+            const items = rule.scoreItems;
+            const dims = [], ratios = [], counts = [];
+            let point = 0, capCover = 0;
+            items.forEach(function (it) {
+                const r = itemMap[it.name];
+                if (!r) { dims.push(null); ratios.push(null); counts.push(null); return; }
+                const v = Number(r.score || 0);
+                dims.push(Math.round(v * 100) / 100);
+                ratios.push(it.cap ? Math.max(0, Math.min(100, v / it.cap * 100)) : 0);
+                counts.push(r.count === undefined ? null : r.count);
+                point += v;
+                capCover += it.cap;
+            });
+            const capAvail = rule.capAvailable || rule.cap || 1;
+            const rate = capCover ? point / capCover * 100 : 0;
+            let wi = -1, wv = 1000;
+            ratios.forEach(function (v, i) { if (v !== null && v < wv) { wv = v; wi = i; } });
+            const st = clStatusOf(rate);
+            return {
+                key: 'real|' + personNode.id + '|' + day.date,
+                idx: -1,
+                name: personNode.name, code: '',
+                postKey: rule.postKey, postName: rule.postName,
+                storeIdx: -1, storeId: '', storeCode: '', storeName: personNode.storeName || '',
+                region: '', area: '',
+                real: true, sourceKind: 'import',
+                dims: dims, ratios: ratios, counts: counts,
+                points: Math.round(point * 100) / 100, cap: rule.cap, capAvailable: capAvail,
+                capCover: Math.round(capCover * 100) / 100,
+                coverCnt: dims.filter(function (v) { return v !== null; }).length, coverTotal: items.length,
+                rate: Math.round(rate * 10) / 10,
+                rateFull: capAvail ? Math.round(point / capAvail * 1000) / 10 : 0,
+                status: st.label, statusCls: st.cls,
+                weakestIdx: wi < 0 ? 0 : wi,
+                weakestName: wi < 0 ? '—' : items[wi].name,
+                weakestRate: wi < 0 ? 0 : Math.round(wv),
+                deductions: [], dedCount: 0, dedTotal: 0,
+                dedRows: [], empCode: '', delivered: 0,
+                tag: { text: '动作评分导入', warn: false },
+                noData: dims.every(function (v) { return v === null; })
+            };
+        }
+
+        async function renderDrillPersonDaily(cur, r) {
+            const list = document.getElementById('drillList');
+            if (!list) return;
+            state.drillPersonId = cur.id;                 // 供区间汇总明细复用
+            renderDutyPersonDetail();
+            const postKey = cur.postKey || postKeyOfPerson(cur) || POSTS[0].key;
+            const rule = clRuleFor(postKey);
+            const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
+
+            // 计算区间日期串（YYYY-MM-DD）
+            const dates = [];
+            for (let i = r[0]; i <= r[1]; i++) {
+                dates.push(dateStr(new Date(START_DATE.getTime() + i * ONE_DAY)));
+            }
+            const dsFrom = dates[0], dsTo = dates[dates.length - 1];
+
+            // v5.4：拉取该人员的真实区间数据（LH 真实日报岗位跳过 —— 走 LH 路径）
+            const realMap = new Map();
+            if (!(LH_OK && rule.real) && cur.id) {
+                try {
+                    const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
+                    if (resp && resp.ok && Array.isArray(resp.days)) {
+                        resp.days.forEach(function (d) { realMap.set(d.date, d); });
+                    }
+                } catch (e) { /* 接口失败：静默回退到 LH/mock */ }
+            }
+            let realNote = '';
+            if (realMap.size) {
+                const ks = Array.from(realMap.keys()).sort();
+                realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
+            }
+            const dataNote = (LH_OK && rule.real)
+                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）'
+                : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
+
+            // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
+            const rows = [];
+            let prevRate = null;
+            // v5.4：若 realMap 有任一日期数据，则其余未命中日期视为「无评估数据」，行置灰 + 文案「当日无该人评估数据」；仅当 realMap 完全为空时才回退 mock
+            const useRealOnly = realMap.size > 0;
+            for (const ds of dates) {
+                let pt, isRealRow = false;
+                if (LH_OK && rule.real) {
+                    pt = drillDailyPoint(cur, ds);
+                } else if (realMap.has(ds)) {
+                    pt = drillRealPoint(cur, rule, realMap.get(ds));
+                    isRealRow = true;
+                } else if (useRealOnly) {
+                    // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else {
+                    pt = drillDailyPoint(cur, ds);
+                }
+                rows.push({ ds: ds, pt: pt, prevRate: prevRate, isRealRow: isRealRow });
+                prevRate = (pt && !pt.noData) ? pt.rate : null;   // 无数据日断开环比链
+            }
+            const rateC = function (v) {
+                return v >= 95 ? '#34d399' : (v >= 85 ? '#60a5fa' : (v >= 70 ? '#fbbf24' : '#fb7185'));
+            };
+            const bodyHtml = rows.map(function (row, ri) {
+                const pt = row.pt;
+                if (!pt || pt.noData) {
+                    // v4.15：无数据行晨/夕会胶囊同样置灰不可点（与整行 opacity-40 一致）
+                    const meetGrey = isMgr ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">晨会</span></td><td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">夕会</span></td>' : '';
+                    return '<tr class="opacity-40" data-ri="' + ri + '">' +
+                        '<td class="px-3 py-2.5 text-sm text-slate-300 whitespace-nowrap border-b border-white/5">' + row.ds + '</td>' +
+                        '<td class="px-3 py-2.5 text-right text-xs text-slate-500 border-b border-white/5" colspan="' + (isMgr ? 4 : 6) + '">' + (pt ? '当日无该人评估数据' : '无日报数据') + '</td>' + meetGrey + '</tr>';
+                }
+                let deltaHtml = '<span class="text-slate-500">—</span>';
+                if (row.prevRate !== null && row.prevRate !== undefined) {
+                    const d = pt.rate - row.prevRate;
+                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
+                }
+                const realTag = row.isRealRow ? ' <span class="ml-1 text-[10px] text-emerald-400">导入</span>' : '';
+                return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
+                    '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项封顶之和（无数据项不计入分母）">' + clNum(pt.capCover) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
+                    // v4.15：晨会 / 夕会报表胶囊（仅销售店长；stopPropagation 避免触发行点击的诊断抽屉）
+                    (isMgr
+                        ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="am" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 cursor-pointer hover:bg-amber-500/25 transition">晨会 ▸</span></td>' +
+                          '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="pm" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 cursor-pointer hover:bg-indigo-500/25 transition">夕会 ▸</span></td>'
+                        : '') +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300">明细 ▸</span></td>' +
+                    '</tr>';
+            }).join('');
+            list.innerHTML =
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
+                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项封顶（已评估口径）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
+                '</div>' +
+                '<table class="min-w-full border-collapse text-sm">' +
+                    '<thead><tr>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估满分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
+                    // v4.15：晨会 / 夕会报表列（仅销售店长）
+                    (isMgr
+                        ? '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">晨会报表</th>' +
+                          '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">夕会报表</th>'
+                        : '') +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">明细</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + bodyHtml + '</tbody></table>';
+            // 行点击 → 构建单日抽屉上下文并打开诊断抽屉（复用闭环 clOpenDrawer 全部内容与图表）
+            list.querySelectorAll('tr[data-date]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    const ds = tr.dataset.date;
+                    const isReal = tr.dataset.real === '1';
+                    let day = null;
+                    let pt;
+                    if (isReal && realMap.has(ds)) {
+                        day = realMap.get(ds);
+                        pt = drillRealPoint(cur, rule, day);
+                    } else {
+                        pt = drillDailyPoint(cur, ds);
+                    }
+                    if (!pt || pt.noData) return;
+                    const openIt = function () {
+                        CL_DRAW_CTX = {
+                            points: [pt], rule: rule, dates: [ds],
+                            teamScores: pt.dims.map(function (v) { return v === null || v === undefined ? 0 : v; })   // 单人场景：均值线与本人重合
+                        };
+                        clOpenDrawer(0);
+                    };
+                    if (isReal) {
+                        // 真实导入行：异步补充证据链（/scoring/details）再打开抽屉；失败则照常去空事实表打开
+                        fetchJson(API_BASE + '/api/scoring/details?date=' + ds + '&personId=' + cur.id)
+                            .then(function (resp) {
+                                if (resp && resp.ok && Array.isArray(resp.details) && resp.details.length) {
+                                    pt.dedRows = resp.details.map(function (r) {
+                                        return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
+                                    });
+                                    pt.dedCount = pt.dedRows.length;
+                                }
+                                openIt();
+                            })
+                            .catch(function () { openIt(); });
+                    } else {
+                        openIt();
+                    }
+                });
+            });
+            // v4.15：晨会 / 夕会报表胶囊点击 —— stopPropagation 避免触发行点击的诊断抽屉
+            list.querySelectorAll('span[data-meet-btn]').forEach(function (sp) {
+                sp.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    openMeetReport(cur, sp.dataset.date, sp.dataset.meetBtn);
+                });
+            });
+        }
+
+        // ==================== v4.15：销售店长 · 晨会 / 夕会报表 ====================
+        // 晨会管理关键目标 = 对某个具体岗位的人发布任务；夕会 = 核对晨会任务有没有完成。
+        // 仅 salesManager 岗位人员逐日表显示入口；晨夕共用同一任务集合，确定性生成（seed 前缀 meeting|），
+        // 同一人同一天刷新后数据稳定；只读查看，不持久化。
+
+        // 销售店长晨会任务模板：任务名 / 衡量标准（目标值） / 时限 / 任务来源（拿分项或上级指令）
+        const MEET_TASK_TPL = [
+            { task: '新增建档并完成 DMS 录入', metric: '新增建档 ≥ {n} 组', n: [6, 10], source: '新增建档' },
+            { task: '当日首访线索 2 小时内跟进登记', metric: '首访登记及时率 100%', n: null, source: '线索跟进' },
+            { task: '组织当日晨会并同步昨日交付目标', metric: '晨会 09:10 前完成宣讲', n: null, source: '上级指令' },
+            { task: '试驾邀约与试驾执行', metric: '试驾 ≥ {n} 组', n: [2, 5], source: '试驾执行' },
+            { task: '走动式管理：接待 / 讲解 / 仪式宣讲抽查', metric: '抽查 ≥ {n} 个环节', n: [2, 4], source: '接待规范' },
+            { task: '锁单客户交付群建群与自我介绍检查', metric: '当班锁单建群率 100%', n: null, source: '上级指令' },
+            { task: '当日客户投诉 / 异常第一时间响应', metric: '异常响应 ≤ 30 分钟', n: null, source: '异常核对' },
+            { task: '夕会前完成当日战报与明日计划', metric: '夕会 19:00 前提交战报', n: null, source: '上级指令' }
+        ];
+        const MEET_DEADLINES = ['12:00 前', '15:00 前', '18:00 前', '今日内', '夕会前'];
+
+        // 晨会任务确定性生成（晨夕共用）：同一人 + 同一日期结果稳定
+        function meetingTasksOf(personNode, ds) {
+            const rnd = clRng('meeting|' + personNode.id + '|' + ds);
+            // 从模板确定性抽取 3-5 条（不重复），按时间轴递增排布
+            const pool = MEET_TASK_TPL.slice();
+            const cnt = 3 + Math.floor(rnd() * 3);
+            const picks = [];
+            for (let i = 0; i < cnt && pool.length; i++) {
+                const j = Math.floor(rnd() * pool.length);
+                picks.push(pool.splice(j, 1)[0]);
+            }
+            const owner = personNode.name;
+            const team = ['张倩', '李昊', '王一诺', '赵子墨', '刘畅'];
+            let hh = 9, mm = 5 + Math.floor(rnd() * 10);
+            return picks.map(function (t) {
+                const time = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+                mm += 6 + Math.floor(rnd() * 9);
+                if (mm >= 60) { mm -= 60; hh++; }
+                // 目标值
+                let metric = t.metric, target = null;
+                if (t.n) {
+                    target = t.n[0] + Math.floor(rnd() * (t.n[1] - t.n[0] + 1));
+                    metric = metric.replace('{n}', target);
+                } else {
+                    target = 1;   // 达成即 100%（率类 / 时点类任务）
+                }
+                // 夕会完成情况：actual 与 status（done / partial / todo）由同 seed 派生
+                const roll = rnd();
+                let status, actual;
+                if (roll < 0.55) { status = 'done'; actual = target; }
+                else if (roll < 0.85) { status = 'partial'; actual = Math.max(0, target - (1 + Math.floor(rnd() * Math.max(1, target)))); }
+                else { status = 'todo'; actual = 0; }
+                if (!t.n && status === 'partial') status = 'todo';
+                return {
+                    time: time, task: t.task, owner: owner,
+                    helper: rnd() < 0.5 ? team[Math.floor(rnd() * team.length)] : null,   // 协同人（演示）
+                    metric: metric, target: target,
+                    deadline: MEET_DEADLINES[Math.floor(rnd() * MEET_DEADLINES.length)],
+                    source: t.source, published: rnd() > 0.05,
+                    actual: actual, status: status
+                };
+            });
+        }
+
+        // 打开晨会 / 夕会报表抽屉（type = 'am' | 'pm'）
+        function openMeetReport(personNode, ds, type) {
+            const d = document.getElementById('meetDrawer');
+            const body = document.getElementById('meetDrawerBody');
+            if (!d || !body) return;
+            const tasks = meetingTasksOf(personNode, ds);
+            const isAm = type === 'am';
+            const post = POSTS_BY_KEY['salesManager'] || { name: '销售店长', color: '#8b5cf6' };
+            // KPI 摘要
+            const done = tasks.filter(function (t) { return t.status === 'done'; }).length;
+            const partial = tasks.filter(function (t) { return t.status === 'partial'; }).length;
+            const todo = tasks.filter(function (t) { return t.status === 'todo'; }).length;
+            const finishRate = tasks.length ? Math.round((done + partial * 0.5) / tasks.length * 1000) / 10 : 0;
+            const kpis = isAm
+                ? [
+                    { label: '发布任务数', v: tasks.length, unit: '条', sub: '晨会时间轴 09:05-09:40', c: '#f59e0b' },
+                    { label: '按时发布率', v: tasks.every(function (t) { return t.published; }) ? 100 : Math.round(tasks.filter(function (t) { return t.published; }).length / tasks.length * 100), unit: '%', sub: '晨会 09:40 前完成发布', c: '#22c55e' },
+                    { label: '涉及拿分项', v: tasks.filter(function (t) { return t.source !== '上级指令'; }).length, unit: '项', sub: '任务与当日积分口径对齐', c: '#06b6d4' }
+                ]
+                : [
+                    { label: '任务完成率', v: finishRate, unit: '%', sub: '完成 100% / 部分完成 50% 计权', c: '#6366f1' },
+                    { label: '全额完成', v: done, unit: '条', sub: '达到晨会衡量标准', c: '#22c55e' },
+                    { label: '部分完成', v: partial, unit: '条', sub: '接近目标，夕会复盘差距', c: '#fbbf24' },
+                    { label: '未完成', v: todo, unit: '条', sub: '列入次日晨会跟进', c: '#ef4444' }
+                ];
+            const kpiHtml = kpis.map(function (k) {
+                return '<div class="cl-kpi" style="--kpi-c:' + k.c + ';flex:1;min-width:150px"><div class="k-label">' + k.label + '</div><div class="k-value">' + k.v + ' <small>' + k.unit + '</small></div><div class="k-sub">' + k.sub + '</div></div>';
+            }).join('');
+            // 表头
+            const thC = 'px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10';
+            const thR = 'px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10';
+            const headHtml = isAm
+                ? '<tr><th class="' + thC + '">时间</th><th class="' + thC + '">任务名称</th><th class="' + thC + '">责任人</th><th class="' + thC + '">衡量标准</th><th class="' + thC + '">完成时限</th><th class="' + thC + '">任务来源</th><th class="' + thR + '">发布状态</th></tr>'
+                : '<tr><th class="' + thC + '">时间</th><th class="' + thC + '">任务名称</th><th class="' + thC + '">责任人</th><th class="' + thC + '">衡量标准</th><th class="' + thR + '">实际完成</th><th class="' + thC + '">完成状态</th><th class="' + thC + '">差距 / 说明</th></tr>';
+            const stMap = { done: { t: '✓ 完成', c: 'bg-emerald-500/15 text-emerald-300' }, partial: { t: '△ 部分完成', c: 'bg-amber-500/15 text-amber-300' }, todo: { t: '✗ 未完成', c: 'bg-rose-500/15 text-rose-300' } };
+            const bodyHtml = tasks.map(function (t) {
+                const srcCls = t.source === '上级指令' ? 'bg-violet-500/15 text-violet-300' : 'bg-cyan-500/15 text-cyan-300';
+                if (isAm) {
+                    return '<tr class="hover:bg-white/5 transition">' +
+                        '<td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap border-b border-white/5">' + t.time + '</td>' +
+                        '<td class="px-3 py-2.5 text-sm text-slate-100 border-b border-white/5">' + t.task + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:' + post.color + '"></span>' + t.owner + (t.helper ? '<span class="text-slate-500"> + ' + t.helper + '（协同）</span>' : '') + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5" style="color:#67e8f9">' + t.metric + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap border-b border-white/5">' + t.deadline + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md ' + srcCls + '">' + t.source + '</span></td>' +
+                        '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + (t.published ? '<span class="px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-300">✓ 已发布</span>' : '<span class="px-2 py-1 rounded-md bg-slate-500/15 text-slate-400">待发布</span>') + '</td></tr>';
+                }
+                const st = stMap[t.status];
+                const actualTxt = t.target > 1 ? (t.actual + ' / ' + t.target) : (t.actual > 0 ? '达成' : '未达成');
+                let gap = '—';
+                if (t.status === 'done') gap = '达到晨会衡量标准';
+                else if (t.status === 'partial') gap = '差 ' + (t.target - t.actual) + '，夕会复盘原因';
+                else gap = t.target > 1 ? '未启动（目标 ' + t.target + '）' : '未达成，列入次日跟进';
+                return '<tr class="hover:bg-white/5 transition">' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap border-b border-white/5">' + t.time + '</td>' +
+                    '<td class="px-3 py-2.5 text-sm text-slate-100 border-b border-white/5">' + t.task + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:' + post.color + '"></span>' + t.owner + (t.helper ? '<span class="text-slate-500"> + ' + t.helper + '（协同）</span>' : '') + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5" style="color:#67e8f9">' + t.metric + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs font-semibold whitespace-nowrap border-b border-white/5" style="color:' + (t.status === 'done' ? '#34d399' : (t.status === 'partial' ? '#fbbf24' : '#fb7185')) + '">' + actualTxt + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md ' + st.c + '">' + st.t + '</span></td>' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-400 border-b border-white/5">' + gap + '</td></tr>';
+            }).join('');
+            body.innerHTML =
+                '<div class="p-5 pb-3 flex items-center justify-between flex-wrap gap-2">' +
+                    '<div><span class="text-base text-slate-100 font-semibold">' + personNode.name + ' · ' + ds + (isAm ? ' 晨会报表' : ' 夕会报表') + '</span>' +
+                    '<span class="text-xs text-slate-400 ml-2">' + (personNode.storeName || '') + ' · 销售店长 · ' + (isAm ? '晨会 09:05-09:40 发布 · 点击夕会报表核对完成情况' : '对照晨会任务逐条核对 · 数据为确定性模拟演示') + '</span></div>' +
+                    '<button data-meet-close class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" style="color:#94a3b8;font-size:14px">✕</button></div>' +
+                '<div class="px-5 flex flex-wrap gap-2 pb-3" style="display:flex">' + kpiHtml + '</div>' +
+                '<div class="px-5 pb-2"><table class="min-w-full border-collapse text-sm"><thead>' + headHtml + '</thead><tbody>' + bodyHtml + '</tbody></table></div>' +
+                '<div class="px-5 py-3 text-[11px] text-slate-500 border-t border-white/5">' + (isAm
+                    ? '晨会报表 = 晨会时间段向具体责任人发布的当日任务清单（时间 / 责任人 / 衡量标准 / 时限 / 任务来源）· 数据为确定性模拟演示，待接真实晨会接口'
+                    : '夕会报表 = 对照当日晨会任务逐条核对完成情况（实际完成 / 完成状态 / 差距说明）· 完成率 = 完成 100% + 部分完成 50% 计权 · 数据为确定性模拟演示，待接真实夕会接口') + '</div>';
+            d.classList.remove('hidden');
+        }
+
+        // ---------- v4.13：产品专家下钻后追加四象限图（X=积分达成率%，Y=交付量） ----------
+        // 仅在「岗位 = 产品专家」下钻后渲染；其它岗位/层级调用方直接清空 #drillPostQuad
+        // 风格与 clRenderQuad 保持一致：均值虚线 + 四象限背景 + 文字解读
+        function renderDrillPostQuad(postNode, persons, r, pr) {
+            const box = document.getElementById('drillPostQuad');
+            if (!box) return;
+            // 人员 < 2：四象限参考价值不大，给出占位提示，避免单点假象
+            if (!persons || persons.length < 2) {
+                clDisposeChart('drillPostQuad');
+                const head = postNode.storeName ? postNode.storeName + ' · ' + postNode.name : postNode.name;
+                box.innerHTML = '<div class="rounded-xl p-4 mt-3" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.15)">' +
+                    '<div class="flex items-center justify-between flex-wrap gap-2 mb-1">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">达成率 × 交付量 · 四象限</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + head + ' · 至少需要 2 位在岗人员才能生成四象限</span></div></div>' +
+                    '<div class="text-xs text-slate-500 py-3 text-center">当前在岗 ' + (persons ? persons.length : 0) + ' 人 · 四象限参考价值有限</div></div>';
+                return;
+            }
+            // 每人 X = round(points / cap * 10000) / 100（达成率% 保留两位小数），Y = delivered（交付量）
+            const points = persons.map(function (p) {
+                const m = metricsOf(p, r[0], r[1]) || {};
+                const cap = productExpertFullScore(p);
+                const rawX = cap > 0 ? ((m.points || 0) / cap) * 100 : 0;
+                const x = Math.max(0, Math.min(140, Math.round(rawX * 100) / 100));   // 上限 140% 防止远超满分拉散坐标
+                const y = m.delivered || 0;
+                return {
+                    name: p.name,
+                    postName: p.postName || postNode.name,
+                    storeName: p.storeName || (postNode.storeName || ''),
+                    storeCode: p.parent && p.parent.parent ? p.parent.parent.code : (p.code || ''),
+                    x: x, y: y,
+                    points: m.points || 0,
+                    delivered: y,
+                    cap: cap
+                };
+            });
+            const xs = points.map(function (p) { return p.x; });
+            const ys = points.map(function (p) { return p.y; });
+            const avgX = xs.reduce(function (s, v) { return s + v; }, 0) / xs.length;
+            const avgY = ys.reduce(function (s, v) { return s + v; }, 0) / ys.length;
+            // X 轴范围 0~120%；Y 轴按人员最大值 1.15 留白；浮动阈值避免单点塌缩
+            const xMax = 120;
+            const xMin = 0;
+            const yMaxV = Math.max.apply(null, ys);
+            const yMax = yMaxV > 0 ? yMaxV * 1.15 + 0.5 : 1;
+            const yMin = 0;
+            // 按门店分色（同门店 ≤ 8 家按门店着色，否则单系列，避免图例爆炸）
+            const storeMap = new Map();
+            points.forEach(function (p, i) {
+                const k = p.storeCode || p.storeName || '_all';
+                if (!storeMap.has(k)) storeMap.set(k, { name: p.storeName || '全部人员', idxs: [] });
+                storeMap.get(k).idxs.push(i);
+            });
+            const groups = Array.from(storeMap.values()).sort(function (a, b) { return b.idxs.length - a.idxs.length; });
+            const byStore = groups.length > 1 && groups.length <= 8;
+            function mkSeries(name, color, idxs) {
+                return {
+                    name: name, type: 'scatter', symbolSize: 16,
+                    itemStyle: {
+                        color: color, opacity: 0.85,
+                        borderColor: 'rgba(255,255,255,0.65)', borderWidth: 1.5,
+                        shadowBlur: 8, shadowColor: scaleColor(color, 0.4)
+                    },
+                    emphasis: { focus: 'self', scale: 1.35 },
+                    data: idxs.map(function (i) {
+                        return { name: points[i].name, value: [points[i].x, points[i].y], _idx: i };
+                    })
+                };
+            }
+            // 先 dispose 旧实例，避免多轮重渲叠加
+            clDisposeChart('drillPostQuad');
+            box.innerHTML = '';
+            const head = postNode.storeName ? postNode.storeName + ' · ' + postNode.name : postNode.name;
+            box.style.height = '';   // 让外层自适应
+            box.innerHTML = '<div class="rounded-xl p-4" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.15)">' +
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                '<div><span class="text-sm text-slate-100 font-medium">达成率 × 交付量 · 四象限</span>' +
+                '<span class="text-[11px] text-slate-400 ml-2">' + head + ' · 横轴 = 区间积分达成率%（个人区间积分 ÷ 个人满分梯度）· 纵轴 = 区间交付量 · 共 ' + persons.length + ' 人</span></div>' +
+                '<div class="text-[11px] text-slate-400">均值线 达成率 <b class="text-amber-300">' + avgX.toFixed(1) + '%</b> · 交付 <b class="text-amber-300">' + avgY.toFixed(1) + '</b> 台</div>' +
+                '</div>' +
+                '<div id="drillPostQuadChart" style="height:380px"></div>' +
+                '</div>';
+            const el = document.getElementById('drillPostQuadChart');
+            if (!el) return;
+            const accent = (POSTS_BY_KEY['productExpert'] || {}).color || '#06b6d4';
+            const series = byStore
+                ? groups.map(function (g, gi) { return mkSeries(g.name, closureStoreColor(gi), g.idxs); })
+                : [mkSeries('全部人员', accent, points.map(function (_, i) { return i; }))];
+            series[0].markLine = {
+                silent: true, symbol: 'none', animation: false,
+                data: [
+                    { xAxis: avgX, label: { formatter: '达成率均值 ' + avgX.toFixed(1) + '%', color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } },
+                    { yAxis: avgY, label: { formatter: '交付均值 ' + avgY.toFixed(1) + ' 台', color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } }
+                ]
+            };
+            series[0].markArea = {
+                silent: true,
+                data: [
+                    [{ xAxis: avgX, yAxis: avgY, itemStyle: { color: 'rgba(16,185,129,0.1)' }, label: { show: true, position: 'insideTopRight', color: '#34d399', fontSize: 12, fontWeight: 700, formatter: '标杆 · 高达成高交付' } }, { xAxis: xMax, yAxis: yMax }],
+                    [{ xAxis: xMin, yAxis: yMin, itemStyle: { color: 'rgba(244,63,94,0.1)' }, label: { show: true, position: 'insideBottomLeft', color: '#fb7185', fontSize: 12, fontWeight: 700, formatter: '待辅导 · 低达成低交付' } }, { xAxis: avgX, yAxis: avgY }],
+                    [{ xAxis: xMin, yAxis: avgY, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideTopLeft', color: '#94a3b8', fontSize: 11, formatter: '高达成低交付 · 流程找卡点' } }, { xAxis: avgX, yAxis: yMax }],
+                    [{ xAxis: avgX, yAxis: yMin, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideBottomRight', color: '#94a3b8', fontSize: 11, formatter: '低达成高交付 · 动作待复制' } }, { xAxis: xMax, yAxis: avgY }]
+                ]
+            };
+            const chartInst = echarts.init(el);
+            extCharts.drillPostQuad = chartInst;
+            chartInst.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        const p = points[it.data._idx];
+                        if (!p) return '';
+                        return '<div style="font-weight:700;margin-bottom:4px">' + p.name + '</div>' +
+                            '<div style="opacity:.7;font-size:11px">' + p.storeName + ' · ' + p.postName + '</div>' +
+                            '<div style="margin-top:6px">达成率：<b>' + p.x.toFixed(2) + '%</b></div>' +
+                            '<div>区间积分：<b>' + clNum(p.points) + '</b> / ' + clNum(p.cap) + ' 分</div>' +
+                            '<div>交付量：<b>' + fmt(p.delivered) + '</b> 台</div>';
+                    }
+                }),
+                grid: { left: 48, right: 20, top: 30, bottom: byStore ? 56 : 44 },
+                xAxis: Object.assign({ type: 'value', name: '达成率 %', nameLocation: 'middle', nameGap: 26, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: xMin, max: xMax, axisLabel: { color: '#94a3b8', fontSize: 11, formatter: '{value}%' } }, clChartAxis()),
+                yAxis: Object.assign({ type: 'value', name: '交付量（台）', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: yMin, max: yMax }, clChartAxis()),
+                legend: byStore ? { bottom: 0, itemWidth: 12, itemHeight: 8, textStyle: { color: '#94a3b8', fontSize: 11 } } : { show: false },
+                series: series
+            }, true);
+            try { chartInst.resize(); } catch (_) {}
+            requestAnimationFrame(function () { try { chartInst.resize(); } catch (_) {} });
         }
 
         // ---------- 趋势分析 ----------
@@ -2748,8 +3740,9 @@
         const STORE_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#22d3ee', '#fbbf24', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#60a5fa', '#c084fc', '#f87171'];
         function closureStoreColor(idx) { return STORE_PALETTE[idx % STORE_PALETTE.length]; }
         const CL_REGION_PALETTE = {
-            '华东大区': '#3b82f6', '华南大区': '#10b981', '华中大区': '#f59e0b', '华北大区': '#8b5cf6',
-            '东北大区': '#06b6d4', '西北大区': '#ec4899', '西南大区': '#fb923c', '其他': '#64748b'
+            '华东一区': '#3b82f6', '华东二区': '#06b6d4', '华东三区': '#0ea5e9', '华中一区': '#f59e0b', '华中二区': '#fbbf24',
+            '华南区': '#10b981', '华北区': '#8b5cf6', '东北区': '#22d3ee', '西北区': '#ec4899', '西南区': '#fb923c',
+            '英菲尼迪区域': '#a78bfa', '其它': '#f472b6', '待确认': '#94a3b8', '其他': '#64748b'
         };
         const CL_STATUS = [
             { min: 95, label: '标杆', cls: 'st-bench' },
@@ -2868,7 +3861,7 @@
                     am.get(s.area).push(i);
                 });
             }
-            const order = ['华东大区', '华南大区', '华中大区', '华北大区', '东北大区', '西北大区', '西南大区', '其他'];
+            const order = ['华东一区', '华东二区', '华东三区', '华中一区', '华中二区', '华南区', '华北区', '东北区', '西北区', '西南区', '英菲尼迪区域', '其它', '待确认', '其他'];
             const regions = Array.from(regionMap.keys()).sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); }).map(function (rn) {
                 const am = regionMap.get(rn);
                 let cnt = 0; am.forEach(function (a) { cnt += a.length; });
@@ -2890,8 +3883,8 @@
         // 闭环口径的生效日期 = 当前选定日报的单日（结果缓存 key 也随之单日化）
         function clAllowedDates() { const d = clViewDate(); return d ? [d] : []; }
         function clEffectiveDates() { return clAllowedDates(); }
-        function clDataIndex() {
-            const dates = clEffectiveDates();
+        // v4.14：按任意日期集合建明细索引（原 clDataIndex 逻辑参数化，闭环默认走单日游标不变）
+        function clDataIndexFor(dates) {
             const key = dates.join(',') || '__none__';
             if (CL_MEMO['idx|' + key]) return CL_MEMO['idx|' + key];
             const dset = new Set(dates);
@@ -2953,6 +3946,8 @@
             });
             return idx;
         }
+        // 闭环原入口：日期来源 = 日报游标单日（行为不变）
+        function clDataIndex() { return clDataIndexFor(clEffectiveDates()); }
 
         // ---------- 筛选范围：大区 / 小区 / 门店多选 ----------
         function closureScopeStores() {
@@ -3551,7 +4546,7 @@
                 : '未单独勾选门店 · 当前范围 <strong class="text-slate-200">' + scopeStores.length + '</strong> 家全部生效 · 点击门店可单独勾选';
 
             const storeScopeHtml =
-                '<div><div class="text-xs text-slate-400 mb-2">大区（专营店按门店名城市前缀自动归属）</div>' + regionChipHtml + '</div>' +
+                '<div><div class="text-xs text-slate-400 mb-2">大区（按专营店主数据表「销售大区」归属，v4.17）</div>' + regionChipHtml + '</div>' +
                 areaChipHtml +
                 '<div class="mt-2">' +
                     '<div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-2 mb-2">' +
@@ -3861,6 +4856,7 @@
             } else {
                 renderClosure();
             }
+            renderDutyTable();
             $rangeText.textContent = state.start + ' 至 ' + state.end;
         }
 
@@ -3873,6 +4869,7 @@
             state.start = $start.value;
             state.end = $end.value;
             state.drillIds = [];
+            state.drillSelectedId = null;   // v4.9：日期范围变化时清掉下钻区旧选中
             clearMetricCache();
             renderAll();
         }
@@ -4025,6 +5022,13 @@
             d.addEventListener('click', function (e) { if (e.target.closest('[data-cl-close]')) clCloseDrawer(); });
             document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clCloseDrawer(); });
         })();
+        // v4.15：晨会 / 夕会报表抽屉关闭（遮罩 / ✕ / Esc；无图表，无需 dispose）
+        (function () {
+            const d = document.getElementById('meetDrawer');
+            if (!d) return;
+            d.addEventListener('click', function (e) { if (e.target.closest('[data-meet-close]')) d.classList.add('hidden'); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') d.classList.add('hidden'); });
+        })();
         document.getElementById('applyBtn').addEventListener('click', function () {
             if (!$start.value || !$end.value || $start.value > $end.value) return;
             state.start = $start.value;
@@ -4033,6 +5037,43 @@
             clearMetricCache();
             renderAll();
         });
+        // ---------- 岗位职责说明表（v4.11：页面最下方，默认收起，可展开/收起） ----------
+        function renderDutyTable() {
+            const box = document.getElementById('dutyBody');
+            if (!box) return;
+            let total = 0;
+            box.innerHTML = POSTS.map(function (p) {
+                const duties = POST_DUTIES[p.key] || [];
+                total += duties.length;
+                const rows = duties.length ? duties.map(function (d) {
+                    return '<tr><td style="white-space:nowrap;color:' + p.color + '">' + d.action + '</td><td>' + d.detail + '</td></tr>';
+                }).join('') : '<tr><td colspan="2" class="text-slate-500">暂无职责条目</td></tr>';
+                return '<div>' +
+                    '<div class="flex items-center gap-2 mb-1">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + p.color + '"></span>' +
+                    '<span class="text-sm text-slate-100 font-medium">' + p.name + '</span>' +
+                    '<span class="text-[11px] text-slate-500">' + p.note + ' · ' + duties.length + ' 项关键动作</span>' +
+                    '</div>' +
+                    '<table class="cl-rule-table"><thead><tr><th style="width:180px">关键动作</th><th>具体内容（示意文案，待业务确认）</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                    '</div>';
+            }).join('');
+            const sub = document.getElementById('dutySubtitle');
+            if (sub) sub.textContent = POSTS.length + ' 岗位 · ' + total + ' 项关键动作 · 示意文案，待业务确认';
+        }
+        (function () {
+            const btn = document.getElementById('dutyToggle');
+            const body = document.getElementById('dutyBody');
+            if (!btn || !body) return;
+            let open = false;
+            function apply() {
+                body.classList.toggle('hidden', !open);
+                btn.textContent = open ? '收起岗位职责 ▴' : '展开岗位职责 ▾';
+                btn.classList.toggle('active', open);
+            }
+            renderDutyTable();
+            btn.addEventListener('click', function () { open = !open; apply(); });
+            apply();
+        })();
         $selRegion.addEventListener('change', function () {
             state.sel.region = $selRegion.value; state.sel.area = '__all__'; state.sel.store = '__all__';
             state.sel.post = '__all__'; state.sel.person = '__all__';
@@ -4042,12 +5083,14 @@
         $selArea.addEventListener('change', function () {
             state.sel.area = $selArea.value; state.sel.store = '__all__';
             state.sel.post = '__all__'; state.sel.person = '__all__';
+            if (state.sel.area !== '__all__') backfillAncestors(nodeById(state.sel.area));   // 自动勾上所属大区
             state.drillIds = []; state.pkIds = []; state.pkBase = null;
             renderAll();
         });
         $selStore.addEventListener('change', function () {
             state.sel.store = $selStore.value;
             state.sel.post = '__all__'; state.sel.person = '__all__';
+            if (state.sel.store !== '__all__') backfillAncestors(nodeById(state.sel.store)); // 自动勾上所属小区/大区
             state.drillIds = [];
             state.pkIds = []; state.pkBase = null;
             // 空岗容错：门店切换后若原岗位在目标门店不存在，给出提示
@@ -4176,9 +5219,36 @@
         });
         document.getElementById('drillBack').addEventListener('click', function () {
             if (state.mode === 'pk') return;
-            if (state.drillIds.length) { state.drillIds.pop(); renderAll(); }
+            // v4.16：回退后同步放宽顶栏组织范围（下钻到哪层筛选跟到哪层，双向一致）
+            if (state.drillIds.length) {
+                state.drillSelectedId = null; state.drillPersonId = null;
+                state.drillIds.pop();
+                if (state.drillIds.length) {
+                    const t = nodeById(state.drillIds[state.drillIds.length - 1]);
+                    if (t) syncSelToDrill(t);   // 栈内还有层级：筛选放宽到新的下钻层级
+                } else {
+                    // 栈已空：基点回到顶栏筛选最深层（上次下钻已同步进 sel），再回退一层筛选
+                    const i0 = drillDeepestSelIdx();
+                    if (i0 >= 0) {
+                        const s0 = Object.assign({}, state.sel);
+                        for (let i = i0; i < SEL_ORDER.length; i++) s0[SEL_ORDER[i]] = '__all__';
+                        state.sel = s0;
+                    }
+                }
+                renderAll(); return;
+            }
+            // 下钻栈为空：当前视图基点 = 顶栏筛选的最深节点，回退一层筛选（人员→岗位→门店→小区→大区→全国）
+            const idx = drillDeepestSelIdx();
+            if (idx < 0) return;   // 已在全国视图，无上级可返回
+            const sel2 = Object.assign({}, state.sel);
+            for (let i = idx; i < SEL_ORDER.length; i++) sel2[SEL_ORDER[i]] = '__all__';
+            state.sel = sel2;
+            state.drillIds = [];
+            state.drillSelectedId = null;
+            state.drillPersonId = null;
+            state.pkIds = []; state.pkBase = null;   // 范围变化清空 PK 已选，与筛选下拉行为一致
+            renderAll();
         });
-        document.getElementById('drillMetric').addEventListener('change', renderAll);
         document.querySelectorAll('[data-trend]').forEach(function (b) {
             b.addEventListener('click', function () {
                 state.trendMode = b.dataset.trend;
@@ -4248,13 +5318,11 @@
             const row = e.target.closest('.funnel-row');
             if (!row) return;
             const key = row.dataset.key;
-            const $m = document.getElementById('drillMetric');
-            if (['leads', 'arrivals', 'locked', 'delivered'].indexOf(key) >= 0) $m.value = key;
-            document.getElementById('drillChart').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('drillPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
             renderDrill();
         });
         document.getElementById('funnelDrillLink').addEventListener('click', function () {
-            document.getElementById('drillChart').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            document.getElementById('drillPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
         function updateTime() {
             const el = document.getElementById('current-time');
@@ -4269,6 +5337,7 @@
         });
 
         // 初始
+        initOrgSelDefaults();   // v5.2：按登录者层级预勾组织筛选（员工→本人 / 店长→门店 / 主管→小区 / 总监→大区）
         setRange(7);
         } // ---- end startApp ----
 

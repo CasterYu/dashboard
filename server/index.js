@@ -9,13 +9,14 @@ const express = require('express');
 const { openDb, DB_PATH } = require('./db');
 const { dataQualityCounts } = require('./services/dataQuality');
 const authRoute = require('./routes/auth');
+const { AUTH_MODE } = require('./services/auth');   // v5.1：鉴权模式开关（password / emp_only）
 const orgRoute = require('./routes/org');
 const metricsRoute = require('./routes/metrics');
 const importRoute = require('./routes/import');
 const adminRoute = require('./routes/admin');
 const scoringRoute = require('./routes/scoring_v4.6');
 
-const VERSION = '4.6.0';
+const VERSION = '5.4.0';   // v5.4：下钻人员逐日表接入真实动作评分数据（GET /api/scoring/range）
 
 const app = express();
 const db = openDb();
@@ -48,7 +49,7 @@ app.use((req, res, next) => {
 });
 
 // ---------- 路由 ----------
-app.get('/api/health', (req, res) => res.json({ ok: true, version: VERSION, now: new Date().toISOString() }));
+app.get('/api/health', (req, res) => res.json({ ok: true, version: VERSION, authMode: AUTH_MODE, now: new Date().toISOString() }));
 app.use('/api', authRoute(db));
 app.use('/api', orgRoute(db));
 app.use('/api', metricsRoute(db));

@@ -19,7 +19,9 @@ if (!JWT_SECRET) {
   JWT_SECRET = crypto.randomBytes(48).toString('hex');
   console.warn('[security] JWT_SECRET 未设置，已使用本次启动随机值——重启后所有 token 将失效，请立即设置环境变量');
 }
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '8h';
+// v5.1 鉴权模式开关：password = 工号+密码（默认，完整链路）；emp_only = 仅工号（免密码试用推广，token 默认缩短为 2h）
+const AUTH_MODE = String(process.env.AUTH_MODE || '').trim().toLowerCase() === 'emp_only' ? 'emp_only' : 'password';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || (AUTH_MODE === 'emp_only' ? '2h' : '8h');
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 12);
 
 const ROLE_LEVEL_MAP = {
@@ -70,16 +72,73 @@ function ancestorOfLevel(db, personId, level) {
   return null;
 }
 
-/** scope 根节点 ID：hq=null（全树）；其他按角色取祖先节点（region→大区 / area→小区 / store→门店 / employee→人员自己） */
+/** scope 根节点 ID：scope_level=null（hq）→ null（全树）；其他按角色取祖先节点（大区/小区/门店/人员自己） */
 function scopeRootForRole(db, person, role) {
-  if (role === 'hq') return null;
+  const roleInfo = loadRole(db, role);
+  if (roleInfo.scopeLevel === null) return null;            // 全树角色（hq）
   if (!person) return null;
-  const expect = ROLE_LEVEL_MAP[role];   // '大区'/'小区'/'门店'/'人员'/null
-  if (!expect) return null;
+  const expect = roleInfo.scopeLevel;                        // '大区'/'小区'/'门店'/'人员'
+  if (!expect) return person.id;                             // 未知角色兜底：仅本人（不越权）
   // 员工直接看自己；其他角色向上找所属大区/小区/门店
-  if (role === 'employee') return person.id;
+  if (expect === '人员') return person.id;
   const ancId = ancestorOfLevel(db, person.id, expect);
   return ancId !== null ? ancId : person.id;   // 兜底：找不到祖先就退回本人（保底，至少不越权）
+}
+
+/** v5.2 角色加载：查 roles 表；查不到回退 ROLE_LEVEL_MAP（scope_level）+ 空权限集 */
+function loadRole(db, roleCode) {
+  if (roleCode === 'hq') {   // 快速路径，也是保底：hq 永远全树全权限
+    return { code: 'hq', name: '总部管理员', scopeLevel: null, permissions: { '*': true }, builtIn: true };
+  }
+  const row = db.prepare('SELECT code, name, scope_level, permissions, built_in FROM roles WHERE code = ?').get(roleCode);
+  if (row) {
+    let perms = {};
+    try { perms = JSON.parse(row.permissions) || {}; } catch (e) { /* 损坏按空处理 */ }
+    return { code: row.code, name: row.name, scopeLevel: row.scope_level, permissions: perms, builtIn: !!row.built_in };
+  }
+  // 回退：roles 表缺行（老库未 seed / 手工删行），按内置映射保底
+  const has = Object.prototype.hasOwnProperty.call(ROLE_LEVEL_MAP, roleCode);
+  return { code: roleCode, name: roleCode, scopeLevel: has ? ROLE_LEVEL_MAP[roleCode] : undefined, permissions: {}, builtIn: false, missing: true };
+}
+
+/** v5.2 权限点判断：hq 恒真；permissions 支持 JSON 数组（seed 格式）与对象两种形态 */
+function hasPerm(db, role, perm) {
+  const roleInfo = loadRole(db, role);
+  if (roleInfo.code === 'hq') return true;
+  const perms = roleInfo.permissions;
+  if (Array.isArray(perms)) return perms.indexOf(perm) >= 0;
+  if (perms && typeof perms === 'object') return !!perms[perm];
+  return false;
+}
+
+/** v5.2 按业务路径解析节点："华东大区/上海一区/门店一"（首段可写可不写"全国"；找不到返回 {err, hint}）
+ *  也支持直接传节点数字 id */
+function resolveNodePath(db, spec) {
+  spec = String(spec).trim();
+  if (/^\d+$/.test(spec)) {
+    const n = db.prepare('SELECT id, name, level FROM org_nodes WHERE id = ?').get(Number(spec));
+    return n ? { id: n.id, name: n.name, level: n.level } : { err: '节点 id 不存在: ' + spec };
+  }
+  const parts = spec.split(/[\/\\]/).map(s => s.trim()).filter(Boolean);
+  if (!parts.length) return { err: '节点路径为空' };
+  const topLevel = db.prepare('SELECT id, name FROM org_nodes WHERE parent_id IS NULL ORDER BY id LIMIT 1').get();
+  let parentId = null, node = null, idx = 0;
+  if (topLevel && parts[0] === topLevel.name) { parentId = topLevel.id; idx = 1; }
+  if (idx === 0 && topLevel) {
+    const reg = db.prepare('SELECT id, name, level FROM org_nodes WHERE name = ? AND parent_id = ?').get(parts[0], topLevel.id);
+    if (reg) { node = reg; parentId = reg.id; idx = 1; }
+  }
+  for (; idx < parts.length; idx++) {
+    const seg = parts[idx];
+    const row = db.prepare('SELECT id, name, level FROM org_nodes WHERE name = ? AND parent_id = ?').get(seg, parentId);
+    if (!row) {
+      const sibs = db.prepare('SELECT name FROM org_nodes WHERE parent_id = ?').all(parentId).map(r => r.name).slice(0, 12);
+      return { err: '找不到「' + seg + '」' + (sibs.length ? '；该层级现有: ' + sibs.join('、') : '') };
+    }
+    node = row; parentId = row.id;
+  }
+  if (!node) return { err: '路径仅含根节点，请至少写到大区/小区/门店一级' };
+  return { id: node.id, name: node.name, level: node.level };
 }
 
 /** 用 WITH RECURSIVE CTE 计算某节点的全部后代（含自身）；rootId=null 时返回全库 */
@@ -95,6 +154,83 @@ function descendantsOf(db, rootId) {
     ) SELECT id FROM sub
   `).all(rootId);
   return rows.map(function (r) { return r.id; });
+}
+
+/** v5.2 多根后代并集：一次 CTE 递归算多棵子树的并集（含各根自身） */
+function descendantsMulti(db, rootIds) {
+  if (!rootIds || !rootIds.length) return [];
+  if (rootIds.length === 1) return descendantsOf(db, rootIds[0]);
+  const ph = rootIds.map(function () { return '?'; }).join(',');
+  const stmt = db.prepare(`
+    WITH RECURSIVE sub(id) AS (
+      SELECT DISTINCT id FROM org_nodes WHERE id IN (${ph})
+      UNION ALL
+      SELECT c.id FROM org_nodes c JOIN sub s ON c.parent_id = s.id
+    ) SELECT DISTINCT id FROM sub
+  `);
+  const rows = stmt.all.apply(stmt, rootIds);
+  return rows.map(function (r) { return r.id; });
+}
+
+/** v5.2 查某用户的显式授权记录（JOIN 节点名与层级，供展示与计算共用） */
+function scopeGrantsOf(db, userId) {
+  return db.prepare(`
+    SELECT usn.node_id, usn.mode, n.name, n.level, n.parent_id
+    FROM user_scope_nodes usn JOIN org_nodes n ON n.id = usn.node_id
+    WHERE usn.user_id = ?
+    ORDER BY usn.mode, n.name
+  `).all(userId);
+}
+
+/** v5.2 显式模式展示名："名称A+名称B（除 名称C）"；include 超 2 个显示"名称A 等 N 个节点" */
+function scopeLabelMulti(db, grants) {
+  const inc = grants.filter(function (g) { return g.mode === 'include'; });
+  const exc = grants.filter(function (g) { return g.mode === 'exclude'; });
+  if (!inc.length) return '（显式清空：当前无任何数据权限）';
+  let label;
+  if (inc.length === 1) label = inc[0].name;
+  else if (inc.length === 2) label = inc[0].name + '+' + inc[1].name;
+  else label = inc[0].name + ' 等 ' + inc.length + ' 个节点';
+  if (exc.length) {
+    label += '（除 ' + (exc.length === 1 ? exc[0].name : exc.length + ' 个节点') + '）';
+  }
+  return label;
+}
+
+/**
+ * v5.2 有效数据范围（每请求实时计算，改授权/调岗下次请求即生效）：
+ *   full     全树角色（hq）
+ *   auto     无显式授权 → 沿人员位置单根派生（v5.1 原行为）
+ *   explicit 有显式授权 → UNION(include 子树) − UNION(exclude 子树)
+ * 返回 { mode, scopeRootId, scopeNodeIds, scopeName, grants? }
+ */
+function effectiveScope(db, user) {
+  const roleInfo = loadRole(db, user.role);
+  if (roleInfo.scopeLevel === null) {
+    return { mode: 'full', scopeRootId: null, scopeNodeIds: descendantsOf(db, null), scopeName: '全国（全树）' };
+  }
+  const grants = scopeGrantsOf(db, user.id);
+  if (!grants.length) {
+    const person = findPersonByEmpNo(db, user.emp_no);
+    const rootId = scopeRootForRole(db, person, user.role);
+    return { mode: 'auto', scopeRootId: rootId, scopeNodeIds: descendantsOf(db, rootId), scopeName: scopeLabelOf(db, user.role, rootId) };
+  }
+  // 显式模式：并集减排除
+  const incIds = grants.filter(function (g) { return g.mode === 'include'; }).map(function (g) { return g.node_id; });
+  const excIds = grants.filter(function (g) { return g.mode === 'exclude'; }).map(function (g) { return g.node_id; });
+  const allowed = new Set(descendantsMulti(db, incIds));
+  for (const exId of excIds) {
+    for (const nid of descendantsOf(db, exId)) allowed.delete(nid);
+  }
+  return {
+    mode: 'explicit',
+    scopeRootId: null,
+    scopeNodeIds: Array.from(allowed),
+    scopeName: scopeLabelMulti(db, grants),
+    includeIds: incIds,
+    excludeIds: excIds,
+    grants: grants
+  };
 }
 
 function signToken(payload) {
@@ -118,22 +254,25 @@ function scopeLabelOf(db, role, scopeRootId) {
  * 统一错误：账号不存在/密码错误均抛 AUTH_INVALID（防枚举）
  */
 async function login(db, empNo, password) {
-  if (!empNo || !password) throw new Error('AUTH_INVALID');
+  if (!empNo) throw new Error('AUTH_INVALID');
+  if (AUTH_MODE === 'password' && !password) throw new Error('AUTH_INVALID');
   const user = loadUserByEmpNo(db, String(empNo).trim());
   if (!user || user.status !== 'active') throw new Error('AUTH_INVALID');
   if (user.locked_until && new Date(user.locked_until) > new Date()) throw new Error('AUTH_LOCKED');
-  const ok = await verifyPassword(password, user.password_hash);
-  if (!ok) {
-    db.prepare('UPDATE users SET failed_attempts = failed_attempts + 1 WHERE id = ?').run(user.id);
-    throw new Error('AUTH_INVALID');
+  if (AUTH_MODE === 'password') {   // v5.1：emp_only 模式跳过密码比对（仅凭工号识别身份，无认证强度）
+    const ok = await verifyPassword(password, user.password_hash);
+    if (!ok) {
+      db.prepare('UPDATE users SET failed_attempts = failed_attempts + 1 WHERE id = ?').run(user.id);
+      throw new Error('AUTH_INVALID');
+    }
   }
   const person = findPersonByEmpNo(db, user.emp_no);
-  const scopeRootId = scopeRootForRole(db, person, user.role);
+  const scope = effectiveScope(db, user);   // v5.2：含显式授权的多根范围
   const token = signToken({
     uid: user.id,
     emp_no: user.emp_no,
     role: user.role,
-    scope_root_id: scopeRootId
+    scope_root_id: scope.scopeRootId
   });
   // 登录成功：清失败计数 + 更新 last_login
   db.prepare("UPDATE users SET failed_attempts = 0, locked_until = NULL, last_login_at = datetime('now','localtime') WHERE id = ?").run(user.id);
@@ -144,10 +283,11 @@ async function login(db, empNo, password) {
       emp_no: user.emp_no,
       name: person ? person.name : user.emp_no,
       role: user.role,
-      scopeName: scopeLabelOf(db, user.role, scopeRootId),
-      scopeRootId: scopeRootId
+      scopeName: scope.scopeName,
+      scopeRootId: scope.scopeRootId,
+      scopeMode: scope.mode
     },
-    mustChangePassword: !!user.must_change_password
+    mustChangePassword: AUTH_MODE === 'password' ? !!user.must_change_password : false
   };
 }
 
@@ -167,33 +307,41 @@ async function changePassword(db, userId, oldPassword, newPassword) {
   return signToken({ uid: user.id, emp_no: user.emp_no, role: user.role, scope_root_id: scopeRootId });
 }
 
-/** 公开当前登录者资料（供 /api/auth/me 使用，每次实时刷新 scope 以反映调岗） */
+/** 公开当前登录者资料（供 /api/auth/me 使用，每次实时刷新 scope 以反映调岗/授权变更） */
 function meOf(db, payload) {
   const user = loadUserByEmpNo(db, payload.emp_no);
   if (!user) return null;
   const person = findPersonByEmpNo(db, user.emp_no);
-  const scopeRootId = scopeRootForRole(db, person, user.role);
-  const scopeName = scopeLabelOf(db, user.role, scopeRootId);
+  const scope = effectiveScope(db, user);
   return {
     id: user.id,
     emp_no: user.emp_no,
     name: person ? person.name : user.emp_no,
     role: user.role,
-    scopeName: scopeName,
-    scopeRootId: scopeRootId,
-    mustChangePassword: !!user.must_change_password,
+    scopeName: scope.scopeName,
+    scopeRootId: scope.scopeRootId,
+    scopeMode: scope.mode,
+    // emp_only 免密模式下跳过强制改密（与登录接口口径一致）
+    mustChangePassword: AUTH_MODE === 'password' ? !!user.must_change_password : false,
     lastLoginAt: user.last_login_at
   };
 }
 
 module.exports = {
+  AUTH_MODE: AUTH_MODE,
   hashPassword: hashPassword,
   verifyPassword: verifyPassword,
   randomPassword: randomPassword,
   loadUserByEmpNo: loadUserByEmpNo,
   findPersonByEmpNo: findPersonByEmpNo,
+  loadRole: loadRole,
+  hasPerm: hasPerm,
+  resolveNodePath: resolveNodePath,
   scopeRootForRole: scopeRootForRole,
   descendantsOf: descendantsOf,
+  descendantsMulti: descendantsMulti,
+  scopeGrantsOf: scopeGrantsOf,
+  effectiveScope: effectiveScope,
   login: login,
   changePassword: changePassword,
   meOf: meOf,

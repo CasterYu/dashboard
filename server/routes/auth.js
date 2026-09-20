@@ -4,26 +4,41 @@
  * 登录接口无需鉴权；其他接口均要求 Bearer Token
  */
 const express = require('express');
-const { login, changePassword, meOf } = require('../services/auth');
+const { login, changePassword, meOf, AUTH_MODE } = require('../services/auth');
 const authRequired = require('../middleware/authRequired');
+
+// v5.1 登录限速：同 IP 60s 内最多 10 次（emp_only 模式下工号即凭证，限速是唯一防爆破手段）
+const loginHits = new Map();
+function loginRateGuard(req, res, next) {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const list = (loginHits.get(ip) || []).filter(function (t) { return now - t < 60000; });
+  if (list.length >= 10) return res.status(429).json({ ok: false, error: '登录尝试过于频繁，请稍后再试' });
+  list.push(now);
+  loginHits.set(ip, list);
+  next();
+}
 
 module.exports = function authRoute(db) {
   const router = express.Router();
 
-  // POST /api/auth/login  { emp_no, password } → { ok, token, user, mustChangePassword }
-  router.post('/auth/login', async function (req, res) {
+  // POST /api/auth/login  { emp_no, password } → { ok, token, user, mustChangePassword, authMode }
+  // v5.1：AUTH_MODE=emp_only 时免密码（仅工号），响应回传 authMode 供前端适配 UI
+  router.post('/auth/login', loginRateGuard, async function (req, res) {
     const empNo = req.body && req.body.emp_no;
     const password = req.body && req.body.password;
-    if (!empNo || !password) return res.status(400).json({ ok: false, error: '工号与密码不能为空' });
+    if (!empNo || (AUTH_MODE === 'password' && !password)) {
+      return res.status(400).json({ ok: false, error: AUTH_MODE === 'emp_only' ? '工号不能为空' : '工号与密码不能为空' });
+    }
     try {
       const r = await login(db, empNo, password);
-      res.json({ ok: true, token: r.token, user: r.user, mustChangePassword: r.mustChangePassword });
+      res.json({ ok: true, token: r.token, user: r.user, mustChangePassword: r.mustChangePassword, authMode: AUTH_MODE });
     } catch (e) {
       if (e.message === 'AUTH_LOCKED') {
         return res.status(423).json({ ok: false, error: '账号暂时被锁定，请稍后再试或联系管理员' });
       }
       // 账号不存在 / 密码错误 / 必填缺失 统一 401 + 模糊错误，防账号枚举
-      return res.status(401).json({ ok: false, error: '工号或密码错误' });
+      return res.status(401).json({ ok: false, error: AUTH_MODE === 'emp_only' ? '工号不存在或已被禁用' : '工号或密码错误' });
     }
   });
 

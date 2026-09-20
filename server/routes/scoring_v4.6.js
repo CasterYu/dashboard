@@ -281,5 +281,55 @@ module.exports = function scoringRoute(db) {
     });
   });
 
+  // ---------- 人员区间逐日积分（动作评分导入数据；下钻页实时评分数据源） ----------
+  //  GET /api/scoring/range?personId=&from=&to=
+  //  按 action_daily_sums 聚合每日各拿分项得分与满分；
+  //  专用于下钻页「人员层 · 每日动作积分完成率」表：
+  //    - 有真实评分导入的岗位（如新媒体运营）：逐日显示真实积分/完成率，无数据日期置灰；
+  //    - 无导入数据的岗位：返回 days=[]，前端回退到 LH/规则驱动模拟；
+  //    - 交付专员/店长（LH 真实日报）走原 LH 路径，与本接口互不影响。
+  router.get('/scoring/range', (req, res) => {
+    // 兼容前端 orgPostId/orgPersonId 传 'n1793' 这种带 n 前缀的节点 id；后端统一规整为纯数字
+    const personId = Number(String(req.query.personId || '').replace(/^n/, ''));
+    const from = String(req.query.from || '');
+    const to = String(req.query.to || '');
+    if (!personId || !from || !to) return res.status(400).json({ ok: false, error: '缺少 personId/from/to' });
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return res.status(400).json({ ok: false, error: '日期格式必须 YYYY-MM-DD' });
+    const rows = db.prepare(`SELECT date, post_key, item,
+        SUM(score) AS s, SUM(cnt) AS cnt, SUM(target_score) AS target_score, MAX(target) AS target
+      FROM action_daily_sums
+      WHERE person_id = ? AND date BETWEEN ? AND ?
+      GROUP BY date, post_key, item
+      ORDER BY date, item`).all(personId, from, to);
+    // 仅取涉及到的 post_key 对应的规则封顶，避免全表扫描
+    const postKeys = Array.from(new Set(rows.map(r => r.post_key)));
+    const capMap = new Map();
+    if (postKeys.length) {
+      const placeholders = postKeys.map(() => '?').join(',');
+      const rs = db.prepare(`SELECT post_key, item, cap_normal FROM action_rules WHERE post_key IN (${placeholders})`).all(...postKeys);
+      for (const r of rs) capMap.set(r.post_key + '|' + r.item, Number(r.cap_normal) || 1);
+    }
+    const byDate = new Map();
+    for (const r of rows) {
+      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, postKey: r.post_key, point: 0, capCover: 0, rate: 0, _source: 'day' });
+      const b = byDate.get(r.date);
+      const cap = capMap.get(r.post_key + '|' + r.item) || 1;
+      const s = clampItemScore(r.s, cap);
+      b.items = b.items || [];
+      b.items.push({
+        item: r.item, target: r.target, count: r.cnt, targetScore: r.target_score,
+        cap, score: s, rawScore: Number(r.s.toFixed(4))
+      });
+      b.point += s;
+      b.capCover += cap;
+    }
+    const days = Array.from(byDate.values()).map(function (b) {
+      b.point = Number(b.point.toFixed(4));
+      b.rate = b.capCover ? Number((b.point / b.capCover * 100).toFixed(1)) : 0;
+      return b;
+    });
+    res.json({ ok: true, personId, from, to, count: days.length, days });
+  });
+
   return router;
 };

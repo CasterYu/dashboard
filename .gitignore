@@ -41,3 +41,15 @@ server/.playwright-cli/
 .env
 server/.env
 *.env.local
+
+# v5.4 收尾：一次性勘察脚本与临时产物（禁止再污染 git status）
+_tmp_*
+
+# v5.4 收尾：会话验证截图仅本地留档，不作为交付物入库
+_artifacts/
+shot_*.png
+.codebuddy-drill-debug.png
+
+# v5.4 收尾：本地版本快照（README《本地版本快照工作流》：快照不进版本控制，仓库仅保留 index.html 与 legacy/v1/）
+legacy/index_v*.html
+legacy/_archive/

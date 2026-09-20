@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>权限维护手册 v5.2 · 业务数据看板</title>
+<style>
+  body { font-family: "Microsoft YaHei", "PingFang SC", sans-serif; max-width: 860px; margin: 0 auto; padding: 32px 24px; color: #1e293b; line-height: 1.75; background: #f8fafc; }
+  h1 { font-size: 26px; border-bottom: 3px solid #3b82f6; padding-bottom: 12px; }
+  h2 { font-size: 20px; margin-top: 40px; color: #1d4ed8; }
+  h3 { font-size: 16px; margin-top: 24px; }
+  code, .cmd { background: #e2e8f0; border-radius: 4px; padding: 2px 6px; font-family: Consolas, monospace; font-size: 13px; }
+  .cmd { display: block; padding: 10px 14px; margin: 8px 0; white-space: pre-wrap; background: #0f172a; color: #7dd3fc; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; background: #fff; }
+  th, td { border: 1px solid #cbd5e1; padding: 8px 12px; text-align: left; font-size: 14px; }
+  th { background: #eff6ff; }
+  .tip { background: #f0fdf4; border-left: 4px solid #22c55e; padding: 10px 14px; border-radius: 0 6px 6px 0; }
+  .warn { background: #fefce8; border-left: 4px solid #eab308; padding: 10px 14px; border-radius: 0 6px 6px 0; }
+  .menu { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 16px 20px; font-family: Consolas, monospace; font-size: 13px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+
+<h1>权限维护手册 v5.2</h1>
+<p>适用版本：看板 <strong>v5.2</strong>（RBAC 权限树）。本手册面向<b>管理员</b>，不需要任何编程知识。</p>
+
+<h2>0. 三层入口，按能力选</h2>
+<table>
+  <tr><th>层级</th><th>形态</th><th>适合谁</th></tr>
+  <tr><td>① 交互菜单（主推）</td><td>双击 <code>权限管理_v5.2.bat</code> → 中文菜单 → 按数字选 → 按提示输入</td><td>完全不懂命令行的人</td></tr>
+  <tr><td>② 单条命令</td><td><code>node scripts\manage-scope_v5.2.js set --emp E90001 --nodes "A大区/a小区"</code></td><td>会复制粘贴的人</td></tr>
+  <tr><td>③ HTTP 接口</td><td><code>PUT /api/admin/users/E90001/scope-nodes</code></td><td>以后接前端管理页/其他系统</td></tr>
+</table>
+<p class="tip">三层入口最终都写同一张授权表，效果完全一致。改完<b>即时生效</b>：被改的人刷新看板页面即可（无需重新登录、无需重启后端）。</p>
+
+<h2>1. 核心概念（3 句话）</h2>
+<ul>
+  <li><b>角色</b>回答"你能用哪些功能"（总部管理员/大区总监/店长/员工/自定义督导…）</li>
+  <li><b>授权</b>回答"你能看哪片数据"（哪个大区/小区/门店，可跨大区、可混合层级、可整体给但抠掉局部）</li>
+  <li><b>组织树</b>只是公司结构，改授权<b>不动组织树</b>，动的是授权表里的几行数据</li>
+</ul>
+
+<h2>2. 交互菜单长什么样</h2>
+<div class="menu">══════════ 业务数据看板 · 权限管理 v5.2 ══════════
+ 当前账号库: 5 个账号, 5 个角色
+ 请选择操作：
+   1. 查看某人的管辖范围
+   2. 给某人分配管辖范围（新建/整体替换）
+   3. 追加授权（在他现有范围上增加）
+   4. 收回部分授权
+   5. 清除全部授权（恢复"按组织结构自动算"）
+   6. 查看全部账号权限一览表
+   7. 角色管理（查看/新增/删除自定义角色）
+   0. 退出
+ 请输入数字：2
+ 请输入工号（输 0 返回）: E90001
+ 请输入管辖节点（多节点用逗号分隔，如 A大区/a小区, A大区/c小区/门店三）: A大区/a小区
+ 是否有排除节点？（直接回车=无；如 A大区/b小区）: A大区/b小区
+ ✓ 已生效：
+   数据范围: a小区（除 b小区）
+   该用户下次刷新看板即为新范围（无需重登、无需重启后端）</div>
+
+<h3>节点怎么写</h3>
+<p>像文件夹路径一样用<b>斜杠</b>从大到小写：<code>A大区/a小区/门店一</code>。可以只写到任意一层（只写 <code>A大区</code> = 整个大区）。写错了系统会列出同层级的正确名称供你复制。中英文逗号都可以分隔多个节点。</p>
+
+<h2>3. 常见维护场景</h2>
+
+<h3>场景 A：新来的负责人接手一半辖区（a、b 小区）</h3>
+<span class="cmd">菜单选 2 → 工号 → 输 A大区/a小区, A大区/b小区</span>
+
+<h3>场景 B：负责人管整个大区，唯独 b 小区归别人</h3>
+<span class="cmd">菜单选 2 → 工号 → 输 A大区 → 排除项输 A大区/b小区</span>
+<p class="tip">用"排除"的好处：以后 b 小区下面新开门店，<b>自动不归他管</b>，不需要回头改配置。</p>
+
+<h3>场景 C：临时把别的大区一家门店划给他兼管（跨大区）</h3>
+<span class="cmd">菜单选 3 → 工号 → 输 B大区/e小区/门店四</span>
+<p>系统不限制"授权必须在本人大区内"，编制与管辖彻底解耦。</p>
+
+<h3>场景 D：某人调岗/离职</h3>
+<span class="cmd">菜单选 5（清空授权，回到按新组织位置自动算）或选 4（只收回某部分）</span>
+
+<h3>场景 E：业务要一个"督导"角色（能看数据，无管理功能）</h3>
+<span class="cmd">菜单选 7 → a → code: supervisor → 显示名: 督导 → 层级: 小区 → 权限点: 回车（默认仅看板查看）</span>
+<p>然后用 <code>npm run users add 工号 supervisor</code> 建账号绑角色，再回菜单 2 配管辖范围。</p>
+
+<h3>场景 F：怎么确认改对了</h3>
+<span class="cmd">菜单选 1 看某人范围（含覆盖节点数）；或选 6 看全员一览表</span>
+
+<h2>4. 命令行速查（②层入口）</h2>
+<span class="cmd">node scripts\manage-scope_v5.2.js list
+node scripts\manage-scope_v5.2.js list --emp E90001
+node scripts\manage-scope_v5.2.js set    --emp E90001 --nodes "A大区/a小区" --exclude "A大区/b小区"
+node scripts\manage-scope_v5.2.js add    --emp E90001 --nodes "B大区/e小区/门店四"
+node scripts\manage-scope_v5.2.js remove --emp E90001 --nodes "A大区/a小区"
+node scripts\manage-scope_v5.2.js clear  --emp E90001
+node scripts\manage-scope_v5.2.js role list
+node scripts\manage-scope_v5.2.js role add supervisor 督导 --level 小区 --perms dashboard.view
+node scripts\manage-scope_v5.2.js role del supervisor</span>
+<p>（在 <code>D:\projects\dashboard\server</code> 目录下执行）</p>
+
+<h2>5. 接口速查（③层入口，供后续接 UI）</h2>
+<table>
+  <tr><th>接口</th><th>说明</th></tr>
+  <tr><td><code>GET /api/admin/users/:empNo/scope-nodes</code></td><td>查看某人授权与当前范围</td></tr>
+  <tr><td><code>PUT /api/admin/users/:empNo/scope-nodes</code></td><td>整体替换；body: <code>{"nodes":[{"path":"A大区/a小区"},{"path":"A大区/b小区","mode":"exclude"}]}</code></td></tr>
+  <tr><td><code>POST /api/admin/users/:empNo/scope-nodes</code></td><td>追加授权，body 同上</td></tr>
+  <tr><td><code>DELETE /api/admin/users/:empNo/scope-nodes</code></td><td>清空授权，回到自动派生</td></tr>
+  <tr><td><code>GET/POST /api/admin/roles</code>、<code>PUT/DELETE /api/admin/roles/:code</code></td><td>角色 CRUD（内置角色禁删禁改层级）</td></tr>
+</table>
+<p>须带 <code>Authorization: Bearer &lt;token&gt;</code>；仅 hq 账号或持有 <code>admin.userManage</code> / <code>roles.manage</code> 权限点的角色可调。</p>
+
+<h2>6. 安全规则（系统自动强制，无需记忆）</h2>
+<ul>
+  <li><b>倒挂拦截</b>：店长只能被授"门店"及以下节点，授小区/大区会被拒绝并给出中文解释</li>
+  <li><b>权限闸</b>：接口与脚本管理仅 hq（或有 admin.userManage 权限的角色）可操作</li>
+  <li><b>全程留痕</b>：所有变更追加到 <code>server\logs\scope_changes_v5.2.log</code>（时间+操作+工号+节点），出问题可查账</li>
+  <li><b>排除节点有效性</b>：排除节点不在任何管辖子树内时给警告（不阻断）</li>
+</ul>
+
+<h2>7. 常见问题</h2>
+<table>
+  <tr><th>现象</th><th>原因</th><th>处理</th></tr>
+  <tr><td>改完没生效</td><td>用户页面还开着</td><td>刷新页面即生效（无需重登、无需重启后端）</td></tr>
+  <tr><td>提示"找不到节点：A大区/xx小区"</td><td>名称打错或层级跳跃</td><td>系统会列出该层级现有名称，复制正确写法</td></tr>
+  <tr><td>某人什么都看不到</td><td>管辖节点被清空但仍有排除项</td><td>菜单选 5 全清重来</td></tr>
+  <tr><td>想恢复 v5.1 老行为（按组织位置自动算）</td><td>—</td><td>菜单选 5 清掉该人全部授权</td></tr>
+  <tr><td>菜单打不开</td><td>Node 环境问题</td><td>确认 <code>C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-2\node.exe</code> 存在</td></tr>
+</table>
+
+<p class="warn">版本说明：v5.2 起"角色"（功能权限）与"授权"（数据范围）彻底解耦。存量账号在未配置显式授权前，行为与 v5.1 完全一致（按人员在组织树上的位置自动派生范围）。</p>
+
+</body>
+</html>

@@ -4,7 +4,7 @@
 
 **汽车销售运营数据看板 · 含历史版本 · 在线可访问**
 
-[![Version](https://img.shields.io/badge/version-v4.8-blue)](https://github.com/CasterYu/dashboard)
+[![Version](https://img.shields.io/badge/version-v5.4-blue)](https://github.com/CasterYu/dashboard)
 [![Pages](https://img.shields.io/badge/GitHub%20Pages-Live-success)](https://casteryu.github.io/dashboard/)
 [![License](https://img.shields.io/badge/license-Internal-lightgrey)]()
 
@@ -20,7 +20,12 @@
 
 | 版本 | 链接 | 状态 | 说明 |
 |:---:|:---|:---:|:---|
-| **🟢 v4.7 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **闭环筛选体验修复（筛选层级：大区→小区→门店→岗位→人员）**：移除门店已选「✕」标签冗余行；切换岗位/大区/小区不再自动点亮全部门店（未单独勾选 = 范围内全部门店生效，仅手动点击才显式勾选）；热力图 `visualMap` 显式指定 `dimension:2` 按达成率着色 |
+| **🟢 v5.4 · 最新版** | **👉 [https://casteryu.github.io/dashboard/](https://casteryu.github.io/dashboard/)** | ✅ 当前 | **下钻页人员逐日表接入动作评分导入数据**：服务端新增 `GET /api/scoring/range?personId=&from=&to=`（按 `action_daily_sums` 聚合逐日各拿分项得分与满分），前端 `renderDrillPersonDaily` 改为异步渲染，取数优先级 = LH 真实日报 → 接口真实区间（有数据日期显示真实分值/完成率，无数据日期置灰「当日无该人评估数据」）→ 规则驱动模拟兜底；直接消灭「Excel 评分导入但区间内只有少数日期有数据」的岗位（如新媒体运营导入仅 9/10）每天都被确定性模拟数值误导的问题；LH 真实日报（交付专员/店长）与 mock 模式行为不变；行点击诊断抽屉在真实数据行异步补充 `/scoring/details` 证据链；页面顶部/页脚/登录副标题统一升 V5.4 |
+| **🟡 v5.3 · 历史版** | 👉 同上链接（页面即 v5.4） | 📦 归档 | **组织筛选层级语义化 + 演示数据归整**：数据库 `organize-demo_v5.2.js` 把 seed 演示树（华东/华南/华北/西南大区含上海一区/杭州小区等 Excel 映射外的虚构组织）统一挪入新建顶层大区「虚拟区」（虚拟 1~4 区），可回滚不删数据；前端修复「虚拟区→虚拟 1 区」大区套大区导致顶栏五级下拉按 children 直取而整级错位的 bug：改为 `collectLevel` 按 level 语义收集（小区/门店/人员），岗位候选只取「岗位」层子节点，杜绝门店槽出现小区、岗位下拉全列「（本店暂无）」、人员下拉出现重复岗位名等错乱 |
+| **🟡 v5.2 · 历史版** | 👉 同上链接（页面即 v5.4） | 📦 归档 | **RBAC 权限树**：角色可自定义增删（roles 表 + 权限点 dashboard.view / admin.dataQuality / metrics.fullTree / admin.userManage / roles.manage）；数据范围显式授权（user_scope_nodes，include 白名单 / exclude 排除双模式，粒度到大区/小区/门店任意节点，支持跨大区与「管A大区但排除b小区」）；范围 = 多根并集 − 排除子树，改授权刷新即生效；无授权账号维持 v5.1 自动派生行为；配套管理接口、`manage-scope_v5.2.js` 交互式 CLI、`权限管理_v5.2.bat` 双击入口与《权限维护手册_v5.2》（`docs/`） |
+| **🟡 v5.1 · 历史版** | 👉 同上链接（页面即 v5.2） | 📦 归档 | **鉴权模式开关 AUTH_MODE**：服务端 `server/.env` 一键切换 `password`（工号+密码，默认）与 `emp_only`（仅工号免密，试用推广期）；emp_only 模式下 JWT 有效期缩短为 2h、登录接口按 IP 限速 10 次/分钟、跳过强制改密；`/api/health` 下发 authMode，前端登录浮层自动隐藏密码框并只提交工号 |
+| **🟡 v5.0 · 历史版** | 👉 同上链接（页面即 v5.1） | 📦 归档 | 组织树全面切换为真实专营店组织（10 大区 × 63 小区 × 393 家灯塔门店，数据源：专营店主数据表） |
+| **🟡 v4.7 · 历史版** | 👉 同上链接（页面即 v5.1） | 📦 归档 | **闭环筛选体验修复（筛选层级：大区→小区→门店→岗位→人员）**：移除门店已选「✕」标签冗余行；切换岗位/大区/小区不再自动点亮全部门店（未单独勾选 = 范围内全部门店生效，仅手动点击才显式勾选）；热力图 `visualMap` 显式指定 `dimension:2` 按达成率着色 |
 | **🟡 v4.6 · 历史版** | 👉 同上链接（页面即 v4.7） | 📦 归档 | **灯塔真实积分接入（动作执行度闭环）**：内置 9 岗位日积分规则主数据 + 2026-05-22 真实评分（交付专员 733 条明细 / 566 条汇总、交付店长 542 / 316，覆盖 393 家专营店、674 人）；「人员 × 拿分项」得分热力图（拿分项 = 规则项，非模拟维度）；积分×销量四象限；积分排名表（名次/姓名/专营店/岗位/当日积分/评估满分/扣分单数/状态）；诊断抽屉新增 **AI 证据链时间线**（分派→首访→最晚时限→判定→订单号）；新增「岗位动作规则视图」（拿分项/单次分值/封顶/拿分必须做到/判断逻辑/不计分情况/凭证来源 + 已接入/待接入标注）；真实门店按大区/小区分层 + 门店搜索多选；后端新增 `action_rules/action_scores/action_daily_sums` 三表与评分导入、查询接口<br>🔑 **在线演示账号：`demo` / `demo123`**（详见 [测试账号](#-测试账号与登录验证)） |
 | **🟡 v4.5 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **闭环看板过程管理三件套（深色主题）**：岗位选择器独立为滚动吸顶固定栏；6 维动作积分热力图（分低偏红，行红=个体问题、列红=流程/培训问题）；四象限图重定义（X=日均积分、Y=销量，均值分象限，右上标杆/左下待辅导）；人员明细表按交付量降序（最弱维度/主要扣分项/扣分模式/归因标签/状态），点击行弹出诊断抽屉（六维雷达 + 周扣分分布 + 扣分明细 TOP3） |
 | **🟡 v4.3 · 历史版** | 👉 同上链接（页面即 v4.6） | 📦 归档 | **PK 岗位层级 + 闭环层级筛选**：PK 模式支持岗位层级（跨店同岗对比）；闭环看板大区→小区→门店逐级收窄；筛选候选严格限定当前范围；门店筛选默认单选、可开多选勾选 |
@@ -37,10 +42,12 @@
 
 | 版本 | 文件路径 |
 |:---:|:---|
-| **v4.7 最新版** | `D:\projects\dashboard\index.html` |
-| **v4.6 历史快照** | `D:\projects\dashboard\legacy\index_v4.6.html` |
+| **v5.4 最新版** | `D:\projects\dashboard\index.html` |
+| **v5.3 历史快照** | `D:\projects\dashboard\legacy\index_v5.3.html` |
+| **v5.2 历史快照** | `D:\projects\dashboard\legacy\index_v5.2.html` |
+| **v5.1 历史快照** | `D:\projects\dashboard\legacy\index_v5.1.html` |
+| **v5.0 历史快照** | `D:\projects\dashboard\legacy\index_v5.0.html` |
 | **v4.5 历史快照** | `D:\projects\dashboard\legacy\index_v4.5.html` |
-| **v4.4 历史快照** | `D:\projects\dashboard\legacy\index_v4.4.html` |
 | **v1 历史版** | `D:\projects\dashboard\legacy\v1\index.html` |
 
 ---
@@ -73,11 +80,27 @@ Get-ChildItem legacy\index_v*.html | Sort-Object LastWriteTime |
 
 ---
 
+## 🔐 权限维护（v5.2）
+
+> 详见《权限维护手册_v5.2》：`docs/权限维护手册_v5.2.html`（傻瓜式，含交互菜单截图式示例与 FAQ）
+
+**三层入口**（效果一致，改完刷新看板即生效，无需重登/重启）：
+
+| 入口 | 用法 |
+|:---|:---|
+| 双击入口（主推） | 双击 `权限管理_v5.2.bat` → 中文菜单按数字选 |
+| CLI 命令 | `node server\scripts\manage-scope_v5.2.js set --emp E90001 --nodes "华东一区/xx小区" [--exclude "华东一区/yy小区"]` |
+| HTTP 接口 | `PUT /api/admin/users/:empNo/scope-nodes`（须 hq 或 `admin.userManage` 权限点） |
+
+**核心模型**：角色（roles 表，能干什么）与授权（user_scope_nodes 表，能看哪里）解耦；授权支持 include 白名单 / exclude 排除双模式，粒度到大区/小区/门店任意节点，允许跨大区；无显式授权的账号按组织位置自动派生（与 v5.1 一致）。变更全程留痕 `server/logs/scope_changes_v5.2.log`。
+
+---
+
 ## 📖 项目说明
 
 汽车销售运营场景下的数据看板，单文件 HTML 部署，零构建、零依赖。
 
-- **v4.5（当前）**：**闭环看板过程管理三件套（深色主题，与全局配色一致）**。① 岗位选择器从筛选面板独立为 `.cl-post-sticky` 滚动吸顶固定栏：深色渐变毛玻璃底 + 蓝边，`top` 偏移在渲染后按 `.topbar` 实际高度运行时计算（不硬编码），页面下滑时始终可见；② 新增「**人员 × 维度积分热力图**」（`clRenderHeat`）：6 维动作分（接待规范/线索跟进/试驾执行/DMS录入/交车流程/培训考试），分数越低越红（红→橙→黄→绿→蓝 visualMap），行整体偏红=个体问题、列整体偏红=流程/培训问题，>14 人自动出 Y 轴滑块，单元格深色描边分隔；③ **四象限图重定义**（`clRenderQuad`）：X=日均积分（累计积分÷天数）、Y=销量（交付），双均值虚线分象限 + markArea 高亮——右上「标杆·高积分高销量」（绿）、左下「存在问题·重点辅导」（红），另两象限灰字标注（流程找卡点/动作待复制）；原纵轴三选一（yMetric）与平均线开关移除，口径固定；④ **人员明细与动作诊断表**：按交付量降序，列 = 销量 / 月度积分（六维动作分百分制）/ 最弱维度 / 主要扣分项 / 扣分模式（高频小额·月度集中·逐周收敛·全维度持续·全月均匀）/ 归因标签 / 状态徽章（标杆≥90·达标≥82·达标边缘≥75·需辅导≥65·重点辅导<65）；⑤ **诊断抽屉**（`#clDrawer`，点击明细行/热力图/散点打开）：深色浮层，头部三 KPI 卡 + 六维雷达（个人实线 vs 团队均值虚线）+ 周扣分分布柱状图 + 扣分明细 TOP3 表（维度/扣分项/次数/单次/累计/典型场景），遮罩/✕/Esc 关闭；⑥ 数据层 `clBuildAction`：以人员姓名+门店+周期为种子的确定性模拟（同人同周期恒定，切换筛选不闪变），动作分由积分分位驱动（高分人员维度整体偏高），扣分明细与弱项联动；新增深色组件 CSS：`.cl-kpi` / `.cl-status`（五档状态徽章）/ `.cl-tag` / `.cl-table` / `.cl-post-sticky` / `.cl-chart-title` 等，图表统一样式走 `clChartAxis()` / `clChartTooltip()`。
+- **v5.4（当前）**：**下钻页人员逐日表接入动作评分导入数据**。服务端新增 `GET /api/scoring/range?personId=&from=&to=`（按 `action_daily_sums` 聚合逐日各拿分项得分与满分，已按 postKey IN 子集化规则封顶，避免全表扫描），前端 `renderDrillPersonDaily` 改为异步渲染：先拉真实区间数据再渲染表格（有数据日期显示真实积分/完成率、无数据日期置灰「当日无该人评估数据」），标签行追加「导入」小标用于区分；取数优先级 = LH 真实日报 → 接口真实区间 → 规则驱动模拟兜底。影响最直接的就是「Excel 评分导入但区间内只有少数日期有数据」的岗位（如新媒体运营导入仅 9/10）：下钻逐日表只显示 9/10 真实行、其余日期置灰（之前区间内每天都有确定性模拟数值是误导）。行点击诊断抽屉在真实数据来源的支持下异步加载 `/scoring/details` 证据链再打开抽屉（失败则照常打开空证据事实表）；LH 真实日报（交付专员/店长）走原 LH 路径不受影响，mock 模式仍走确定性生成。页面顶部/页脚/登录副标题统一升 V5.4，本地快照 `legacy/index_v5.3.html`。
 - **v4.4（历史）**：**闭环筛选面板重排 + 积分/销量排行榜 + 顶栏可折叠**。① 闭环「岗位 × 门店筛选」面板顺序改为大区 →（小区，选了大区才显示）→ 门店（☐多选 / 全选当前范围 / 清空按钮并入门店标题行、居中显示，门店 chips 在下）→ 岗位（单选）；② 积分排行榜升级为「**积分/销量排行榜**」，维度自动跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员），每个对象同时展示「人均销量 + 人均积分」（均按在职人数取平均），条形主值为排序指标（销量/积分优先可切换，**默认销量优先**），右侧标签与 tooltip 同时给出两个口径；移除原门店/岗位/人员维度 tabs；③ 顶栏筛选区可一键收起/展开（折叠状态通过 `localStorage` 持久化，刷新后保持），常驻条显示当前范围摘要 + 收起/展开按钮。
 - **v4.3（历史）**：**PK 模式岗位层级改造 + 闭环看板层级筛选 + 范围泄漏修复**。① PK 模式层级扩展为门店 / 岗位 / 人员三种，岗位层级 = 跨店同岗对比（候选为范围内各门店的同一岗位节点），附二级岗位选项卡；② 闭环看板新增大区 → 小区 → 门店逐级收窄筛选，切换层级后已选门店保留仍可见的；③ 筛选候选与行严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；④ 范围变化自动清空 PK 已选，避免跨范围残留；⑤ PK 对比岗位选中样式改为岗位色实底 + 白字（修复蓝底蓝字看不清）；⑥ 闭环门店筛选默认单选，可开启「多选」勾选多家。
 - **v4.2（历史）**：**身份权限校验**。① 5 角色：`hq` / `regional_lead` / `area_lead` / `store_lead` / `employee`，覆盖总部、大区、小区、门店、员工五层；② **工号密码自管**：CLI `node server/scripts/create-user.js add <工号> <初始密码> <role>` 一行建账号，`reset/list/import/disable/enable` 子命令齐全；③ **JWT（HS256，8h）** 颁发 token，前端 `fetchJson` 自动注入 Bearer，401 自动跳登录浮层；④ **scope 子树过滤**（递归 CTE）：员工仅看自己；店长看门店；小区长看小区；大区长看大区；HQ 看全量；非 HQ 用户额外纳入祖先链，保留树结构；调岗后下次登录生效（动态计算，不缓存）；⑤ **首登强制改密**：服务端 `must_change_password` 标志 + 客户端拦截双保险；⑥ **mock 模式（演示数据）自动渲染为「演示模式（总部）」徽章**，无需登录；⑦ 账号管理 CLI、token 配置、JWT_SECRET 生成详见 `server/DEPLOY.md §7`。
@@ -221,7 +244,7 @@ node scripts/create-user.js add <工号> <初始密码> <role>   # 建账号（�
 npm start                         # http://127.0.0.1:3777
 ```
 
-> 环境变量 `.env`：`JWT_SECRET=...`（必填，CLI 启动会校验）、`IMPORT_TOKEN=...`（导入接口用）。
+> 环境变量 `.env`：`JWT_SECRET=...`（必填，CLI 启动会校验）、`IMPORT_TOKEN=...`（导入接口用）、`AUTH_MODE=password|emp_only`（v5.1 鉴权模式开关：默认 `password` 工号+密码；`emp_only` 仅工号免密登录，token 缩短为 2h、登录 IP 限速 10 次/分钟，适合内部试用推广期）。
 
 ### 角色与权限（v4.2）
 
@@ -355,7 +378,10 @@ node scripts/create-user.js import users.csv                    # 批量导入�
 
 | 版本 | 日期 | 变更说明 |
 |:---:|:---:|:---|
-| **v4.8** | 2026-09-17 | **闭环看板体验优化 + 日报翻阅器**：① 闭环看板新增独立日报翻阅器（◀ 日期 ▾ ▶，仅列真实数据日期，绑定「动作积分与规则达成」面板展示），闭环取数收敛为单日口径与顶栏区间解耦，闭环门店多选默认关闭；② 闭环热力图左（人员名）右（拿分项）轴标签提亮加粗放大；③ 交付店长 / 交付专员拿分项启用短别名（横轴水平不倾斜），别名同步显示在规则表「映射」列，全名降级为「拿分项」列保留口径 |
+| **v5.4** | 2026-09-20 | **下钻页人员逐日表接入动作评分导入数据**：服务端新增 `GET /api/scoring/range?personId=&from=&to=` 接口（按 `action_daily_sums` 聚合逐日各拿分项得分与满分，按涉及的 `post_key` 子集化规则封顶），前端 `renderDrillPersonDaily` 改为异步渲染；取数优先级 = LH 真实日报 → 接口真实区间 → 规则驱动模拟；真实导入行异步补充 `/scoring/details` 证据链；LH 真实日报（交付专员/店长）与 mock 模式行为不变；本地快照 `legacy/index_v5.3.html` |
+| **v5.3** | 2026-09-20 | **组织筛选层级语义化 + 演示数据归整**：数据库 `organize-demo_v5.2.js` 把 seed 演示树统一挪入新建顶层大区「虚拟区」（虚拟 1~4 区），可回滚不删数据；前端修复「虚拟区→虚拟 1 区」大区套大区导致顶栏五级下拉按 children 直取而整级错位的 bug：改为 `collectLevel` 按 level 语义收集，岗位候选只取「岗位」层子节点 |
+| **v5.2** | 2026-09-20 | **RBAC 权限树**：角色可自定义增删（roles 表 + 权限点化）；数据范围显式授权（user_scope_nodes，include 白名单 / exclude 排除双模式）；范围 = 多根并集 − 排除子树，改授权刷新即生效；无授权账号维持 v5.1 自动派生行为；配套 `manage-scope_v5.2.js` CLI、`权限管理_v5.2.bat` 双击入口、《权限维护手册_v5.2》 |
+| **v5.1** | 2026-09-20 | **鉴权模式开关 AUTH_MODE**：服务端 `.env` 一键切换 `password`（工号+密码，默认，完整链路）与 `emp_only`（仅工号免密，试用推广期）；`emp_only` 下 JWT 有效期由 8h 缩短为 2h、登录接口按 IP 限速 10 次/分钟（v5.1 登录限速中间件）、跳过 `must_change_password` 强制改密；`/api/health` 与登录响应下发 `authMode`，前端 boot 时探测并自动适配登录浮层（隐藏密码框/忘记密码提示，只提交工号）；`server/services/auth.js` / `routes/auth.js` / `index.js` 与前端 `index.html` 登录模块同步改造；切回 `password` 模式无需改代码 |
 | **v4.7** | 2026-09-17 | **闭环筛选体验修复（层级：大区→小区→门店→岗位→人员）**：① 移除门店筛选下方「已选门店 ✕」标签行（与门店胶囊勾选态重复）；② 修复切换岗位/大区/小区后全部门店被自动勾选的问题——`storeCodes=null` 语义改为「未单独勾选 = 当前范围内全部门店生效」，胶囊保持熄灭，仅用户手动点击才出现显式勾选（数组=显式勾选，[]=显式清空），「全选当前范围」按钮更名为「全部生效」；③ 修复热力图全红问题（ECharts `visualMap` 显式指定 `dimension:2` 映射达成率）；版本号统一 V4.7 |
 | **v4.6** | 2026-09-17 | **灯塔真实积分接入（动作执行度闭环）**：新增数据文件 `lighthouse_scoring_v4.6.js`（9 岗位日积分规则 48 项 + 2026-05-22 真实评分：明细 1275 / 汇总 882 / 人员 674 / 门店 393）与解析脚本 `tools/parse_lighthouse_v4.6.py`；闭环模块改为**双源 provider**（交付专员/交付店长=真实，其余 8 岗位=规则驱动模拟，岗位 chip 标注来源）；数据层重构为规则驱动 `clRuleFor`/`clBuildAction`（拿分项得分取汇总 `score` 并按封顶截断、无汇总回退明细求和、当日积分=各拿分项之和）；热力图列维度改为**真实拿分项**；四象限 Y 轴改为确定性销量；排名表列重构（名次/姓名/专营店/岗位/当日积分/评估满分/扣分单数/状态）；诊断抽屉新增 **AI 证据链时间线**（分派→首访→最晚时限→判定→订单号）；新增**岗位动作规则视图**（拿分项/单次分值/封顶/拿分必须做到/判断逻辑/不计分情况/凭证来源 + 已接入·待接入徽章）；筛选区支持真实门店大区/小区分层 + 搜索多选 + 单日数据降级提示；后端新增 `action_rules` / `action_scores` / `action_daily_sums` 三表、`services/actionScoring_v4.6.js`、`routes/scoring_v4.6.js`（`/api/scoring/*` 6 个查询接口）与 `POST /api/import/scoring`、`POST /api/import/rules` 导入接口（幂等覆盖、`dryRun` 预演、门店/人员自动落库）；版本号统一 V4.6 |
 | **v4.5** | 2026-09-17 | **闭环看板过程管理三件套（沿用深色主题）**：岗位选择器独立 `.cl-post-sticky` 吸顶固定栏（偏移量运行时按顶栏实际高度计算）；新增 6 维动作积分热力图（`clRenderHeat`，分低偏红，行红=个体问题/列红=流程问题）；四象限重定义（`clRenderQuad`，X=日均积分、Y=销量，均值分象限，右上标杆绿/左下待辅导红）；人员明细表按交付量降序（销量/月度积分/最弱维度/主要扣分项/扣分模式/归因标签/状态徽章）；点击行开诊断抽屉（`#clDrawer`：三 KPI 卡 + 六维雷达 + 周扣分分布 + 扣分明细 TOP3）；数据层 `clBuildAction` 确定性模拟（种子哈希，同人同周期恒定，积分分位驱动）；新增 `.cl-kpi` / `.cl-status` / `.cl-tag` / `.cl-table` 深色组件样式；移除闭环散点纵轴切换与平均线开关；版本号统一 V4.5 |
@@ -423,6 +449,6 @@ git push origin --tags
 
 ✨ **推荐使用 GitHub Pages 在线版访问，无需启动本地服务** ✨
 
-[👉 v4.7 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v4.7 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v4.7/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
+[👉 v5.4 最新版（GitHub Pages）](https://casteryu.github.io/dashboard/) · [👉 v5.4 镜像（jsDelivr）](https://cdn.jsdelivr.net/gh/CasterYu/dashboard@v5.4/index.html) · [👉 v1 历史版](https://casteryu.github.io/dashboard/legacy/v1/)
 
 </div>
