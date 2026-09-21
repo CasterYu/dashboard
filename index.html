@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <link rel="icon" href="data:,">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>业务数据看板 V5.4 · 汽车销售运营中心</title>
+    <title>业务数据看板 V5.12 · 汽车销售运营中心</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/echarts/5.4.3/echarts.min.js"></script>
     <!-- v4.6：灯塔真实积分数据模块（与 index.html 同目录，file:// 与 GitHub Pages 均可加载） -->
@@ -368,6 +368,17 @@
         .cl-ev-item.bad::before { background: #fb7185; box-shadow: 0 0 0 3px rgba(251,113,133,0.16); }
         .cl-ev-kv { display: inline-flex; gap: 5px; font-size: 11px; padding: 1px 7px; border-radius: 6px; background: rgba(148,163,184,0.1); color: #cbd5e1; margin: 3px 4px 0 0; }
         .cl-ev-kv b { color: #94a3b8; font-weight: 500; }
+        /* v5.7：AI 证据链按「拿分项+动作」分组折叠（一订单一判定，平铺过长） */
+        .cl-ev-grp { border: 1px solid rgba(148,163,184,0.18); border-radius: 10px; margin-bottom: 10px; overflow: hidden; }
+        .cl-ev-grp summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; background: rgba(148,163,184,0.06); }
+        .cl-ev-grp summary::-webkit-details-marker { display: none; }
+        .cl-ev-grp summary::after { content: '▸'; color: #64748b; font-size: 11px; margin-left: auto; }
+        .cl-ev-grp[open] summary::after { content: '▾'; }
+        .cl-ev-grp .cl-ev-grp-act { font-size: 11px; color: #94a3b8; }
+        .cl-ev-grp .cl-ev-grp-badge { font-size: 11px; padding: 1px 8px; border-radius: 999px; background: rgba(148,163,184,0.12); color: #cbd5e1; }
+        .cl-ev-grp .cl-ev-grp-badge.bad { background: rgba(251,113,133,0.14); color: #fb7185; }
+        .cl-ev-grp .cl-ev-grp-badge.ok { background: rgba(52,211,153,0.12); color: #34d399; }
+        .cl-ev-grp .cl-ev-body { padding: 10px 12px 12px 16px; }
         .cl-bar { height: 6px; border-radius: 999px; background: rgba(148,163,184,0.15); overflow: hidden; }
         .cl-bar > i { display: block; height: 100%; border-radius: 999px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -451,7 +462,7 @@
             <div class="flex items-center gap-3">
                 <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-xl shadow-lg">D</div>
                 <div>
-                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V5.4</span></h1>
+                    <h1 class="text-xl font-bold text-white">业务数据看板 <span class="text-xs font-medium align-middle px-2 py-0.5 rounded-md bg-blue-500/15 text-blue-300 border border-blue-400/20">V5.12</span></h1>
                     <p class="text-xs text-slate-400 mt-0.5">汽车销售运营中心 · 双看板：经营总览 + 业务执行与闭环</p>
                 </div>
             </div>
@@ -581,7 +592,7 @@
                     <div>
                         <div class="text-[11px] text-blue-300 font-semibold tracking-wider mb-1">CONVERSION</div>
                         <div class="panel-title"><span class="dot"></span>全链路经营转化漏斗</div>
-                        <div class="panel-subtitle" id="funnelSub">7 阶段 · 区间合计</div>
+                        <div class="panel-subtitle" id="funnelSub">6 阶段 · 区间合计</div>
                     </div>
                     <div id="funnelDrillLink" class="text-[12px] text-cyan-300 pt-1 cursor-pointer whitespace-nowrap">经营下钻 →</div>
                 </div>
@@ -644,7 +655,7 @@
             <div class="flex items-center justify-between mb-1 flex-wrap gap-3">
                 <div>
                     <div class="panel-title"><span class="dot"></span>明细数据表</div>
-                    <div class="panel-subtitle" id="tableSubtitle">门店维度 · 按积分降序</div>
+                    <div class="panel-subtitle" id="tableSubtitle">门店维度 · 按人均积分完成率降序</div>
                 </div>
                 <div class="flex items-center gap-1">
                     <button class="quick-btn active" data-table="门店">门店</button>
@@ -688,7 +699,7 @@
         </section>
 
         <footer class="text-center text-xs text-slate-500 py-4">
-            业务数据看板 V5.4 · v5.4：下钻页「人员层 · 每日动作积分完成率」接入动作评分导入数据 —— 服务端新增 `GET /api/scoring/range?personId=&from=&to=`（按 action_daily_sums 聚合逐日各拿分项得分与满分，已按 postKey IN 子集化规则封顶），前端 renderDrillPersonDaily 改为异步渲染，先拉真实区间数据再渲染表格（有数据日期显示真实分值/完成率、无数据日期置灰「当日无该人评估数据」）；影响最直接的就是「Excel 评分导入但区间内只有少数日期有数据」的岗位（如新媒体运营导入仅 9/10）：下钻逐日表只显示 9/10 真实行、其余日期置灰（之前区间内每天都有确定性模拟数值是误导）；无导入数据的岗位或服务端失败时自动回退到原有 LH/规则驱动模拟；行为兼容：LH 真实日报（交付专员/店长）走原路径不受影响，mock 模式仍走确定性生成。下钻行点击诊断在真实数据来源的支持下走 /scoring/details 证据链 · v5.3：组织筛选层级语义化修复 + 演示数据归整 —— 早期 seed 演示树（华东/华南/华北/西南大区含上海一区/杭州小区等 Excel 映射之外的虚构组织）统一挪入新建顶层大区「虚拟区」并改名虚拟1~4区（数据库 organize-demo_v5.2.js，不删任何业务数据、可回滚）；修复「虚拟区→虚拟1区」大区套大区结构导致顶栏五级下拉（大区→小区→门店→岗位→人员）按 children 直取而整级错位的问题：小区/门店/人员候选改为 collectLevel 按层级语义收集、岗位候选只取「岗位」层子节点，杜绝门店槽出现小区、岗位下拉全列「（本店暂无）」、人员下拉出现重复岗位名等错乱 · v5.2：RBAC 权限树 —— 服务端新增 roles 角色表（功能权限点化：dashboard.view/admin.dataQuality/metrics.fullTree/admin.userManage/roles.manage，支持自定义「督导」等新角色）与 user_scope_nodes 显式授权表（include 白名单 / exclude 排除双模式；授权粒度为大区/小区/门店任意节点，支持跨大区授权与「管A大区但排除b小区」的排除式授权，组织变动自动跟随）；数据范围 = include 多根子树并集 − exclude 子树，每次请求实时计算，改授权刷新即生效；无显式授权的账号维持按组织位置自动派生（与 v5.1 行为完全一致，存量账号零感知）；角色徽章兜底显示自定义角色 code；配套 PUT/GET/POST/DELETE /api/admin/users/:empNo/scope-nodes 与 /api/admin/roles CRUD 接口（adminRequired 权限点守卫 + 倒挂校验）、manage-scope_v5.2.js 交互式管理 CLI（命令/菜单双模式 + 变更留痕 logs/scope_changes_v5.2.log）、权限管理_v5.2.bat 双击入口与《权限维护手册_v5.2》（docs/） · 业务数据看板 V5.1 · v5.1：鉴权模式开关 AUTH_MODE —— 服务端 .env 一键切换 password（工号+密码，默认）与 emp_only（仅工号免密，试用推广期）；emp_only 模式下 JWT 有效期缩短为 2h、登录接口按 IP 限速 10 次/分钟、跳过 must_change_password 强制改密；/api/health 下发 authMode，前端登录浮层自动隐藏密码框并只提交工号 · v5.0：组织树全面切换为真实专营店组织 —— ORG_SPEC 由 4 大区 8 小区 14 家演示虚构店（上海浦东旗舰店/杭州西湖店/广州天河店/北京朝阳店/成都高新店等，大区小区均为早期演示假数据）整体重建为真实「10 个销售大区 + 待确认分组 × 63 个销售小区 × 393 家灯塔门店」组织树（数据源：专营店20260918175014.xls，沿用 v4.17 店名匹配重映射结果，14 家无同名店归入待确认分组不丢失）；经营总览顶栏五个下拉（大区/小区/全部店铺/全部岗位/全部人员）与多维下钻全部切换为真实组织树并联动刷新；删除旧演示门店及岗位空缺白名单 blankStores 的旧店名引用（空缺改由 min:0 岗位确定性随机生成，PK 对比「暂无」置灰逻辑同步修正）；版本跳号 V5.0 标记组织体系切换 · 业务数据看板 V4.17 · v4.17：门店大区/小区按专营店主数据表（专营店20260918175014.xls，956家营业店）重映射 —— 灯塔数据 393 家门店按「店名匹配」（编码体系不同：灯塔纯数字 vs 主数据 D 开头）重写 region/area 为真实「销售大区/销售小区」体系：379 家成功映射至新 12 大区（华东一区/华东二区/华东三区/华中一区/华中二区/华南区/华北区/东北区/西北区/西南区/英菲尼迪区域/其它）× 64 小区，14 家在主数据表中无同名店（宿州东十里、温州新成等）归入「待确认」分组不丢失；闭环看板大区胶囊自动切换为新体系（组织排序白名单与配色 map 同步更新）；配套交付《门店大区小区对照表_v4.17.xlsx》（对照明细 393 行 + 待确认清单 14 行附近似店名线索 + 大区×小区汇总透视）；ORG_SPEC 演示树与 PK 模式不受影响 · v4.16：多维下钻与顶栏「组织范围」筛选双向同步 —— 每次点击下钻列表行即把当前下钻路径（大区→小区→门店→岗位→人员）写入顶栏五个下拉（直接改 state.sel + renderAll 回显，不派发 change 事件以保留下钻栈），全页看板（KPI / 榜单 / 闭环等）随下钻范围联动收窄；面包屑跳转与「返回上级」回退时筛选同步放宽到对应层级（栈内回退到栈顶节点、栈空回退一层筛选），下钻面包屑与顶栏筛选始终一致；顶栏手动改筛选仍按现状清空下钻栈，PK 模式不受影响 · v4.15：多维下钻「销售店长」人员逐日表新增「晨会报表 / 夕会报表」两列（位于最弱拿分项与明细之间）—— 晨会报表 = 当日晨会向该人员发布/承接的任务清单（时间轴 / 任务名称 / 责任人 / 衡量标准 / 完成时限 / 任务来源 / 发布状态），夕会报表 = 对照晨会任务逐条核对的完成情况（实际完成 / 完成状态 ✓△✗ / 差距说明，完成率 = 完成 100% + 部分完成 50% 计权），两报表共用同一确定性模拟任务集合（seed = 人员 × 日期），点击胶囊独立开抽屉查看且不触发行级诊断抽屉，无日报数据行置灰；仅销售店长岗位显示，其他岗位保持现状 · v4.14：多维下钻「人员」成为可下钻层级 —— 岗位矩阵点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏筛选区间内的「每日动作积分完成率」表（每行 = 一天：当日积分 / 已评估满分 / 完成率（已评估口径，无数据项不计入分母）/ 与前一日之差 / 最弱拿分项），点击任意日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（KPI 卡 + 拿分项雷达图 + 扣分单数分布 + 得分构成 + 扣分明细 + AI 证据链，取数 = 该行单日）；真实评分岗位按确定性映射取灯塔评分明细（无日报日期置灰），模拟岗位按人员 × 日期确定性生成；适用全部岗位 · v4.13：多维下钻「产品专家」岗位下钻到人员后，在「人员 × 关键动作得分率矩阵」下方追加一张四象限散点图（横轴 = 区间积分达成率 % = 个人区间积分 ÷ 个人满分梯度 × 100%；纵轴 = 区间交付量；每人 = 一个点；含两轴均值虚线 + 四象限背景与文字解读：标杆 / 待辅导 / 流程找卡点 / 动作待复制），数据跟随顶栏筛选与日期区间联动刷新；其他岗位保持现状 · v4.12：多维下钻新增「岗位 → 人员」层级 —— 岗位下钻后矩阵切换为「人员 × 关键动作得分率」（动作取自岗位职责说明表，得分率 = 完成量 ÷ 该人被分配的任务量，随顶栏日期区间聚合，环比为百分点差），点击人员行展开单人动作明细进度条；人员动作数据为演示假数据（确定性生成，待接真实接口） · v4.11：岗位体系按业务职责文本对齐（8 岗位：销售专员归入产品专家、市场经理 + 新媒体运营合并为「新媒体&市场经理」、客户管家/经理改名「客关经理」）、页面最下方新增可折叠「岗位职责说明表」（岗位 × 关键动作 × 具体内容，共 40 项，示意文案待业务确认）；多维下钻移除岗位指标下拉（矩阵展示全指标，排序固定为大区/小区按线索量、门店按积分） · v4.10：多维下钻移除「当前层级合计」卡片与下钻柱状图（仅保留可点击下钻的下级明细列表）、积分/销量排行榜移至页面最底部 · v4.8：业务执行与闭环看板新增独立日报翻阅器（◀ 日期 ▾ ▶，仅列真实数据日期，绑定「动作积分与规则达成」面板展示）、闭环取数收敛为单日口径彻底与顶栏区间解耦、闭环门店多选默认关闭、移除「不重叠 / 单日降级」提示、不引入环比；顶栏日期筛选保持原位不动；闭环热力图左侧人员姓名与底部拿分项标签提亮加粗放大（可读性优化）、交付店长/交付专员拿分项启用短别名（横轴水平不倾斜，别名同步至规则表） · v4.7：闭环筛选修复（移除门店已选标签冗余行 / 切换岗位·大区·小区不再自动点亮全部门店，未单独勾选=范围内全部生效 / 热力图按达成率着色；筛选层级：大区→小区→门店→岗位→人员）· 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
+            业务数据看板 V5.12 · v5.12：全链路经营转化漏斗改造 —— 首层由「新增线索」改为「意向线索」，层级精简为 6 阶段（意向线索 → 邀约排程 → 到店 → 有效试驾 → 锁单 → 交付，移除新增线索、有效线索两层）；右侧百分比统一改为以意向线索为基准的累计转化率（本层÷意向线索），首行显示「基准」，柱宽仍按累计占比缩放，悬浮展示累计与「上一层→本层」两口径；底部「整体转化率」改为意向线索→交付、「线索量」同步改为意向线索→交付链；下钻「人员层每日动作积分完成率」与闭环看板不受影响 · 业务数据看板 V5.11 · v5.11：明细数据表门店 / 岗位维度改按「人均积分完成率」 —— 这两级原来直接按总积分降序，人数多的对象天然占优；现口径 = 行子树内每位在职人员的（区间积分 ÷ 个人满分梯度 × 100%）先各自算个人完成率、再等权平均（与下钻「达成率 × 交付量」四象限同一满分口径，非 Σ积分 ÷ Σ满分）；列名同步改为「人均积分完成率」并按该值降序，单元格显示琥珀色百分比、悬浮展示「总积分 ÷ 在职人数 = 人均积分 · Σ满分 · 整体口径完成率」便于横向核对；已停用人员不计入分母，无在职人员或无有效满分的行显示「—」并排末位，数值恒有兜底不会出现 NaN；人员维度保持个人总积分与「按积分降序」不变，线索 / 到店 / 锁单 / 交车 / 到店率 / 转化率各列、组织范围与日期区间联动、下钻层级、PK 模式、底部排行榜与闭环看板均不受影响 · 业务数据看板 V5.10 · v5.10：经营结果趋势分析图形分型 —— 按指标类型分派图形：具体数据类（意向线索 / 到店 / 锁单 / 新增线索 / 试驾 / 交付 / 邀约排程）由折线改为圆角柱状图做期间对比，百分比比率类（意向线索→到店 / 到店→试驾 / 试驾→锁单 转化率）保持折线图走右侧百分比轴，两类可同图共存（系列顺序先柱后线，折线压在柱体上方不被遮挡）；归一化对比模式下数量类仍为柱状，柱高按自身峰值缩放到 100%，悬浮提示同步显示缩放百分比与还原实值；含柱状时类目轴改为两侧留边（boundaryGap:true）避免首尾柱贴边被裁切，纯比率选择时折线仍贴边铺满与现状一致；数据口径、双 Y 轴、指标多选（≤4 项）、日/周/月粒度、组织范围与日期区间联动均不变，PK 模式保持原有折线不动 · 业务数据看板 V5.9 · v5.9：修复「数营专家等岗位逐日表有真实导入数据却整表置灰」—— 根因是导入拿分项名与静态规则名不完全一致（导入「线索处理及时率」vs LH 规则表草案「线索处理及时率%」，数营专家 4 条规则全是 deprecated 草案、clRuleFor 兜底 slice(0,4) 后全部映射失败 → dims 全 null → every() 误判 noData，即使 /api/scoring/range 已返回真实数据如宋彩虹 9/10 1.48 分/148% 也整表置灰「当日无该人评估数据」）；修复：drillRealPoint 拿分项查找先精确后归一化（去 %/空格），且接口返回的拿分项若静态规则未覆盖则自动补入映射 —— 以后导入任何新拿分项都能直接在逐日表计入积分/完成率，不再依赖静态规则表收录；②修复「扣分明细/AI 证据链 0 分行判定口径」（clZeroRowBad，两处共用）：结论前缀优先（「不满足/未满足」开头=未达成、「已满足/全满足」开头=达成，防「不满足：…其余2项满足」尾部「满足」翻转结论）+ 无前缀描述式证据反向判定 —— 旧口径只认「不满足/超时/未通过/逾期」关键词，漏判描述式失败证据 291 行（如张涛试乘试驾「4必讲侧0项命中」「无收尾动作」2 行 0 分被显示「当日无扣分记录、动作全达标」），并误判交付店长「已满足【…未逾期】」类达成行 239 行为未达成；经全库 3908 行 0 分数据校准（杨勇 22 行未达成、张涛 2 行均精确命中） · v5.8：下钻人员逐日表日期区间跟随顶栏日期筛选 —— 修复「应用上方日期筛选后下方逐日表不同步」：人员逐日表日期串此前取 currentIdx()，被 clampIdx 钳制到指标数据窗口（API 模式即 9/10~9/16），顶栏改选 9/9~9/20 应用后逐日表日期恒不变；现改为直接按 state.start/end 逐日生成日期串（上限 400 天防误操作），窗口外日期由既有分支自然处理 —— LH 岗位窗口外显示「无日报数据」置灰、已导入岗位未命中显示「当日无该人评估数据」置灰、区间动作评分查询 /scoring/range 按新窗口拉取；指标类看板与区间动作得分率汇总区仍按指标数据窗口口径（窗口外无指标数据） · v5.7：下钻逐日表去模拟填充 + AI 证据链分组折叠 —— ①修复「岗位已导入动作评分但当前人员无导入记录」时逐日表回退确定性模拟、区间内每天都出现相同假数据的问题（如 [产品专家]上海松江 6.3 分/44.6% 天天不变）：API 模式启动后懒加载 /api/scoring/meta 岗位导入元信息（SMETA 缓存），岗位 detailRows>0 且该人 range 查询无记录 → 整表置灰「当日无该人评估数据」，数据说明改为「该岗位已导入动作评分（导入日期…），当前人员无导入记录」；未导入岗位（演示岗位）与 mock 模式行为不变；②AI 证据链接「拿分项+动作」分组折叠（<details> 组头：判定数 + 未达成/达成计数徽章，组内单条默认收起）—— 导入明细是「一订单一条判定记录」（如杨勇 9/10 非首访 23 条 = 23 个不同订单，非重复导入），平铺 24 条易误读为重复；来源文案改「评分导入文件（AI 分析原因）」（原误标「灯塔系统判定日志」），达成行加分值徽章；③抽屉来源徽章：导入行改「动作评分导入数据」；累计扣分为 0 时显示「累计 0 分」（原「累计 -0 分」）· v5.6：诊断抽屉扣分明细与 AI 证据链接入真实导入数据 —— 修复下钻页人员某日「明细」抽屉中「扣分明细」「AI 证据链」恒空的两处链路问题：①服务端 `/api/scoring/details` 的 personId 未兼容带 n 前缀的组织节点 id（如 n4051 → NaN → 查 0 行），与 `/scoring/range` 统一为 `replace(/^n/,'')` 规整；②前端真实导入路径只回填证据链 dedRows 而不构建 deductions，扣分明细表/扣分单数/累计扣分恒空 —— 新增 clDedsFromDetails 按统一口径（score<0，或 score=0 且证据含 不满足/未满足/判定=超时/未通过/逾期）从明细行按「拿分项+动作」分组构建（单次分值负分行用 |score|、其余从动作文本尾部「；0.06分」解析，解析不到显 —），同步回填 dedCount/dedTotal/tag；clEvPairs 升级解析真实证据文本（未满足【规则】/不满足：/证据：三种前缀 + 中文分句 k=v 对），未达成判定（含 不满足/超时/逾期/不足）标红；真实导入行来源徽章不再误显「模拟数据」；③下钻人员逐日表取数优先级改为「动作评分导入 > LH 真实日报 > 置灰」—— 交付店长/专员等 LH 岗位（仅 5/22 有灯塔日报）此前跳过导入数据拉取，导入的 9/10 评分数据在逐日表上永远不出现，现改为先查导入区间数据、未命中日期再走 LH 路径。数据无需重导：Excel「AI分析原因」列已存 action_scores.evidence · v5.5：动作评分达标口径修订 —— 「日标准得分 = 100% 达标线」：完成率 = 当日积分 ÷ 当日实际有评估数据的拿分项标准分合计（导入汇总 target_score 优先，缺省回退规则封顶 cap），允许超出 100%（如内容运营勤勉拿 6 分、日标准 4 分 = 150%），单项比率与当日完成率均不再封顶，分子改用未封顶实际得分；缺项不扣分：当日反馈记录未覆盖的拿分项（如店长当日未配置「线索获取」任务）不计入分母，按其余项标准分判定当日是否达标；生效面：/api/scoring/range、/scoring/summary、/scoring/persons 与下钻页人员逐日表、诊断抽屉（表格列「已评估满分」更名「已评估标准分」，抽屉「封顶」列改显标准分，雷达轴上限改用标准分） · v5.4：下钻页「人员层 · 每日动作积分完成率」接入动作评分导入数据 —— 服务端新增 `GET /api/scoring/range?personId=&from=&to=`（按 action_daily_sums 聚合逐日各拿分项得分与满分，已按 postKey IN 子集化规则封顶），前端 renderDrillPersonDaily 改为异步渲染，先拉真实区间数据再渲染表格（有数据日期显示真实分值/完成率、无数据日期置灰「当日无该人评估数据」）；影响最直接的就是「Excel 评分导入但区间内只有少数日期有数据」的岗位（如新媒体运营导入仅 9/10）：下钻逐日表只显示 9/10 真实行、其余日期置灰（之前区间内每天都有确定性模拟数值是误导）；无导入数据的岗位或服务端失败时自动回退到原有 LH/规则驱动模拟；行为兼容：LH 真实日报（交付专员/店长）走原路径不受影响，mock 模式仍走确定性生成。下钻行点击诊断在真实数据来源的支持下走 /scoring/details 证据链 · v5.3：组织筛选层级语义化修复 + 演示数据归整 —— 早期 seed 演示树（华东/华南/华北/西南大区含上海一区/杭州小区等 Excel 映射之外的虚构组织）统一挪入新建顶层大区「虚拟区」并改名虚拟1~4区（数据库 organize-demo_v5.2.js，不删任何业务数据、可回滚）；修复「虚拟区→虚拟1区」大区套大区结构导致顶栏五级下拉（大区→小区→门店→岗位→人员）按 children 直取而整级错位的问题：小区/门店/人员候选改为 collectLevel 按层级语义收集、岗位候选只取「岗位」层子节点，杜绝门店槽出现小区、岗位下拉全列「（本店暂无）」、人员下拉出现重复岗位名等错乱 · v5.2：RBAC 权限树 —— 服务端新增 roles 角色表（功能权限点化：dashboard.view/admin.dataQuality/metrics.fullTree/admin.userManage/roles.manage，支持自定义「督导」等新角色）与 user_scope_nodes 显式授权表（include 白名单 / exclude 排除双模式；授权粒度为大区/小区/门店任意节点，支持跨大区授权与「管A大区但排除b小区」的排除式授权，组织变动自动跟随）；数据范围 = include 多根子树并集 − exclude 子树，每次请求实时计算，改授权刷新即生效；无显式授权的账号维持按组织位置自动派生（与 v5.1 行为完全一致，存量账号零感知）；角色徽章兜底显示自定义角色 code；配套 PUT/GET/POST/DELETE /api/admin/users/:empNo/scope-nodes 与 /api/admin/roles CRUD 接口（adminRequired 权限点守卫 + 倒挂校验）、manage-scope_v5.2.js 交互式管理 CLI（命令/菜单双模式 + 变更留痕 logs/scope_changes_v5.2.log）、权限管理_v5.2.bat 双击入口与《权限维护手册_v5.2》（docs/） · 业务数据看板 V5.1 · v5.1：鉴权模式开关 AUTH_MODE —— 服务端 .env 一键切换 password（工号+密码，默认）与 emp_only（仅工号免密，试用推广期）；emp_only 模式下 JWT 有效期缩短为 2h、登录接口按 IP 限速 10 次/分钟、跳过 must_change_password 强制改密；/api/health 下发 authMode，前端登录浮层自动隐藏密码框并只提交工号 · v5.0：组织树全面切换为真实专营店组织 —— ORG_SPEC 由 4 大区 8 小区 14 家演示虚构店（上海浦东旗舰店/杭州西湖店/广州天河店/北京朝阳店/成都高新店等，大区小区均为早期演示假数据）整体重建为真实「10 个销售大区 + 待确认分组 × 63 个销售小区 × 393 家灯塔门店」组织树（数据源：专营店20260918175014.xls，沿用 v4.17 店名匹配重映射结果，14 家无同名店归入待确认分组不丢失）；经营总览顶栏五个下拉（大区/小区/全部店铺/全部岗位/全部人员）与多维下钻全部切换为真实组织树并联动刷新；删除旧演示门店及岗位空缺白名单 blankStores 的旧店名引用（空缺改由 min:0 岗位确定性随机生成，PK 对比「暂无」置灰逻辑同步修正）；版本跳号 V5.0 标记组织体系切换 · 业务数据看板 V4.17 · v4.17：门店大区/小区按专营店主数据表（专营店20260918175014.xls，956家营业店）重映射 —— 灯塔数据 393 家门店按「店名匹配」（编码体系不同：灯塔纯数字 vs 主数据 D 开头）重写 region/area 为真实「销售大区/销售小区」体系：379 家成功映射至新 12 大区（华东一区/华东二区/华东三区/华中一区/华中二区/华南区/华北区/东北区/西北区/西南区/英菲尼迪区域/其它）× 64 小区，14 家在主数据表中无同名店（宿州东十里、温州新成等）归入「待确认」分组不丢失；闭环看板大区胶囊自动切换为新体系（组织排序白名单与配色 map 同步更新）；配套交付《门店大区小区对照表_v4.17.xlsx》（对照明细 393 行 + 待确认清单 14 行附近似店名线索 + 大区×小区汇总透视）；ORG_SPEC 演示树与 PK 模式不受影响 · v4.16：多维下钻与顶栏「组织范围」筛选双向同步 —— 每次点击下钻列表行即把当前下钻路径（大区→小区→门店→岗位→人员）写入顶栏五个下拉（直接改 state.sel + renderAll 回显，不派发 change 事件以保留下钻栈），全页看板（KPI / 榜单 / 闭环等）随下钻范围联动收窄；面包屑跳转与「返回上级」回退时筛选同步放宽到对应层级（栈内回退到栈顶节点、栈空回退一层筛选），下钻面包屑与顶栏筛选始终一致；顶栏手动改筛选仍按现状清空下钻栈，PK 模式不受影响 · v4.15：多维下钻「销售店长」人员逐日表新增「晨会报表 / 夕会报表」两列（位于最弱拿分项与明细之间）—— 晨会报表 = 当日晨会向该人员发布/承接的任务清单（时间轴 / 任务名称 / 责任人 / 衡量标准 / 完成时限 / 任务来源 / 发布状态），夕会报表 = 对照晨会任务逐条核对的完成情况（实际完成 / 完成状态 ✓△✗ / 差距说明，完成率 = 完成 100% + 部分完成 50% 计权），两报表共用同一确定性模拟任务集合（seed = 人员 × 日期），点击胶囊独立开抽屉查看且不触发行级诊断抽屉，无日报数据行置灰；仅销售店长岗位显示，其他岗位保持现状 · v4.14：多维下钻「人员」成为可下钻层级 —— 岗位矩阵点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏筛选区间内的「每日动作积分完成率」表（每行 = 一天：当日积分 / 已评估满分 / 完成率（已评估口径，无数据项不计入分母）/ 与前一日之差 / 最弱拿分项），点击任意日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（KPI 卡 + 拿分项雷达图 + 扣分单数分布 + 得分构成 + 扣分明细 + AI 证据链，取数 = 该行单日）；真实评分岗位按确定性映射取灯塔评分明细（无日报日期置灰），模拟岗位按人员 × 日期确定性生成；适用全部岗位 · v4.13：多维下钻「产品专家」岗位下钻到人员后，在「人员 × 关键动作得分率矩阵」下方追加一张四象限散点图（横轴 = 区间积分达成率 % = 个人区间积分 ÷ 个人满分梯度 × 100%；纵轴 = 区间交付量；每人 = 一个点；含两轴均值虚线 + 四象限背景与文字解读：标杆 / 待辅导 / 流程找卡点 / 动作待复制），数据跟随顶栏筛选与日期区间联动刷新；其他岗位保持现状 · v4.12：多维下钻新增「岗位 → 人员」层级 —— 岗位下钻后矩阵切换为「人员 × 关键动作得分率」（动作取自岗位职责说明表，得分率 = 完成量 ÷ 该人被分配的任务量，随顶栏日期区间聚合，环比为百分点差），点击人员行展开单人动作明细进度条；人员动作数据为演示假数据（确定性生成，待接真实接口） · v4.11：岗位体系按业务职责文本对齐（8 岗位：销售专员归入产品专家、市场经理 + 新媒体运营合并为「新媒体&市场经理」、客户管家/经理改名「客关经理」）、页面最下方新增可折叠「岗位职责说明表」（岗位 × 关键动作 × 具体内容，共 40 项，示意文案待业务确认）；多维下钻移除岗位指标下拉（矩阵展示全指标，排序固定为大区/小区按线索量、门店按积分） · v4.10：多维下钻移除「当前层级合计」卡片与下钻柱状图（仅保留可点击下钻的下级明细列表）、积分/销量排行榜移至页面最底部 · v4.8：业务执行与闭环看板新增独立日报翻阅器（◀ 日期 ▾ ▶，仅列真实数据日期，绑定「动作积分与规则达成」面板展示）、闭环取数收敛为单日口径彻底与顶栏区间解耦、闭环门店多选默认关闭、移除「不重叠 / 单日降级」提示、不引入环比；顶栏日期筛选保持原位不动；闭环热力图左侧人员姓名与底部拿分项标签提亮加粗放大（可读性优化）、交付店长/交付专员拿分项启用短别名（横轴水平不倾斜，别名同步至规则表） · v4.7：闭环筛选修复（移除门店已选标签冗余行 / 切换岗位·大区·小区不再自动点亮全部门店，未单独勾选=范围内全部生效 / 热力图按达成率着色；筛选层级：大区→小区→门店→岗位→人员）· 默认演示模式（模拟数据，加 ?data=api 切换真实数据服务）· 经营总览看板：全国 → 大区 → 小区 → 门店 → 岗位 → 人员 六级 · 区间合计基于所选时间与组织范围动态计算 · 三大板块可展开查看按日走势 · 经营结果趋势分析支持指标多选与双 Y 轴 · 业务执行与闭环看板：单岗位 × 多门店散点图（X=累计积分，Y=锁单量/试驾点评率/线索试驾率），门店分色，附均值参考线 · v4：组织范围支持「显示已停用」开关（API 模式），离职人员/闭店门店可查看，历史指标仍完整保留 · v4.1：积分排行榜门店维度按人均积分（总积分 ÷ 在职人数）排名，消除人数规模优势 · v4.4：闭环筛选面板布局重排（大区→门店[多选开关同行]→岗位）、积分/销量排行榜同时展示人均销量+人均积分（销量/积分优先可切换，默认销量优先）、顶栏筛选区可一键收起展开 · v4.3：PK 模式支持岗位层级（跨店同岗对比）、闭环看板大区→小区→门店层级筛选、筛选候选严格限定当前范围 · 闭环门店筛选默认单选，可开启多选勾选多家
         </footer>
     </div>
 
@@ -699,7 +710,7 @@
                 <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg">D</div>
                 <div>
                     <h2 class="text-lg font-bold text-white">业务数据看板</h2>
-                    <p id="loginSubTitle" class="text-xs text-slate-400">V5.4 · 工号密码登录</p>
+                    <p id="loginSubTitle" class="text-xs text-slate-400">V5.12 · 工号密码登录</p>
                 </div>
             </div>
             <p id="loginDesc" class="text-xs text-slate-400 mt-3 mb-3 leading-relaxed">输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。</p>
@@ -862,10 +873,9 @@
             ['locked', 'opportunities', 0.46],
             ['delivered', 'locked', 0.88]
         ];
-        // 七阶段全链路漏斗
+        // 全链路漏斗（v5.12：首层改为意向线索，只保留 邀约排程/到店/有效试驾/锁单/交付 共 6 阶段）
         const FUNNEL_STAGES = [
-            { key: 'leads', name: '新增线索', color: '#3b82f6' },
-            { key: 'validLeads', name: '有效线索', color: '#06b6d4' },
+            { key: 'intentLeads', name: '意向线索', color: '#6366f1' },
             { key: 'invites', name: '邀约排程', color: '#10b981' },
             { key: 'arrivals', name: '到店', color: '#22d3ee' },
             { key: 'testDrives', name: '有效试驾', color: '#8b5cf6' },
@@ -1411,7 +1421,11 @@
                     // 401：清 token + 显示登录页（登录接口本身 401 不弹窗）
                     if (!/auth\/login/.test(url)) {
                         clearToken();
-                        if (DATA_MODE === 'api') showLogin('会话已过期，请重新登录');
+                        if (DATA_MODE === 'api') {
+                            // v5.5：重登前先重新探测鉴权模式 —— 否则 AUTH_MODE 停留在默认 password，
+                            // emp_only 免密模式下会话过期也会误显「工号+密码」登录框
+                            fetchAuthMode().then(function () { showLogin('会话已过期，请重新登录'); });
+                        }
                     }
                     throw new Error('HTTP 401 - ' + url);
                 }
@@ -1489,7 +1503,7 @@
             const desc = document.getElementById('loginDesc');
             if (desc) desc.textContent = empOnly ? '输入工号直接登录（当前为免密码试用模式：仅凭工号识别身份，请勿将本人工号借予他人）。' : '输入工号与密码登录。初次登录或密码被重置后须先修改默认密码。';
             const sub = document.getElementById('loginSubTitle');
-            if (sub) sub.textContent = empOnly ? 'V5.4 · 工号登录（免密码）' : 'V5.4 · 工号密码登录';
+            if (sub) sub.textContent = empOnly ? 'V5.12 · 工号登录（免密码）' : 'V5.12 · 工号密码登录';
             const forgot = document.getElementById('loginForgotHint');
             if (forgot) forgot.classList.toggle('hidden', empOnly);
         }
@@ -2381,6 +2395,7 @@
                 const first = m[FUNNEL_STAGES[0].key] || 0;
                 sub.textContent = FUNNEL_STAGES.length + ' 阶段 · ' + node.name + ' · 区间合计';
                 let worst = null;
+                // v5.12：右侧百分比统一改为「意向线索 → 本层」的累计转化率（以意向线索为基准）
                 body.innerHTML = FUNNEL_STAGES.map(function (st, i) {
                     const v = m[st.key];
                     const prevV = i === 0 ? v : m[FUNNEL_STAGES[i - 1].key];
@@ -2388,9 +2403,9 @@
                     const cumRate = first ? (v / first) * 100 : 100;
                     if (i > 0 && (worst === null || stepRate < worst.rate)) worst = { rate: stepRate, from: FUNNEL_STAGES[i - 1].name, to: st.name };
                     const w = Math.max(10, Math.min(100, cumRate));
-                    const rateClass = i === 0 ? 'ghost' : (stepRate < 50 ? 'warn' : '');
-                    const rateText = i === 0 ? '基准' : stepRate.toFixed(1) + '%';
-                    return '<div class="funnel-row" data-key="' + st.key + '" style="--w:' + w + '%;--fc:' + st.color + '" title="' + st.name + '：' + fmt(v) + '（占首层 ' + cumRate.toFixed(1) + '%，环比 ' + rateText + '）">' +
+                    const rateClass = i === 0 ? 'ghost' : (cumRate < 10 ? 'warn' : '');
+                    const rateText = i === 0 ? '基准' : cumRate.toFixed(1) + '%';
+                    return '<div class="funnel-row" data-key="' + st.key + '" style="--w:' + w + '%;--fc:' + st.color + '" title="' + st.name + '：' + fmt(v) + '（意向线索→' + st.name + ' ' + cumRate.toFixed(1) + '%' + (i > 0 ? '，上一层→本层 ' + stepRate.toFixed(1) + '%' : '') + '）">' +
                         '<div class="fr-track">' +
                         '<div class="fr-bar">' +
                         '<div class="fr-inner">' +
@@ -2402,12 +2417,12 @@
                 }).join('');
                 const conv = first ? (m.delivered / first) * 100 : 0;
                 footer.innerHTML =
-                    '<div class="flex items-center justify-between"><span class="text-slate-400">整体转化率（线索 → 交付）</span>' +
+                    '<div class="flex items-center justify-between"><span class="text-slate-400">整体转化率（意向线索 → 交付）</span>' +
                     '<span class="text-white font-bold">' + conv.toFixed(2) + '%</span></div>' +
                     (worst ? '<div class="flex items-center justify-between"><span class="text-slate-400">最大流失环节</span>' +
                         '<span class="text-rose-400 font-medium">' + worst.from + ' → ' + worst.to + '（' + worst.rate.toFixed(1) + '%）</span></div>' : '') +
                     '<div class="flex items-center justify-between"><span class="text-slate-400">线索量</span>' +
-                    '<span class="text-slate-200">' + fmt(m.leads) + ' 条 → 交付 ' + fmt(m.delivered) + ' 辆</span></div>' +
+                    '<span class="text-slate-200">意向线索 ' + fmt(first) + ' 条 → 交付 ' + fmt(m.delivered) + ' 辆</span></div>' +
                     (m.delivered < 5 ? '<div class="text-[11px] text-amber-300/80 pt-1 leading-relaxed">当前范围样本较小（交付 ' + fmt(m.delivered) +
                         ' 辆），深层指标会出现 0 值，建议放宽时间区间或组织范围后再看转化率</div>' : '');
             } else {
@@ -2629,7 +2644,7 @@
             if (matrixSubEl) {
                 const pathText = nodePath(cur).map(function (n) { return n.name; }).join(' → ');
                 matrixSubEl.textContent = (cur.level === '人员')
-                    ? pathText + ' · 已到人员级 · 区间逐日动作积分完成率见下方（完成率 = 当日积分 ÷ 已评估拿分项封顶）'
+                    ? pathText + ' · 已到人员级 · 区间逐日动作积分完成率见下方（完成率 = 当日积分 ÷ 已评估拿分项标准分，日标准得分 = 100%）'
                     : (isDutyLevel
                         ? pathText + ' · 人员 × 关键动作 · 得分率 = 完成量 ÷ 分配任务量 · 环比 = 对比上一等长周期（百分点）· 点击人员行下钻查看逐日积分'
                         : pathText + ' · 按所选范围 · 环比 = 对比上一等长周期 · 点击行继续下钻（至人员级）');
@@ -2893,29 +2908,50 @@
 
         // 人员层主渲染：区间逐日完成率表（列表区）+ 区间动作得分率汇总（#drillDutyDetail，复用 renderDutyPersonDetail）
         // v5.4：人员层主渲染 · 区间逐日动作积分完成率（接入动作评分导入数据）
-        // 取数优先级：
-        //   1) LH 真实日报路径（交付专员/店长）—— 走原 drillDailyPoint，CL_DATES 置灰；
-        //   2) 接口真实区间（/api/scoring/range）—— 有数据日期显示真实积分/完成率，无数据日期置灰；
-        //   3) 其余 —— 走 drillDailyPoint 的规则驱动模拟分支（确定性生成），并在 dataNote 标明「规则驱动模拟数据（确定性生成）」。
+        // 取数优先级（v5.7 修订）：
+        //   1) 接口真实区间（/api/scoring/range）—— 有数据日期显示真实积分/完成率；
+        //   2) v5.7：岗位已导入评分（/api/scoring/meta detailRows>0）但该人无任何记录 —— 整表置灰「当日无该人评估数据」，不再回退模拟；
+        //   3) LH 真实日报路径（交付专员/店长，未导入评分的岗位）—— 走原 drillDailyPoint，CL_DATES 置灰；
+        //   4) 其余（mock 模式 / 从未导入的演示岗位）—— 走 drillDailyPoint 的规则驱动模拟分支（确定性生成），并在 dataNote 标明「规则驱动模拟数据（确定性生成）」。
         // 行点击：真实数据来源异步补充 /scoring/details 证据链再打开诊断抽屉。
         function drillRealPoint(personNode, rule, day) {
-            const itemMap = {};
-            (day.items || []).forEach(function (it) { itemMap[it.item] = it; });
-            const items = rule.scoreItems;
-            const dims = [], ratios = [], counts = [];
-            let point = 0, capCover = 0;
+            const itemMap = {}, itemMapN = {};
+            (day.items || []).forEach(function (it) {
+                itemMap[it.item] = it;
+                itemMapN[String(it.item || '').replace(/[%％\s]/g, '')] = it;   // v5.9：归一化键（去 %/空格）
+            });
+            // v5.9：导入拿分项与静态规则名可能不完全一致（如导入「线索处理及时率」vs 规则表「线索处理及时率%」——
+            // 数营专家规则全是 deprecated 草案，clRuleFor 兜底 slice(0,4) 后 4 项全部映射失败 → dims 全 null →
+            // every() 误判 noData，即使 /scoring/range 返回了真实数据（宋彩虹 9/10 1.48 分/148%）也整表置灰）。
+            // 修复：①查找时先精确后归一化；②接口返回的拿分项若静态规则未覆盖则补入映射
+            let items = (rule.scoreItems && rule.scoreItems.length) ? rule.scoreItems.slice() : [];
+            (day.items || []).forEach(function (d) {
+                if (d && d.item && !items.some(function (x) {
+                    return x.name === d.item || String(x.name || '').replace(/[%％\s]/g, '') === String(d.item).replace(/[%％\s]/g, '');
+                })) {
+                    items.push({ name: d.item, cap: d.cap || d.std || 1 });
+                }
+            });
+            const dims = [], ratios = [], counts = [], stds = [];
+            let point = 0, capCover = 0, stdCover = 0;
             items.forEach(function (it) {
-                const r = itemMap[it.name];
-                if (!r) { dims.push(null); ratios.push(null); counts.push(null); return; }
+                const r = itemMap[it.name] || itemMapN[String(it.name || '').replace(/[%％\s]/g, '')];
+                if (!r) { dims.push(null); ratios.push(null); counts.push(null); stds.push(null); return; }
                 const v = Number(r.score || 0);
+                // v5.5：日标准得分（100% 达标线）优先取导入汇总 target_score，缺失回退规则封顶；
+                // 单项比率与当日完成率均不封顶 —— 超出标准按比例计（如 6 分 / 标准 4 分 = 150%）
+                const std = Number(r.targetScore) > 0 ? Number(r.targetScore) : (it.cap || 1);
                 dims.push(Math.round(v * 100) / 100);
-                ratios.push(it.cap ? Math.max(0, Math.min(100, v / it.cap * 100)) : 0);
+                ratios.push(std ? Math.max(0, v / std * 100) : 0);
                 counts.push(r.count === undefined ? null : r.count);
                 point += v;
-                capCover += it.cap;
+                capCover += (it.cap || 1);
+                stdCover += std;
+                stds.push(std);
             });
             const capAvail = rule.capAvailable || rule.cap || 1;
-            const rate = capCover ? point / capCover * 100 : 0;
+            // v5.5：完成率 = 当日积分 ÷ 当日标准分合计（分母只累计当日实际有评估数据的拿分项）
+            const rate = stdCover ? point / stdCover * 100 : 0;
             let wi = -1, wv = 1000;
             ratios.forEach(function (v, i) { if (v !== null && v < wv) { wv = v; wi = i; } });
             const st = clStatusOf(rate);
@@ -2927,9 +2963,14 @@
                 storeIdx: -1, storeId: '', storeCode: '', storeName: personNode.storeName || '',
                 region: '', area: '',
                 real: true, sourceKind: 'import',
-                dims: dims, ratios: ratios, counts: counts,
+                dims: dims, ratios: ratios, counts: counts, stds: stds,
+                // v5.9 修复③：把「静态规则 + 导入自动补项」合并后的拿分项清单带出去（与 dims/stds/ratios/counts 同索引）。
+                // 此前抽屉只遍历静态规则表，导入的新拿分项（如产品专家「到店接待」）计入当日积分却无行可显示 → 三个区块对不上
+                itemNames: items.map(function (x) { return x.name; }),
+                itemCaps: items.map(function (x) { return x.cap || 1; }),
                 points: Math.round(point * 100) / 100, cap: rule.cap, capAvailable: capAvail,
                 capCover: Math.round(capCover * 100) / 100,
+                stdCover: Math.round(stdCover * 100) / 100,
                 coverCnt: dims.filter(function (v) { return v !== null; }).length, coverTotal: items.length,
                 rate: Math.round(rate * 10) / 10,
                 rateFull: capAvail ? Math.round(point / capAvail * 1000) / 10 : 0,
@@ -2939,9 +2980,29 @@
                 weakestRate: wi < 0 ? 0 : Math.round(wv),
                 deductions: [], dedCount: 0, dedTotal: 0,
                 dedRows: [], empCode: '', delivered: 0,
+                real: true,   // v5.6：真实导入行来源徽章不再误显「模拟数据」
                 tag: { text: '动作评分导入', warn: false },
                 noData: dims.every(function (v) { return v === null; })
             };
+        }
+
+        // v5.7：动作评分导入元信息（/api/scoring/meta，API 模式懒加载一次）—— 判断「该岗位是否已导入评分明细」。
+        // 用途：API 模式下岗位已有导入数据、但当前人员无导入记录时，逐日表不再回退确定性模拟，整表置灰。
+        const SMETA = { req: null, posts: null, days: [] };
+        function smetaLoad() {
+            if (DATA_MODE !== 'api') return Promise.resolve(null);
+            if (!SMETA.req) {
+                SMETA.req = fetchJson(API_BASE + '/api/scoring/meta').then(function (m) {
+                    if (m && m.ok && Array.isArray(m.posts)) {
+                        SMETA.posts = new Set(m.posts.filter(function (x) { return (x.detailRows || 0) > 0; }).map(function (x) { return x.postKey; }));
+                        SMETA.days = (m.days || []).slice();
+                    } else {
+                        SMETA.posts = new Set();
+                    }
+                    return SMETA.posts;
+                }).catch(function () { SMETA.posts = new Set(); return SMETA.posts; });
+            }
+            return SMETA.req;
         }
 
         async function renderDrillPersonDaily(cur, r) {
@@ -2953,16 +3014,28 @@
             const rule = clRuleFor(postKey);
             const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
 
-            // 计算区间日期串（YYYY-MM-DD）
+            // v5.8：区间日期串直接取顶栏日期筛选 state.start/end（不按指标数据窗口钳制）——
+            // 此前用入参 r（currentIdx() 被 clampIdx 钳制到指标数据范围，如 9/10~9/16），
+            // 顶栏选 9/9~9/20 应用后逐日表日期串不变，表现为「日期筛选不同步」；
+            // 窗口外日期由既有分支自然处理：导入未命中/置灰、LH 无日报返回 null 置灰
             const dates = [];
-            for (let i = r[0]; i <= r[1]; i++) {
-                dates.push(dateStr(new Date(START_DATE.getTime() + i * ONE_DAY)));
+            {
+                let d = parseDate(state.start);
+                const dEnd = parseDate(state.end);
+                let guard = 0;
+                while (d <= dEnd && guard++ < 400) {
+                    dates.push(dateStr(d));
+                    d = new Date(d.getTime() + ONE_DAY);
+                }
             }
+            if (!dates.length) { dates.push(dateStr(parseDate(state.start))); }
             const dsFrom = dates[0], dsTo = dates[dates.length - 1];
 
-            // v5.4：拉取该人员的真实区间数据（LH 真实日报岗位跳过 —— 走 LH 路径）
+            // v5.4：拉取该人员的真实区间数据（动作评分导入）；
+            // v5.6：交付等 LH 岗位也拉取 —— 逐日取数优先级改为「导入数据 > LH 真实日报 > 置灰」，
+            // 否则导入的 9/10 评分数据在 LH 岗位（仅 5/22 有日报）的逐日表上永远不出现
             const realMap = new Map();
-            if (!(LH_OK && rule.real) && cur.id) {
+            if (cur.id) {
                 try {
                     const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
                     if (resp && resp.ok && Array.isArray(resp.days)) {
@@ -2975,9 +3048,15 @@
                 const ks = Array.from(realMap.keys()).sort();
                 realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
             }
-            const dataNote = (LH_OK && rule.real)
-                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）'
+            // v5.7：API 模式下查询岗位导入元信息 —— 岗位已有导入评分但该人无记录 → 整表置灰，不回退模拟
+            const smetaPosts = await smetaLoad();
+            const postHasImport = !!(smetaPosts && smetaPosts.has(postKey));
+            let dataNote = (LH_OK && rule.real)
+                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）' + (realMap.size ? '；' + realNote : '')
                 : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
+            if (postHasImport && !realMap.size) {
+                dataNote = '该岗位已导入动作评分（导入日期 ' + (SMETA.days.join('、') || '—') + '），当前人员无导入记录 —— 逐日置灰，不展示模拟数据';
+            }
 
             // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
             const rows = [];
@@ -2986,11 +3065,14 @@
             const useRealOnly = realMap.size > 0;
             for (const ds of dates) {
                 let pt, isRealRow = false;
-                if (LH_OK && rule.real) {
-                    pt = drillDailyPoint(cur, ds);
-                } else if (realMap.has(ds)) {
+                if (realMap.has(ds)) {
                     pt = drillRealPoint(cur, rule, realMap.get(ds));
                     isRealRow = true;
+                } else if (postHasImport) {
+                    // v5.7：岗位已导入评分但该人当日无记录 → 置灰（不再回退确定性模拟 / LH 映射，杜绝「天天都有假数据」）
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else if (LH_OK && rule.real) {
+                    pt = drillDailyPoint(cur, ds);
                 } else if (useRealOnly) {
                     // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
                     pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
@@ -3022,7 +3104,7 @@
                 return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
                     '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
                     '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项封顶之和（无数据项不计入分母）">' + clNum(pt.capCover) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项标准分（日标准得分）之和（无数据项不计入分母）">' + clNum(pt.stdCover != null ? pt.stdCover : pt.capCover) + '</td>' +
                     '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
                     '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
                     '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
@@ -3038,13 +3120,13 @@
                 '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
                     '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
                     '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
-                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项封顶（已评估口径）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
+                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项标准分（日标准得分 = 100%，超出按比例计，如 150%；当日无评估数据的拿分项不计入分母）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
                 '</div>' +
                 '<table class="min-w-full border-collapse text-sm">' +
                     '<thead><tr>' +
                     '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
                     '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估满分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估标准分</th>' +
                     '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
                     '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
                     '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
@@ -3085,7 +3167,12 @@
                                     pt.dedRows = resp.details.map(function (r) {
                                         return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
                                     });
-                                    pt.dedCount = pt.dedRows.length;
+                                    // v5.6：同步构建扣分明细（抽屉「扣分明细」表 / 扣分单数 / 累计扣分 / 标签）
+                                    const deds = clDedsFromDetails(resp.details);
+                                    pt.deductions = deds;
+                                    pt.dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
+                                    pt.dedTotal = Math.round(deds.reduce(function (s, d) { return s + d.total; }, 0) * 100) / 100;
+                                    if (deds.length) pt.tag = clTagOf(deds);
                                 }
                                 openIt();
                             })
@@ -3516,9 +3603,14 @@
                 grid: { left: 10, right: gridRight, top: 42, bottom: 6, containLabel: true },
                 legend: { data: selected.map(function (m) { return m.label; }), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
                 tooltip: { trigger: 'axis', ...TOOLTIP_STYLE, formatter: tooltipFormatter },
-                xAxis: { type: 'category', data: buckets.map(function (b) { return b.label; }), boundaryGap: false, ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) } },
+                // v5.10：数量类指标贴边会被裁切，含柱状时保留类目两侧空隙；纯比率时折线仍贴边
+                xAxis: { type: 'category', data: buckets.map(function (b) { return b.label; }), boundaryGap: absSelected.length > 0, ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) } },
                 yAxis: yAxis,
-                series: selected.map(function (m) {
+                // v5.10 图形分型：具体数据（type='abs'）用柱状图对比、百分比比率（type='rate'）用折线图；
+                // 系列顺序固定「先柱后线」，折线压在柱体上方不被遮挡
+                series: selected.slice().sort(function (a, b) {
+                    return (a.type === 'abs' ? 0 : 1) - (b.type === 'abs' ? 0 : 1);
+                }).map(function (m) {
                     if (m.type === 'rate') {
                         return {
                             name: m.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
@@ -3530,19 +3622,18 @@
                     }
                     const peak = absPeak[m.key] || 0;
                     return {
-                        name: m.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
-                        showSymbol: buckets.length <= 40,
+                        name: m.label, type: 'bar', barMaxWidth: 18,
                         yAxisIndex: 0,
                         data: buckets.map(function (b) {
                             const v = b.values[m.key] || 0;
                             return normEff ? (peak ? Math.round(v / peak * 1000) / 10 : 0) : Math.round(v);
                         }),
-                        lineStyle: { color: m.color, width: 2 }, itemStyle: { color: m.color },
-                        areaStyle: normEff ? undefined : {
+                        itemStyle: {
                             color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-                                { offset: 0, color: scaleColor(m.color, 0.35) },
-                                { offset: 1, color: scaleColor(m.color, 0) }
-                            ])
+                                { offset: 0, color: scaleColor(m.color, 0.95) },
+                                { offset: 1, color: scaleColor(m.color, 0.4) }
+                            ]),
+                            borderRadius: [4, 4, 0, 0]
                         }
                     };
                 })
@@ -3710,20 +3801,78 @@
 
             const node = currentNode();
             const level = state.tableDim;
+            // v5.11：门店 / 岗位维度改用「人均积分完成率」排名（消除人数规模差异），人员维度仍为个人总积分
+            const isRateDim = level !== '人员';
+            // 口径：行子树内每位在职人员的（区间积分 ÷ 个人满分梯度 × 100%）先各自算完成率，再等权平均
+            // 实现：一次遍历在职人员并沿 parent 向上回写，避免逐行重算子树（O(人数 × 树深)）
+            const rateMap = new Map();      // node.id → { sumRate, cnt, sumPoints, sumCap }
+            if (isRateDim) {
+                collectLevel(node, '人员', []).forEach(function (p) {
+                    if (p.status === 0) return;                  // 已停用人员不计入分母
+                    const cap = productExpertFullScore(p);       // 与「达成率 × 交付量」四象限同一满分口径
+                    if (!(cap > 0)) return;
+                    const pm = metricsOf(p, r[0], r[1]);
+                    const pts = (pm && typeof pm.points === 'number' && isFinite(pm.points)) ? pm.points : 0;
+                    const rate = pts / cap * 100;
+                    let cur = p;
+                    while (cur) {
+                        let rec = rateMap.get(cur.id);
+                        if (!rec) { rec = { sumRate: 0, cnt: 0, sumPoints: 0, sumCap: 0 }; rateMap.set(cur.id, rec); }
+                        rec.sumRate += rate; rec.cnt += 1; rec.sumPoints += pts; rec.sumCap += cap;
+                        cur = cur.parent;
+                    }
+                });
+            }
+            function rateRecOf(n) {
+                const rec = rateMap.get(n.id);
+                return (rec && rec.cnt > 0 && rec.sumCap > 0) ? rec : null;
+            }
+            function avgRateOf(n) {
+                const rec = rateRecOf(n);
+                return rec ? rec.sumRate / rec.cnt : null;
+            }
             // v4.3：行严格按当前范围收集，不再回退全树（避免范围外条目出现）
             let rows = collectLevel(node, level, []);
-            rows = rows.slice().sort(function (a, b) { return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points; });
-            sub.textContent = level + '维度 · 范围：' + node.name + ' · 按积分降序 · 共 ' + rows.length + ' 条';
-            const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', '积分'];
+            rows = rows.slice().sort(function (a, b) {
+                if (isRateDim) {
+                    const ra = avgRateOf(a), rb = avgRateOf(b);
+                    if (ra === null && rb === null) return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points;
+                    if (ra === null) return 1;                   // 无法计算的排末位
+                    if (rb === null) return -1;
+                    if (rb !== ra) return rb - ra;
+                }
+                return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points;
+            });
+            sub.textContent = level + '维度 · 范围：' + node.name + ' · ' + (isRateDim ? '按人均积分完成率降序' : '按积分降序') + ' · 共 ' + rows.length + ' 条';
+            const lastCol = isRateDim ? '人均积分完成率' : '积分';
+            const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', lastCol];
+            const rateTip = '人均积分完成率 = 该行子树在职人员「区间积分 ÷ 个人满分梯度」百分比的等权平均（先算个人完成率再平均，非 Σ积分 ÷ Σ满分）';
             thead.innerHTML = '<tr>' + cols.map(function (c, i) {
-                return '<th class="py-2 px-2 font-medium whitespace-nowrap ' + (i ? 'text-right' : 'text-left') + '">' + c + '</th>';
+                const tip = (isRateDim && i === cols.length - 1) ? ' title="' + rateTip + '"' : '';
+                return '<th class="py-2 px-2 font-medium whitespace-nowrap ' + (i ? 'text-right' : 'text-left') + '"' + tip + '>' + c + '</th>';
             }).join('') + '</tr>';
             tbody.innerHTML = rows.map(function (n, i) {
-                const m = metricsOf(n, r[0], r[1]);
+                const m = metricsOf(n, r[0], r[1]) || { leads: 0, arrivals: 0, locked: 0, delivered: 0, points: 0 };
                 const l2a = m.leads ? (m.arrivals / m.leads) * 100 : 0;
                 const conv = m.leads ? (m.delivered / m.leads) * 100 : 0;
                 const nm = level === '人员' && n.storeName ? n.storeName + ' · ' + n.name + '（' + (n.postName || '') + '）' : n.name;
                 const nmHTML = '<span' + (n.status === 0 ? ' class="txt-inactive"' : '') + '>' + nm + '</span>';
+                let lastCell;
+                if (isRateDim) {
+                    const rec = rateRecOf(n);
+                    const rate = avgRateOf(n);
+                    if (rate === null) {
+                        lastCell = '<span class="text-slate-500" title="该范围无在职人员或无有效满分梯度，无法计算人均积分完成率">—</span>';
+                    } else {
+                        const avgPts = rec.sumPoints / rec.cnt;
+                        const wholeRate = rec.sumCap ? rec.sumPoints / rec.sumCap * 100 : 0;
+                        const tip = '总积分 ' + fmt(rec.sumPoints) + ' ÷ ' + rec.cnt + ' 人 = 人均 ' + avgPts.toFixed(1) + ' 分' +
+                            ' · Σ满分 ' + fmt(rec.sumCap) + ' · 整体口径完成率 ' + wholeRate.toFixed(1) + '%';
+                        lastCell = '<span class="text-amber-400 font-semibold" title="' + tip + '">' + rate.toFixed(1) + '%</span>';
+                    }
+                } else {
+                    lastCell = '<span class="text-amber-400 font-semibold">' + fmt(m.points) + '</span>';
+                }
                 return '<tr class="border-t border-white/5 hover:bg-white/5 transition">' +
                     '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' + nmHTML + '</td>' +
                     '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.leads) + '</td>' +
@@ -3732,7 +3881,7 @@
                     '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.delivered) + '</td>' +
                     '<td class="py-2 px-2 text-right text-slate-400">' + l2a.toFixed(1) + '%</td>' +
                     '<td class="py-2 px-2 text-right text-slate-400">' + conv.toFixed(1) + '%</td>' +
-                    '<td class="py-2 px-2 text-right font-semibold text-amber-400">' + fmt(m.points) + '</td></tr>';
+                    '<td class="py-2 px-2 text-right">' + lastCell + '</td></tr>';
             }).join('');
         }
 
@@ -3795,10 +3944,121 @@
         }
         function clEvPairs(evStr) {
             if (!evStr) return [];
-            return evStr.split('|').map(function (seg) {
-                const i = seg.indexOf('=');
-                return i < 0 ? { k: '说明', v: seg } : { k: seg.slice(0, i), v: seg.slice(i + 1) };
+            // 灯塔 mock 格式：k=v|k=v
+            if (evStr.indexOf('|') >= 0) {
+                return evStr.split('|').map(function (seg) {
+                    const i = seg.indexOf('=');
+                    return i < 0 ? { k: '说明', v: seg } : { k: seg.slice(0, i), v: seg.slice(i + 1) };
+                });
+            }
+            // v5.6：真实导入格式 —— 前缀（未满足【规则】/已满足【规则】/不满足：/证据：）+ 中文分句，句内 k=v 或 k：v
+            const out = [];
+            let s = String(evStr);
+            const mUn = s.match(/^(未满足|已满足)【([^】]*)】/);
+            if (mUn) {
+                out.push({ k: '结论', v: mUn[1] });
+                if (mUn[2]) out.push({ k: '规则', v: mUn[2] });
+                s = s.slice(mUn[0].length);
+            } else if (/^[不未]满足[：:]/.test(s)) {
+                out.push({ k: '结论', v: s.slice(0, 3) });
+                s = s.replace(/^[不未]满足[：:]/, '');
+            }
+            s.split(/[；;]/).forEach(function (part) {
+                part.split(/[，,]/).forEach(function (seg) {
+                    seg = seg.trim().replace(/^证据[：:]/, '').replace(/[）)]$/, '').trim();
+                    if (!seg) return;
+                    const kv = seg.match(/^([^=：:]{1,14})\s*[=：:]\s*(.+)$/);
+                    out.push(kv ? { k: kv[1].trim(), v: kv[2].trim() } : { k: '说明', v: seg });
+                });
             });
+            return out.filter(function (x) { return x.v !== ''; });
+        }
+        // v5.9：0 分行未达成判定（扣分明细 + AI 证据链徽章共用口径）—— 结论前缀优先 + 描述式反向判定：
+        // ① 「不满足/未满足」开头 → 未达成；「已满足/全满足/满分」开头 → 达成（「不满足：…其余2项满足」尾部的
+        //    「满足」不得翻转结论）；② 无结论前缀的描述式证据（如「4必讲侧0项命中」「无收尾动作」「未就五个维度
+        //    主动探索需求」，全库 9/10 有 291 行，如张涛试乘试驾 2 行 0 分）按达成词白名单反向判定，防漏进扣分明细。
+        // 顺带修正旧口径两处误判：描述式失败证据漏判 291 行；交付店长「已满足【…未逾期】」被「逾期」关键词误计未达成 239 行
+        function clZeroRowBad(evidence) {
+            const ev = String(evidence || '').trim();
+            if (!ev) return true;
+            if (/^(不满足|未满足|未达成|不达标|未达标)/.test(ev)) return true;
+            if (/^(已满足|全满足|满足|已达标|满分)/.test(ev)) return false;
+            return !/全满足|(?<![不未])满足|不扣分|(?<!未)达标|(?<![未不])通过|满分|未逾期|未超时|不判/.test(ev);
+        }
+        // v5.9c：分数明细解析器 —— 动作文本按 1-1-x 编号拆条款清单（去重保序）
+        function clParseClauses(actionText) {
+            if (!actionText) return [];
+            const out = [];
+            const seen = new Set();
+            const codeRe = /(\d-\d-\d+)/g;
+            // split 捕获：parts[0]=前导, [1]=code1, [2]=desc1, [3]=code2, [4]=desc2, ...
+            const parts = String(actionText).split(codeRe);
+            for (let i = 1; i < parts.length; i += 2) {
+                const code = parts[i];
+                if (seen.has(code)) continue;
+                seen.add(code);
+                const desc = (parts[i + 1] || '').replace(/[\s…\.。,，;；]+/g, ' ').trim();
+                out.push({ code: code, desc: desc });
+            }
+            return out;
+        }
+        // v5.9c：分数明细解析器 —— AI 证据结构化（verdict/failCodes/basis/restOk）
+        // verdict 与 clZeroRowBad 口径对齐：前缀「不满足/未达成」=fail；「全满足/满足」=pass；描述式反向判定
+        function clParseAiReason(evidenceText) {
+            const ev = String(evidenceText || '').trim();
+            if (!ev) return { verdict: 'unknown', failCodes: [], basis: '', restOk: '' };
+            // ---- verdict 判定 ----
+            let verdict = 'unknown';
+            if (/^(不满足|未满足|未达成|不达标|未达标)/.test(ev)) verdict = 'fail';
+            else if (/^(已满足|全满足|满足|已达标|满分)/.test(ev)) verdict = 'pass';
+            if (verdict === 'unknown') {
+                // 描述式反向判定：含达成词→pass，否则按 fail（与 clZeroRowBad 一致）
+                if (/全满足|(?<![不未])满足|不扣分|(?<!未)达标|(?<![未不])通过|满分|未逾期|未超时/.test(ev)) verdict = 'pass';
+                else verdict = 'fail';
+            }
+            // ---- failCodes：从「不满足：1-1-x …」提取失败编号 ----
+            const failCodes = [];
+            const failMatch = ev.match(/不满足[：:]\s*([\s\S]*?)(?=[（(;；]|其余|全满足|$)/);
+            if (failMatch && failMatch[1]) {
+                const codes = failMatch[1].match(/\d-\d-\d+/g);
+                if (codes) failCodes.push(...codes);
+            }
+            // ---- basis：括号内判定依据 ----
+            let basis = '';
+            const basisMatch = ev.match(/[（(]([^）)]+)[）)]/);
+            if (basisMatch) basis = basisMatch[1].trim();
+            // ---- restOk：「其余 N 项满足」 ----
+            let restOk = '';
+            const restMatch = ev.match(/其余\s*(\d+)\s*项满足/);
+            if (restMatch) restOk = '其余' + restMatch[1] + '项满足';
+            return { verdict: verdict, failCodes: failCodes, basis: basis, restOk: restOk };
+        }
+        // v5.6：真实导入明细行 → 扣分明细（抽屉「扣分明细」表与 dedByItem/totalDed 数据源）
+        // 口径：score<0（交付岗位负分行）或 score=0 且证据判定未达成（v5.9 起反向判定，见 clZeroRowBad）
+        function clDedsFromDetails(details) {
+            const isBad = function (r) {
+                return r.score < 0 || (r.score === 0 && clZeroRowBad(r.evidence));
+            };
+            const map = new Map();
+            details.forEach(function (r) {
+                if (!isBad(r)) return;
+                const key = r.item + '||' + r.action;
+                let d = map.get(key);
+                if (!d) { d = { item: r.item, action: r.action, count: 0, per: null, total: 0, orders: [], evidence: [] }; map.set(key, d); }
+                d.count += 1;
+                if (r.score < 0) { d.total += -r.score; if (d.per === null) d.per = -r.score; }
+                if (r.orderNo && d.orders.indexOf(r.orderNo) < 0 && d.orders.length < 5) d.orders.push(String(r.orderNo));
+                if (r.evidence && d.evidence.length < 3) d.evidence.push(r.evidence);
+            });
+            return Array.from(map.values()).map(function (d) {
+                // 单次分值：负分行用 |score|；否则从动作文本尾部解析「；0.06分」
+                if (d.per === null) {
+                    const m = String(d.action || '').match(/[；;]\s*(\d+(?:\.\d+)?)\s*分\s*$/) || String(d.action || '').match(/(\d+(?:\.\d+)?)\s*分\s*$/);
+                    if (m) d.per = Number(m[1]);
+                }
+                if (d.per !== null && d.total === 0) d.total = Math.round(d.per * d.count * 100) / 100;
+                return d;
+            }).sort(function (a, b) { return b.total - a.total || b.count - a.count; });
         }
 
         // ---------- 岗位积分规则（灯塔规则表；无规则表的岗位用通用动作兜底）----------
@@ -4259,7 +4519,13 @@
             const d = document.getElementById('clDrawer'); if (!d) return;
             const p = ctx.points[idx], rule = ctx.rule;
             if (!p) return;
-            const items = rule.scoreItems;
+            // v5.9 修复③：拿分项清单与逐日表口径对齐 —— 真实导入行优先用 drillRealPoint 合并后的清单
+            // （静态规则 + 导入自动补项，如产品专家导入的「到店接待」不在静态规则表内，旧代码致构成表漏行、
+            // 表内合计 ≠ 头部当日积分、已评估 N/M 项 的第 M 项无处可看）；无合并清单时回退静态规则表。
+            // dims/stds/ratios/counts 均按同一索引生成，故构成表、雷达图、扣分分布三者天然对齐
+            const items = (p.itemNames && p.itemNames.length) ? p.itemNames.map(function (nm, i) {
+                return { name: nm, cap: (p.itemCaps && p.itemCaps[i]) || 1 };
+            }) : rule.scoreItems;
             // ---- 证据链条目：真实数据用明细行，模拟数据用扣分项证据 ----
             const tl = [];
             if (p.dedRows && p.dedRows.length) {
@@ -4273,36 +4539,147 @@
                     });
                 });
             }
-            const tlShown = tl.slice(0, 40);
+            // v5.7：AI 证据链按「拿分项+动作」分组折叠 —— 导入明细是「一订单一条判定记录」（如非首访 23 个订单=23 条），
+            // 平铺几十条过长且易误读为重复导入；组头显示判定数与达成/未达成计数，组内明细默认收起、点击展开
+            const evSrcText = (p.dedRows && p.dedRows.length) ? '评分导入文件（AI 分析原因）' : '灯塔系统判定日志';
+            const evIsBad = function (e) {
+                if (Number(e.score) > 0) return false;   // v5.7：得分行（如 0.1 分）直接判达成，不看证据关键词
+                // v5.9：0 分行改反向判定（与扣分明细 clDedsFromDetails 共用 clZeroRowBad）——描述式失败证据（0项命中/无收尾动作等）不再漏判
+                return clZeroRowBad(e.ev);
+            };
+            const tlGroups = [];
+            const tlGroupMap = new Map();
+            tl.forEach(function (e) {
+                const gk = e.item + '|' + e.act;
+                let g = tlGroupMap.get(gk);
+                if (!g) { g = { item: e.item, act: e.act, list: [] }; tlGroupMap.set(gk, g); tlGroups.push(g); }
+                g.list.push(e);
+            });
             // ---- 各拿分项扣分单数 ----
             const dedByItem = {};
             (p.deductions || []).forEach(function (dd) { dedByItem[dd.item] = (dedByItem[dd.item] || 0) + dd.count; });
             const totalDed = (p.deductions || []).reduce(function (s, x) { return s + x.total; }, 0);
+            // v5.7：累计扣分为 0 时显示「累计 0 分」，不再出现「累计 -0 分」
+            const dedTotalTxt = (totalDed > 0) ? ('-' + clNum(totalDed)) : '0';
             const srcCls = p.real ? 'real' : 'mock';
-            const srcText = p.real ? '灯塔真实评分数据' : (rule.real ? '模拟数据' : '规则驱动模拟数据');
+            // v5.7：真实导入行（sourceKind=import）来源徽章改「动作评分导入数据」，不再误标灯塔日报
+            const srcText = (p.sourceKind === 'import') ? '动作评分导入数据' : (p.real ? '灯塔真实评分数据' : (rule.real ? '模拟数据' : '规则驱动模拟数据'));
             const itemRows = items.map(function (it, i) {
                 const sc = p.dims[i], rt = p.ratios[i], cnt = p.counts[i], dn = dedByItem[it.name] || 0;
                 const barC = rt === null ? '#475569' : (rt >= 95 ? '#10b981' : rt >= 85 ? '#3b82f6' : rt >= 70 ? '#fbbf24' : rt >= 50 ? '#fb923c' : '#fb7185');
                 return '<tr class="border-b border-slate-700/30">' +
                     '<td class="py-2 px-2" style="color:#e2e8f0;font-weight:600">' + it.name + '</td>' +
                     '<td class="py-2 px-2 text-right font-semibold" style="color:' + barC + '">' + (sc === null ? '—' : clNum(sc)) + '</td>' +
-                    '<td class="py-2 px-2 text-right" style="color:#94a3b8">' + clNum(it.cap) + '</td>' +
-                    '<td class="py-2 px-2" style="min-width:110px"><div class="flex items-center gap-2"><div class="cl-bar" style="flex:1"><i style="width:' + (rt === null ? 0 : Math.max(2, Math.round(rt))) + '%;background:' + barC + '"></i></div><span style="font-size:11px;color:#94a3b8">' + (rt === null ? '—' : Math.round(rt) + '%') + '</span></div></td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#94a3b8">' + clNum((p.stds && p.stds[i] != null) ? p.stds[i] : it.cap) + '</td>' +
+                    '<td class="py-2 px-2" style="min-width:110px"><div class="flex items-center gap-2"><div class="cl-bar" style="flex:1"><i style="width:' + (rt === null ? 0 : Math.min(100, Math.max(2, Math.round(rt)))) + '%;background:' + barC + '"></i></div><span style="font-size:11px;color:#94a3b8">' + (rt === null ? '—' : Math.round(rt) + '%') + '</span></div></td>' +
                     '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + (cnt === null || cnt === undefined ? '—' : cnt) + '</td>' +
                     '<td class="py-2 px-2 text-right" style="color:' + (dn ? '#fb923c' : '#64748b') + '">' + dn + '</td>' +
                     '</tr>';
             }).join('');
-            const dedRowsHtml = (p.deductions || []).length ? p.deductions.map(function (x, i) {
-                return '<tr class="border-b border-slate-700/30">' +
-                    '<td class="py-2 px-2" style="color:#94a3b8">' + (i + 1) + '</td>' +
-                    '<td class="py-2 px-2" style="color:#e2e8f0">' + x.item + '</td>' +
-                    '<td class="py-2 px-2" style="color:#cbd5e1">' + clShortItem(x.action) + '</td>' +
-                    '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + x.count + ' 单</td>' +
-                    '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + clNum(x.per) + '</td>' +
-                    '<td class="py-2 px-2 text-right font-semibold" style="color:#fb923c">' + clNum(x.total) + '</td>' +
-                    '<td class="py-2 px-2 text-xs" style="color:#94a3b8">' + ((x.orders || []).length ? (x.orders || []).slice(0, 2).join(' / ') + ((x.orders || []).length > 2 ? ' +' + (x.orders.length - 2) : '') : '—') + '</td>' +
-                    '</tr>';
-            }).join('') : '<tr><td colspan="7" class="py-4 text-center" style="color:#94a3b8">当日无扣分记录 · 动作全达标</td></tr>';
+            // v5.9c：分数明细（按「拿分项+动作」分卡片）—— 默认仅展示未达成；达成组折叠可查
+            const sdGroups = tlGroups.map(function (g) {
+                let badCnt = 0;
+                g.list.forEach(function (e) { if (evIsBad(e)) badCnt++; });
+                const okCnt = g.list.length - badCnt;
+                const ded = (p.deductions || []).find(function (d) { return d.item === g.item && d.action === g.act; });
+                const sampleBad = g.list.find(function (e) { return evIsBad(e); });
+                const sampleEv = sampleBad ? sampleBad.ev : (g.list[0] ? g.list[0].ev : '');
+                return {
+                    group: g, failCount: badCnt, okCount: okCnt,
+                    clauses: clParseClauses(g.act), ai: clParseAiReason(sampleEv),
+                    deduction: ded, sampleEv: sampleEv, isBad: badCnt > 0
+                };
+            });
+            const sdBad = sdGroups.filter(function (r) { return r.isBad; });
+            const sdGood = sdGroups.filter(function (r) { return !r.isBad; });
+            const sdGoodTotal = sdGood.reduce(function (s, r) { return s + r.group.list.length; }, 0);
+            // ---- 单张分数明细卡片（共用渲染：isBad 控制配色） ----
+            const renderScoreCard = function (rec) {
+                const g = rec.group, ded = rec.deduction, ai = rec.ai, isBad = rec.isBad;
+                const borderColor = isBad ? 'rgba(251,113,133,0.45)' : 'rgba(52,211,153,0.35)';
+                const headerBg = isBad ? 'rgba(251,113,133,0.08)' : 'rgba(52,211,153,0.06)';
+                // 条款清单 OR 整段回退（至少 2 条编号才展开清单，避免单条噪音）
+                let bodyHtml;
+                if (rec.clauses.length >= 2) {
+                    const rows = rec.clauses.map(function (c) {
+                        const mark = (ai.failCodes.length > 0) ? (ai.failCodes.indexOf(c.code) >= 0) : (ai.verdict === 'fail');
+                        return '<tr><td style="padding:3px 6px;color:' + (mark ? '#fb7185' : '#34d399') + ';font-weight:700;width:22px">' + (mark ? '✗' : '✓') + '</td>' +
+                            '<td style="padding:3px 6px;color:#e2e8f0;font-weight:600;width:62px">' + c.code + '</td>' +
+                            '<td style="padding:3px 6px;color:#cbd5e1">' + (c.desc || '—') + '</td></tr>';
+                    }).join('');
+                    bodyHtml = '<div style="padding:10px 12px">' +
+                        '<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">动作要求</div>' +
+                        '<table class="w-full text-xs">' + rows + '</table></div>';
+                } else {
+                    bodyHtml = '<div style="padding:10px 12px">' +
+                        '<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">动作要求</div>' +
+                        '<div style="background:rgba(71,85,105,0.18);padding:8px 10px;border-radius:6px;color:#cbd5e1;font-size:12px;line-height:1.6">' + clShortItem(g.act) + '</div></div>';
+                }
+                // AI 判定行（结构化：结论/失败条款/依据/其余满足）
+                const verdictTag = ai.verdict === 'fail' ? '<span class="cl-tag" style="background:rgba(251,113,133,0.18);color:#fb7185;font-weight:600">未满足</span>' :
+                    ai.verdict === 'pass' ? '<span class="cl-tag" style="background:rgba(52,211,153,0.18);color:#34d399;font-weight:600">满足</span>' :
+                    '<span class="cl-tag" style="color:#94a3b8">未判定</span>';
+                const aiHtml = '<div style="padding:8px 12px;border-top:1px dashed rgba(71,85,105,0.4);font-size:12px">' +
+                    '<span style="color:#94a3b8;margin-right:6px;font-size:11px">AI 判定：</span>' + verdictTag +
+                    (ai.failCodes.length ? '<span style="margin-left:6px;color:#fb7185">失败条款 ' + ai.failCodes.join(' / ') + '</span>' : '') +
+                    (ai.basis ? '<span style="margin-left:6px;color:#94a3b8">依据「' + ai.basis + '」</span>' : '') +
+                    (ai.restOk ? '<span style="margin-left:6px;color:#34d399">' + ai.restOk + '</span>' : '') +
+                    '</div>';
+                // 头部徽章条
+                const headHtml = '<div class="flex items-center gap-2 flex-wrap" style="padding:8px 12px;background:' + headerBg + ';border-bottom:1px solid ' + borderColor + '">' +
+                    '<span class="cl-tag" style="background:rgba(' + (isBad ? '251,113,133' : '52,211,153') + ',0.18);color:' + (isBad ? '#fb7185' : '#34d399') + ';font-weight:600">' + g.item + '</span>' +
+                    '<span style="color:#e2e8f0;font-size:13px;font-weight:600" title="' + String(g.act || '').replace(/"/g, '&quot;') + '">' + clShortItem(g.act) + '</span>' +
+                    '<span style="flex:1"></span>' +
+                    '<span style="font-size:11px;color:#94a3b8">' + g.list.length + ' 条判定</span>' +
+                    (rec.failCount ? '<span style="font-size:11px;color:#fb7185;font-weight:600">未达成 ' + rec.failCount + '</span>' : '') +
+                    (rec.okCount ? '<span style="font-size:11px;color:#34d399;font-weight:600">达成 ' + rec.okCount + '</span>' : '') +
+                    (ded && Math.abs(ded.total) > 0 ? '<span style="font-size:11px;font-weight:700;color:#fb923c;background:rgba(245,158,11,0.15);padding:2px 6px;border-radius:4px">扣 ' + clNum(Math.abs(ded.total)) + ' 分</span>' : '') +
+                    '</div>';
+                // 底部：汇总 + 折叠每订单判定
+                const evList = g.list.slice(0, 40).map(function (e, i) {
+                    const pairs = clEvPairs(e.ev);
+                    const bad = evIsBad(e);
+                    return '<div style="padding:3px 0;border-bottom:1px dashed rgba(71,85,105,0.25)">' +
+                        '<div class="flex items-center gap-2 flex-wrap"><span style="font-size:11px;font-weight:600;color:#e2e8f0">' + (e.order ? '订单 ' + e.order : '记录 ' + (i + 1)) + '</span>' +
+                        (e.score < 0 ? '<span style="font-size:10px;color:#fb923c;font-weight:600">扣 ' + clNum(-e.score) + ' 分</span>' : (e.score > 0 ? '<span style="font-size:10px;color:#34d399;font-weight:600">得 ' + clNum(e.score) + ' 分</span>' : '')) + '</div>' +
+                        (pairs.length ? '<div style="margin-top:1px">' + pairs.map(function (kv) {
+                            return '<span class="cl-ev-kv"><b>' + kv.k + '</b>' + kv.v + '</span>';
+                        }).join('') + '</div>' : '') +
+                        '</div>';
+                }).join('') + (g.list.length > 40 ? '<div style="color:#64748b;font-size:10px;padding-top:4px">… 其余 ' + (g.list.length - 40) + ' 条略</div>' : '');
+                const footerHtml = '<div style="padding:8px 12px;background:rgba(15,23,42,0.4);font-size:11px;color:#94a3b8;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-top:1px solid rgba(71,85,105,0.3)">' +
+                    (ded ? '<span>单数 <b style="color:#e2e8f0">' + ded.count + '</b></span>' +
+                        '<span>单次 <b style="color:#e2e8f0">' + (ded.per === null || ded.per === undefined ? '—' : clNum(ded.per)) + '</b></span>' +
+                        '<span>累计 <b style="color:#fb923c">' + clNum(ded.total) + '</b></span>' +
+                        '<span>关联 <b style="color:#e2e8f0">' + ded.orders.length + '</b> 单</span>' :
+                        '<span>关联 <b style="color:#e2e8f0">' + g.list.length + '</b> 条判定</span>') +
+                    '<span style="flex:1"></span>' +
+                    '<details><summary style="cursor:pointer;color:#2563eb;font-size:11px;list-style:none">▸ 展开 ' + g.list.length + ' 条判定</summary>' +
+                    '<div style="margin-top:6px;padding:6px;background:rgba(15,23,42,0.6);border-radius:4px">' + evList + '</div>' +
+                    '</details></div>';
+                return '<div style="border:1px solid ' + borderColor + ';border-radius:8px;margin-bottom:8px;overflow:hidden">' +
+                    headHtml + bodyHtml + aiHtml + footerHtml + '</div>';
+            };
+            // ---- 装配分数明细 HTML ----
+            const sdTitle = '<div class="cl-chart-title mb-2">分数明细 <span style="font-weight:400;color:#94a3b8">（共 ' + tlGroups.length + ' 组 · ' + sdBad.length + ' 组未达成 · 累计 ' + dedTotalTxt + ' 分；默认仅展示未达成，点击「展开达成判定」可查全达标）</span></div>';
+            const sdBadHtml = sdBad.map(renderScoreCard).join('');
+            let sdTailHtml;
+            if (sdBad.length === 0 && sdGood.length > 0) {
+                // 全达标场景：空态 + 折叠展开
+                sdTailHtml = '<div style="padding:14px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.3);border-radius:8px;text-align:center">' +
+                    '<div style="font-size:14px;color:#34d399;font-weight:600;margin-bottom:6px">✓ 当日无扣分记录 · 动作全达标</div>' +
+                    '<details><summary style="cursor:pointer;font-size:12px;color:#2563eb;list-style:none">▸ 展开 ' + sdGoodTotal + ' 条达成判定</summary>' +
+                    '<div style="margin-top:8px;text-align:left">' + sdGood.map(renderScoreCard).join('') + '</div>' +
+                    '</details></div>';
+            } else if (sdGood.length > 0) {
+                // 部分达成：折叠达成组
+                sdTailHtml = '<details style="margin-top:4px"><summary style="cursor:pointer;font-size:12px;color:#2563eb;list-style:none;padding:8px;background:rgba(37,99,235,0.08);border-radius:6px">▸ 展开 ' + sdGoodTotal + ' 条达成判定</summary>' +
+                    '<div style="margin-top:8px">' + sdGood.map(renderScoreCard).join('') + '</div>' +
+                    '</details>';
+            } else {
+                sdTailHtml = '';
+            }
+            const scoreDetailHtml = tlGroups.length ? (sdTitle + sdBadHtml + sdTailHtml) : '<div class="text-xs py-4" style="color:#64748b">当日无判定记录</div>';
             document.getElementById('clDrawerBody').innerHTML =
                 '<div class="p-6 space-y-5">' +
                     '<div class="flex items-start justify-between gap-3 flex-wrap">' +
@@ -4317,7 +4694,7 @@
                     '<div class="flex gap-4 flex-wrap">' +
                         '<div class="cl-kpi" style="--kpi-c:' + rule.color + ';flex:1;min-width:150px"><div class="k-label">当日积分</div><div class="k-value">' + clNum(p.points) + ' <small>/ ' + clNum(p.capAvailable) + '</small></div><div class="k-sub">' + (rule.capAvailable !== rule.cap ? '规则满分 ' + clNum(rule.cap) + ' · 当日可得分项已接入' : '岗位规则满分') + '</div></div>' +
                         '<div class="cl-kpi" style="--kpi-c:#10b981;flex:1;min-width:150px"><div class="k-label">满分达成率</div><div class="k-value">' + p.rate + ' <small>%</small></div><div class="k-sub">最弱拿分项 ' + clShortItem(p.weakestName) + '（' + p.weakestRate + '%）</div></div>' +
-                        '<div class="cl-kpi" style="--kpi-c:#f59e0b;flex:1;min-width:150px"><div class="k-label">扣分单数 / 累计扣分</div><div class="k-value">' + p.dedCount + ' <small>单</small></div><div class="k-sub">累计 -' + clNum(totalDed) + ' 分</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#f59e0b;flex:1;min-width:150px"><div class="k-label">扣分单数 / 累计扣分</div><div class="k-value">' + p.dedCount + ' <small>单</small></div><div class="k-sub">累计 ' + dedTotalTxt + ' 分</div></div>' +
                         '<div class="cl-kpi" style="--kpi-c:#2563eb;flex:1;min-width:150px"><div class="k-label">销量 / 交付</div><div class="k-value">' + fmt(p.delivered || 0) + ' <small>台</small></div><div class="k-sub">' + p.storeName + (p.empCode ? ' · 工号 ' + p.empCode : '') + '</div></div>' +
                     '</div>' +
                     '<div class="grid grid-cols-1 md:grid-cols-2 gap-5">' +
@@ -4327,37 +4704,17 @@
                     '<div>' +
                         '<div class="cl-chart-title mb-2">拿分项得分构成 <span style="font-weight:400;color:#94a3b8">（当日积分 ' + clNum(p.points) + ' / ' + clNum(p.capAvailable) + ' 分 · 已评估 ' + p.coverCnt + '/' + p.coverTotal + ' 项 · 动作达成 ' + p.rate + '% · 严格口径 ' + p.rateFull + '%）</span></div>' +
                         '<table class="cl-table w-full text-sm"><thead class="text-xs"><tr>' +
-                        '<th class="py-2 px-2 text-left font-medium">拿分项</th><th class="py-2 px-2 text-right font-medium">当日得分</th><th class="py-2 px-2 text-right font-medium">封顶</th><th class="py-2 px-2 text-left font-medium">达成率</th><th class="py-2 px-2 text-right font-medium">完成单数</th><th class="py-2 px-2 text-right font-medium">扣分单数</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">拿分项</th><th class="py-2 px-2 text-right font-medium">当日得分</th><th class="py-2 px-2 text-right font-medium">标准分</th><th class="py-2 px-2 text-left font-medium">达成率</th><th class="py-2 px-2 text-right font-medium">完成单数</th><th class="py-2 px-2 text-right font-medium">扣分单数</th>' +
                         '</tr></thead><tbody>' + itemRows + '</tbody></table>' +
                     '</div>' +
-                    '<div>' +
-                        '<div class="cl-chart-title mb-2">扣分明细 <span style="font-weight:400;color:#94a3b8">（共 ' + (p.deductions || []).length + ' 类 · ' + p.dedCount + ' 单 · 累计 -' + clNum(totalDed) + ' 分）</span></div>' +
-                        '<table class="cl-table w-full text-sm"><thead class="text-xs"><tr>' +
-                        '<th class="py-2 px-2 text-left font-medium">#</th><th class="py-2 px-2 text-left font-medium">拿分项</th><th class="py-2 px-2 text-left font-medium">未达成动作</th><th class="py-2 px-2 text-right font-medium">单数</th><th class="py-2 px-2 text-right font-medium">单次</th><th class="py-2 px-2 text-right font-medium">累计</th><th class="py-2 px-2 text-left font-medium">关联订单</th>' +
-                        '</tr></thead><tbody>' + dedRowsHtml + '</tbody></table>' +
-                    '</div>' +
-                    '<div>' +
-                        '<div class="cl-chart-title mb-2">AI 证据链 <span style="font-weight:400;color:#94a3b8">（' + tl.length + ' 条判定记录' + (tl.length > tlShown.length ? ' · 展示前 ' + tlShown.length + ' 条' : '') + ' · 来源：灯塔系统判定日志）</span></div>' +
-                        (tlShown.length ? '<div style="max-height:340px;overflow-y:auto;padding-right:6px">' + tlShown.map(function (e, i) {
-                            const pairs = clEvPairs(e.ev);
-                            const bad = pairs.some(function (kv) { return /未满足|不通过|扣分/.test(kv.v) || (/判定|结论/.test(kv.k) && /未|扣/.test(kv.v)); });
-                            return '<div class="cl-ev-item' + (bad ? ' bad' : '') + '">' +
-                                '<div class="flex items-center gap-2 flex-wrap"><span style="font-size:12px;font-weight:700;color:#e2e8f0">' + (e.order ? '订单 ' + e.order : '记录 ' + (i + 1)) + '</span>' +
-                                '<span class="cl-tag">' + e.item + '</span>' +
-                                (e.score < 0 ? '<span class="cl-tag warn">扣 ' + clNum(-e.score) + ' 分</span>' : '') + '</div>' +
-                                '<div style="font-size:11px;color:#94a3b8;margin-top:2px">' + clShortItem(e.act) + '</div>' +
-                                (pairs.length ? '<div style="margin-top:2px">' + pairs.map(function (kv) {
-                                    return '<span class="cl-ev-kv"><b>' + kv.k + '</b>' + kv.v + '</span>';
-                                }).join('') + '</div>' : '') +
-                                '</div>';
-                        }).join('') + '</div>' : '<div class="text-xs py-4" style="color:#64748b">当日无扣分判定记录</div>') +
-                    '</div>' +
+                    '<div>' + scoreDetailHtml + '</div>' +
                 '</div>';
             d.classList.remove('hidden');
-            // ---- 拿分项雷达（个人 vs 团队均值，各轴上限 = 拿分项封顶） ----
+            // ---- 拿分项雷达（个人 vs 团队均值，各轴上限 = 拿分项标准分，缺省回退封顶） ----
             clDisposeChart('clRadar');
             const rd = echarts.init(document.getElementById('clRadar'));
             extCharts.clRadar = rd;
+            const axisMaxOf = function (i) { return (p.stds && p.stds[i] != null && p.stds[i] > 0) ? p.stds[i] : (items[i] ? items[i].cap : 1); };
             rd.setOption({
                 animation: false,
                 legend: { bottom: 0, itemWidth: 14, textStyle: { color: '#94a3b8', fontSize: 11 } },
@@ -4365,11 +4722,11 @@
                     formatter: function (it) {
                         if (!it.name && !it.seriesName) return '';
                         return '<div style="font-weight:700">' + it.seriesName + '</div>' +
-                            it.name + '：<b>' + clNum(it.value) + '</b> / ' + clNum(items[it.dataIndex] ? items[it.dataIndex].cap : 0);
+                            it.name + '：<b>' + clNum(it.value) + '</b> / ' + clNum(axisMaxOf(it.dataIndex));
                     }
                 }),
                 radar: {
-                    indicator: items.map(function (it) { return { name: clShortItem(it.name), max: it.cap }; }),
+                    indicator: items.map(function (it, i) { return { name: clShortItem(it.name), max: axisMaxOf(i) }; }),
                     radius: '58%', center: ['50%', '46%'],
                     axisName: { color: '#94a3b8', fontSize: 10 },
                     splitArea: { areaStyle: { color: ['rgba(148,163,184,0.07)', 'rgba(148,163,184,0.02)'] } },

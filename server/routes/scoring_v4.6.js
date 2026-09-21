@@ -8,7 +8,11 @@
  *   GET /api/scoring/summary?date=&post=&personId=                人员×拿分项日汇总（拿分项得分）
  *   GET /api/scoring/details?date=&personId=&post=                动作明细（AI 证据链）
  *
- * 口径：拿分项得分 = clamp(1 + Σ 动作得分, 0, 1)；当日积分 = Σ 拿分项得分（满分见岗位规则条数）
+ * 口径（v5.5 达标口径修订）：
+ *   拿分项得分 = clamp(Σ 动作得分, 0, cap)；当日积分 = Σ 拿分项得分；
+ *   完成率 = 当日积分 ÷ 当日标准分合计（stdCover），其中日标准得分优先取导入汇总的 target_score，
+ *   无则回退规则封顶 cap；「日标准得分 = 100% 达标线」，超出按比例计（如 6 分 / 标准 4 分 = 150%），
+ *   完成率不封顶；分母只累计当日实际有评估数据的拿分项（店长未配置的任务不扣分、不进分母）。
  */
 const express = require('express');
 
@@ -146,7 +150,7 @@ module.exports = function scoringRoute(db) {
     const byPerson = new Map();
     const seen = new Set();
     const bucketOf = pid => {
-      if (!byPerson.has(pid)) byPerson.set(pid, { personId: pid, point: 0, capCover: 0, items: [] });
+      if (!byPerson.has(pid)) byPerson.set(pid, { personId: pid, point: 0, capCover: 0, stdCover: 0, items: [] });
       return byPerson.get(pid);
     };
 
@@ -157,13 +161,17 @@ module.exports = function scoringRoute(db) {
       GROUP BY person_id, post_key, item`).all(...params);
     for (const r of sums) {
       const cap = caps.get(r.post_key + '|' + r.item) || 1;
+      // v5.5：日标准得分（100% 达标线）优先取导入汇总 target_score，缺失回退规则封顶 cap
+      const std = Number(r.target_score) > 0 ? Number(r.target_score) : cap;
       const b = bucketOf(r.person_id);
+      const raw = Number(r.s.toFixed(4));
       b.items.push({
         item: r.item, target: r.target, count: r.cnt, targetScore: r.target_score,
-        cap, rawScore: Number(r.s.toFixed(4)), score: clampItemScore(r.s, cap), source: 'sum'
+        cap, std, rawScore: raw, score: raw, source: 'sum'
       });
-      b.point += clampItemScore(r.s, cap);
+      b.point += raw;
       b.capCover += cap;
+      b.stdCover += std;
       seen.add(r.person_id + '|' + r.post_key + '|' + r.item);
     }
 
@@ -179,17 +187,20 @@ module.exports = function scoringRoute(db) {
       if (seen.has(r.person_id + '|' + r.post_key + '|' + r.item)) continue;
       const cap = caps.get(r.post_key + '|' + r.item) || 1;
       const b = bucketOf(r.person_id);
+      const raw = Number(r.s.toFixed(4));
       b.items.push({
         item: r.item, target: null, count: r.cnt, targetScore: null,
-        cap, rawScore: Number(r.s.toFixed(4)), score: clampItemScore(r.s, cap), source: 'detail'
+        cap, std: cap, rawScore: raw, score: raw, source: 'detail'
       });
-      b.point += clampItemScore(r.s, cap);
+      b.point += raw;
       b.capCover += cap;
+      b.stdCover += cap;
     }
 
     for (const b of byPerson.values()) {
       b.point = Number(b.point.toFixed(4));
-      b.rate = b.capCover ? Number((b.point / b.capCover * 100).toFixed(1)) : 0;
+      // v5.5：完成率分母 = 当日实际有评估数据的拿分项标准分合计；日标准得分=100%，允许超出（如 150%）
+      b.rate = b.stdCover ? Number((Math.max(0, b.point) / b.stdCover * 100).toFixed(1)) : 0;
     }
     return byPerson;
   }
@@ -262,7 +273,8 @@ module.exports = function scoringRoute(db) {
     const where = [];
     const params = [];
     if (date) { where.push('date = ?'); params.push(String(date)); }
-    if (personId) { where.push('person_id = ?'); params.push(Number(personId)); }
+    // v5.6：兼容前端传 'n4051' 这种带 n 前缀的组织节点 id（与 /scoring/range 同口径），否则 NaN 查 0 行
+    if (personId) { where.push('person_id = ?'); params.push(Number(String(personId).replace(/^n/, ''))); }
     if (post && post !== 'all') { where.push('post_key = ?'); params.push(String(post)); }
     if (item) { where.push('item = ?'); params.push(String(item)); }
     const lim = Math.max(1, Math.min(Number(limit) || 500, 2000));
@@ -283,7 +295,7 @@ module.exports = function scoringRoute(db) {
 
   // ---------- 人员区间逐日积分（动作评分导入数据；下钻页实时评分数据源） ----------
   //  GET /api/scoring/range?personId=&from=&to=
-  //  按 action_daily_sums 聚合每日各拿分项得分与满分；
+  //  按 action_daily_sums 聚合每日各拿分项得分、封顶（cap）与标准分（std，100% 达标线）；
   //  专用于下钻页「人员层 · 每日动作积分完成率」表：
   //    - 有真实评分导入的岗位（如新媒体运营）：逐日显示真实积分/完成率，无数据日期置灰；
   //    - 无导入数据的岗位：返回 days=[]，前端回退到 LH/规则驱动模拟；
@@ -311,21 +323,25 @@ module.exports = function scoringRoute(db) {
     }
     const byDate = new Map();
     for (const r of rows) {
-      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, postKey: r.post_key, point: 0, capCover: 0, rate: 0, _source: 'day' });
+      if (!byDate.has(r.date)) byDate.set(r.date, { date: r.date, postKey: r.post_key, point: 0, capCover: 0, stdCover: 0, rate: 0, _source: 'day' });
       const b = byDate.get(r.date);
       const cap = capMap.get(r.post_key + '|' + r.item) || 1;
-      const s = clampItemScore(r.s, cap);
+      // v5.5：日标准得分（100% 达标线）优先取导入汇总 target_score，缺失回退规则封顶 cap
+      const std = Number(r.target_score) > 0 ? Number(r.target_score) : cap;
+      const s = Number(r.s.toFixed(4));
       b.items = b.items || [];
       b.items.push({
         item: r.item, target: r.target, count: r.cnt, targetScore: r.target_score,
-        cap, score: s, rawScore: Number(r.s.toFixed(4))
+        cap, std, score: s, rawScore: s
       });
       b.point += s;
       b.capCover += cap;
+      b.stdCover += std;
     }
     const days = Array.from(byDate.values()).map(function (b) {
       b.point = Number(b.point.toFixed(4));
-      b.rate = b.capCover ? Number((b.point / b.capCover * 100).toFixed(1)) : 0;
+      // v5.5：完成率 = 当日积分 ÷ 当日标准分合计（仅累计当日有数据的拿分项，允许超出 100%）
+      b.rate = b.stdCover ? Number((Math.max(0, b.point) / b.stdCover * 100).toFixed(1)) : 0;
       return b;
     });
     res.json({ ok: true, personId, from, to, count: days.length, days });

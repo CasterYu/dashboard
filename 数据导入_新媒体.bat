@@ -24,6 +24,10 @@ echo   4. 回滚      撤销最近一次导入（删数据+删本次新建节点
 echo   5. 全量导入  未命中门店挂「其它/未匹配」一并落库（慎用）
 echo   6. 整理演示数据  旧 seed 演示树挪入「虚拟区」（改名虚拟1~4区）
 echo   7. 还原演示整理  回滚最近一次演示数据归整
+echo   8. 多岗位预览    产品专家/交付店长/交付专员/数营专家 统计+未匹配清单
+echo   9. 多岗位导入    仅映射命中门店，每岗位独立批次（先跑 8 看报告）
+echo  10. 多岗位状态    导入批次与 5 岗位数据量
+echo  11. 多岗位回滚    撤销指定批次（批次号先用 10 查）
 echo   0. 退出
 echo.
 set "choice="
@@ -35,7 +39,20 @@ if "%choice%"=="4" (node scripts\import-real_v1.js rollback)
 if "%choice%"=="5" (node scripts\import-real_v1.js import-all)
 if "%choice%"=="6" (node scripts\organize-demo_v5.2.js apply)
 if "%choice%"=="7" (node scripts\organize-demo_v5.2.js rollback)
+if "%choice%"=="8" (node scripts\import-multi_v5.4.js preview)
+if "%choice%"=="9" (node scripts\import-multi_v5.4.js import)
+if "%choice%"=="10" (node scripts\import-multi_v5.4.js status)
+if "%choice%"=="11" goto rollbackMulti
 if "%choice%"=="0" exit /b 0
+echo.
+pause
+goto menu
+
+:rollbackMulti
+set "rb="
+echo 先看批次号：可先运行 10（多岗位状态）
+set /p rb=输入批次号（直接回车=回滚最近一批）：
+if "%rb%"=="" (node scripts\import-multi_v5.4.js rollback) else (node scripts\import-multi_v5.4.js rollback %rb%)
 echo.
 pause
 goto menu
