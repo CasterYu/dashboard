@@ -6,10 +6,8 @@ echo   数据看板一键启动（前端 8000 + 后端 3777）
 echo ========================================
 echo.
 
-set NODE22=C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-2\node.exe
-
-echo [1/2] 启动后端 API（端口 3777，Node22）...
-start "看板-后端-3777" cmd /k "cd /d D:\projects\dashboard\server && "%NODE22%" index.js"
+echo [1/2] 启动后端 API（端口 3777）...
+start "看板-后端-3777" cmd /k "cd /d D:\projects\dashboard\server && node index.js"
 
 echo [2/2] 启动前端页面（端口 8000）...
 start "看板-前端-8000" cmd /k "cd /d D:\projects\dashboard && python -m http.server 8000"
