@@ -1,20 +1,13 @@
 // 业务数据看板 v5.12 — 应用启动与渲染（P3 抽离，依赖 data/utils/mock/api_auth，须在它们之后加载）
 
-        function startApp() {
-            if (DATA_MODE === 'mock') tree = buildTree();
-            // v4：开关仅在 API 模式下出现；mock 演示模式界面与 v3.8 完全一致
+// ===== 全局声明区（P3-3：从 startApp 闭包提升为全局）=====
             const swWrap = document.getElementById('showInactiveWrap');
-            if (swWrap) swWrap.classList.toggle('hidden', DATA_MODE !== 'api');
-
-        // ==================== PART3：状态、组织筛选器、单选视图 ====================
         const NODE_BY_ID = new Map();
         function reindexTree() {
             NODE_BY_ID.clear();
             (function indexNode(n) { NODE_BY_ID.set(n.id, n); n.children.forEach(indexNode); })(tree);
         }
-        reindexTree();
         function nodeById(id) { return NODE_BY_ID.get(id) || tree; }
-
         const state = {
             board: 'overview',                 // 当前看板：overview（经营总览） / closure（业务执行与闭环）
             start: '', end: '',
@@ -54,7 +47,6 @@
         const $pkBar = document.getElementById('pkBar');
         const $pkOptionsWrap = document.getElementById('pkOptionsWrap');
         const $pkOptions = document.getElementById('pkOptions');
-
         function prevRange() {
             const r = rangeIdx(state.start, state.end);
             const span = r[1] - r[0] + 1;
@@ -63,8 +55,6 @@
             return { i0: i0, i1: i1 };
         }
         function currentIdx() { return rangeIdx(state.start, state.end); }
-
-        // 单选模式下的当前节点：取最深一级的有效选择
         function currentNode() {
             const chain = [state.sel.region, state.sel.area, state.sel.store, state.sel.post, state.sel.person];
             let last = tree;
@@ -73,7 +63,6 @@
             });
             return last;
         }
-        // 「返回上级」辅助：返回顶栏筛选中最深选中层级在 SEL_ORDER 中的下标；全为 __all__（全国）返回 -1
         const SEL_ORDER = ['region', 'area', 'store', 'post', 'person'];
         function drillDeepestSelIdx() {
             for (let i = SEL_ORDER.length - 1; i >= 0; i--) {
@@ -81,8 +70,6 @@
             }
             return -1;
         }
-        // v5.2：级联回填 —— 选中下级节点（小区/门店）后，沿 parent 链自动把上级大区/小区勾上。
-        // 只补「__all__」空位，不覆盖用户已显式选择的层级；保证筛选区始终呈现完整的逐级路径
         const LEVEL_STATE_KEY = { '大区': 'region', '小区': 'area', '门店': 'store', '岗位': 'post', '人员': 'person' };
         function backfillAncestors(node) {
             let n = node && node.parent;
@@ -92,9 +79,6 @@
                 n = n.parent;
             }
         }
-        // v5.2：登录默认范围 —— 按自动派生的范围根，把组织筛选预勾到本人管理层级：
-        // 员工→本人、店长→门店、小区主管→小区、大区总监→大区（祖先链由级联回填补齐）；
-        // 总部（无范围根）保持全国；显式多根授权无法映射单一链路，保持全国由用户自行筛选
         function initOrgSelDefaults() {
             if (DATA_MODE !== 'api' || !cachedUser || !cachedUser.scopeRootId) return;
             if (cachedUser.scopeMode === 'explicit') return;
@@ -104,8 +88,6 @@
             if (key) state.sel[key] = node.id;
             backfillAncestors(node);
         }
-
-        // ---------- 下拉框填充 ----------
         function fillSelect(el, list, allLabel, current, placeholder) {
             let html = '<option value="__all__">' + (placeholder || allLabel) + '</option>';
             list.forEach(function (n) {
@@ -118,8 +100,6 @@
             const picked = el.options[el.selectedIndex];
             if (!picked || picked.disabled || el.value !== (current || '__all__')) el.value = '__all__';
         }
-        // v5.3：候选改为按 level 语义收集（collectLevel）而非直接 children ——
-        // 树中存在「虚拟区→虚拟1区(华东大区)」这类大区套大区的归整结构，直取 children 会整级错位
         function storesOfArea(areaId) {
             const area = areaId === '__all__' ? null : nodeById(areaId);
             return area ? collectLevel(area, '门店') : [];
@@ -229,10 +209,6 @@
                 }
             }
         }
-
-        // ---------- PK 候选 ----------
-        // v4.3：候选严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；
-        // 岗位层级 = 跨店同岗对比：候选为范围内各门店的「同一岗位」节点（如 上海东风南方威铭 · 销售店长）
         function pkCandidates() {
             let list;
             if (state.pkLevel === '岗位') {
@@ -302,8 +278,6 @@
         }
         function pkNodes() { return state.pkIds.map(nodeById); }
         function pkBaseNode() { return state.pkBase ? nodeById(state.pkBase) : (pkNodes()[0] || null); }
-
-        // ---------- 图标 ----------
         const ICONS = {
             user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>',
             phone: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.1a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>',
@@ -320,8 +294,6 @@
             if (key === 'points') return ICONS.star;
             return ICONS.user;
         }
-
-        // ---------- 单选视图 ----------
         const MODULE_GROUPS = [
             { title: '线索入口', keys: ['leads', 'validLeads', 'intentLeads', 'invites'] },
             { title: '到店接待', keys: ['arrivals', 'testDrives', 'returnVisits', 'opportunities'] },
@@ -442,8 +414,6 @@
                 '<div class="value">' + value + '</div>' +
                 '<div class="delta ' + (up ? 'text-emerald-400' : 'text-rose-400') + '">' + deltaText + '</div></div>';
         }
-
-        // ==================== PART4：PK 对比视图 + 全链路七阶段漏斗 ====================
         const PK_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
         function pkColorOf(node) {
             const i = state.pkIds.indexOf(node.id);
@@ -575,8 +545,6 @@
                 });
             });
         }
-
-        // ---------- 全链路七阶段漏斗 ----------
         function renderFunnel() {
             const r = currentIdx(), pr = prevRange();
             const body = document.getElementById('funnelBody');
@@ -650,8 +618,6 @@
                 }).join('');
             }
         }
-
-        // ==================== PART5：下钻 / 趋势 / 积分 / 明细 / 交互 ====================
         const extCharts = {};
         function chart(id) {
             const el = document.getElementById(id);
@@ -659,7 +625,6 @@
             if (!extCharts[id]) extCharts[id] = echarts.init(el);
             return extCharts[id];
         }
-        // v4.9：左柱图已移除，drillList 独占整行；此处仅保留选中态辅助函数
         const AXIS_STYLE = {
             axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
             axisTick: { show: false },
@@ -671,8 +636,6 @@
             borderColor: 'rgba(148,163,184,0.2)',
             textStyle: { color: '#e2e8f0', fontSize: 12 }
         };
-
-        // ---------- 板块展开：按日多指标折线图 ----------
         function renderPanelChart(gi) {
             const g = MODULE_GROUPS[gi];
             const el = document.getElementById('svChart' + gi);
@@ -734,10 +697,6 @@
             });
             return node;
         }
-
-        // v4.16：下钻 ↔ 顶栏「组织范围」双向同步 —— 把当前下钻节点路径写入 state.sel
-        // 直接改 state.sel 后由 renderAll 的 fillSelect 回显下拉，不派发 change 事件
-        //（change 监听会清空下钻栈，见 $selRegion 等监听器），nodePath 保证父层先设置，依赖链天然合法。
         function syncSelToDrill(node) {
             if (!node) return;
             const LV = { '大区': 'region', '小区': 'area', '门店': 'store', '岗位': 'post', '人员': 'person' };
@@ -745,9 +704,6 @@
             nodePath(node).forEach(function (n) { if (LV[n.level]) sel[LV[n.level]] = n.id; });
             state.sel = sel;
         }
-
-        // ==================== v4.9：下钻区选中态 + 列表联动 ====================
-        // 统一管理 state.drillSelectedId，让 drillList 行保持高亮（柱状图已移除）
         function setDrillSelected(id) {
             state.drillSelectedId = id;
             applyListSelection();
@@ -765,9 +721,6 @@
                 }
             });
         }
-        // 点击左柱图柱条 / drillList 行的统一入口：
-        //   - 与当前选中相同时：取消选中
-        //   - 选中后自动下钻（保留原「点击继续下钻」行为）
         function selectOrDrill(id) {
             if (!id) return;
             if (state.drillSelectedId === id) {
@@ -945,10 +898,6 @@
             });
             applyListSelection();
         }
-
-        // ---------- v4.12：岗位 → 人员 动作得分率矩阵 ----------
-        // 行 = 该岗位下的每位人员，列 = 该岗位的关键动作（取岗位职责说明表同一份文案）
-        // 单元格 = 得分率（完成量 ÷ 该人被分配的任务量）+ 环比（与上一等长周期的百分点差）
         function renderDutyMatrix(postNode, children, r, pr) {
             const list = document.getElementById('drillList');
             const detailEl = document.getElementById('drillDutyDetail');
@@ -995,8 +944,6 @@
             });
             applyListSelection();
         }
-
-        // 单人动作得分率明细（点击人员行展开）：动作名 + 进度条 + 完成/分配 + 得分率 + 环比
         function renderDutyPersonDetail() {
             const box = document.getElementById('drillDutyDetail');
             const list = document.getElementById('drillList');
@@ -1042,15 +989,6 @@
                     (totalDelta === null ? '' : ' · 环比 ' + (totalDelta > 0 ? '+' : '') + totalDelta.toFixed(1) + 'pt') + '</div>' +
                 '</div>' + rows + '</div>';
         }
-
-        // ==================== v4.14：人员层下钻 · 区间逐日动作积分完成率 ====================
-        // 点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏区间内逐日的动作积分完成率表；
-        // 点击某日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（取数 = 该行单日）。
-        // 数据说明：下钻组织树为演示树（树人员无真实工号）。真实评分岗位按 hashSeed(人员id) 确定性映射到
-        // 灯塔数据中同岗位的一名人员取数 —— 同一人员刷新后数据稳定，且明细结构与真实数据完全一致；
-        // 模拟岗位按 (人员id + 日期) seed 规则驱动生成（参照 clMockPoints 的扣分证据格式）。
-
-        // 单人单日得分点：真实岗位走灯塔单日索引；模拟岗位规则驱动生成；无数据日期返回 null
         function drillDailyPoint(personNode, ds) {
             const postKey = personNode.postKey || postKeyOfPerson(personNode) || POSTS[0].key;
             const rule = clRuleFor(postKey);
@@ -1099,15 +1037,6 @@
                 deductions: deds, dedRows: [], delivered: 1 + Math.floor(rnd() * 12)
             });
         }
-
-        // 人员层主渲染：区间逐日完成率表（列表区）+ 区间动作得分率汇总（#drillDutyDetail，复用 renderDutyPersonDetail）
-        // v5.4：人员层主渲染 · 区间逐日动作积分完成率（接入动作评分导入数据）
-        // 取数优先级（v5.7 修订）：
-        //   1) 接口真实区间（/api/scoring/range）—— 有数据日期显示真实积分/完成率；
-        //   2) v5.7：岗位已导入评分（/api/scoring/meta detailRows>0）但该人无任何记录 —— 整表置灰「当日无该人评估数据」，不再回退模拟；
-        //   3) LH 真实日报路径（交付专员/店长，未导入评分的岗位）—— 走原 drillDailyPoint，CL_DATES 置灰；
-        //   4) 其余（mock 模式 / 从未导入的演示岗位）—— 走 drillDailyPoint 的规则驱动模拟分支（确定性生成），并在 dataNote 标明「规则驱动模拟数据（确定性生成）」。
-        // 行点击：真实数据来源异步补充 /scoring/details 证据链再打开诊断抽屉。
         function drillRealPoint(personNode, rule, day) {
             const itemMap = {}, itemMapN = {};
             (day.items || []).forEach(function (it) {
@@ -1179,9 +1108,6 @@
                 noData: dims.every(function (v) { return v === null; })
             };
         }
-
-        // v5.7：动作评分导入元信息（/api/scoring/meta，API 模式懒加载一次）—— 判断「该岗位是否已导入评分明细」。
-        // 用途：API 模式下岗位已有导入数据、但当前人员无导入记录时，逐日表不再回退确定性模拟，整表置灰。
         const SMETA = { req: null, posts: null, days: [] };
         function smetaLoad() {
             if (DATA_MODE !== 'api') return Promise.resolve(null);
@@ -1198,199 +1124,6 @@
             }
             return SMETA.req;
         }
-
-        async function renderDrillPersonDaily(cur, r) {
-            const list = document.getElementById('drillList');
-            if (!list) return;
-            state.drillPersonId = cur.id;                 // 供区间汇总明细复用
-            renderDutyPersonDetail();
-            const postKey = cur.postKey || postKeyOfPerson(cur) || POSTS[0].key;
-            const rule = clRuleFor(postKey);
-            const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
-
-            // v5.8：区间日期串直接取顶栏日期筛选 state.start/end（不按指标数据窗口钳制）——
-            // 此前用入参 r（currentIdx() 被 clampIdx 钳制到指标数据范围，如 9/10~9/16），
-            // 顶栏选 9/9~9/20 应用后逐日表日期串不变，表现为「日期筛选不同步」；
-            // 窗口外日期由既有分支自然处理：导入未命中/置灰、LH 无日报返回 null 置灰
-            const dates = [];
-            {
-                let d = parseDate(state.start);
-                const dEnd = parseDate(state.end);
-                let guard = 0;
-                while (d <= dEnd && guard++ < 400) {
-                    dates.push(dateStr(d));
-                    d = new Date(d.getTime() + ONE_DAY);
-                }
-            }
-            if (!dates.length) { dates.push(dateStr(parseDate(state.start))); }
-            const dsFrom = dates[0], dsTo = dates[dates.length - 1];
-
-            // v5.4：拉取该人员的真实区间数据（动作评分导入）；
-            // v5.6：交付等 LH 岗位也拉取 —— 逐日取数优先级改为「导入数据 > LH 真实日报 > 置灰」，
-            // 否则导入的 9/10 评分数据在 LH 岗位（仅 5/22 有日报）的逐日表上永远不出现
-            const realMap = new Map();
-            if (cur.id) {
-                try {
-                    const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
-                    if (resp && resp.ok && Array.isArray(resp.days)) {
-                        resp.days.forEach(function (d) { realMap.set(d.date, d); });
-                    }
-                } catch (e) { /* 接口失败：静默回退到 LH/mock */ }
-            }
-            let realNote = '';
-            if (realMap.size) {
-                const ks = Array.from(realMap.keys()).sort();
-                realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
-            }
-            // v5.7：API 模式下查询岗位导入元信息 —— 岗位已有导入评分但该人无记录 → 整表置灰，不回退模拟
-            const smetaPosts = await smetaLoad();
-            const postHasImport = !!(smetaPosts && smetaPosts.has(postKey));
-            let dataNote = (LH_OK && rule.real)
-                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）' + (realMap.size ? '；' + realNote : '')
-                : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
-            if (postHasImport && !realMap.size) {
-                dataNote = '该岗位已导入动作评分（导入日期 ' + (SMETA.days.join('、') || '—') + '），当前人员无导入记录 —— 逐日置灰，不展示模拟数据';
-            }
-
-            // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
-            const rows = [];
-            let prevRate = null;
-            // v5.4：若 realMap 有任一日期数据，则其余未命中日期视为「无评估数据」，行置灰 + 文案「当日无该人评估数据」；仅当 realMap 完全为空时才回退 mock
-            const useRealOnly = realMap.size > 0;
-            for (const ds of dates) {
-                let pt, isRealRow = false;
-                if (realMap.has(ds)) {
-                    pt = drillRealPoint(cur, rule, realMap.get(ds));
-                    isRealRow = true;
-                } else if (postHasImport) {
-                    // v5.7：岗位已导入评分但该人当日无记录 → 置灰（不再回退确定性模拟 / LH 映射，杜绝「天天都有假数据」）
-                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
-                } else if (LH_OK && rule.real) {
-                    pt = drillDailyPoint(cur, ds);
-                } else if (useRealOnly) {
-                    // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
-                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
-                } else {
-                    pt = drillDailyPoint(cur, ds);
-                }
-                rows.push({ ds: ds, pt: pt, prevRate: prevRate, isRealRow: isRealRow });
-                prevRate = (pt && !pt.noData) ? pt.rate : null;   // 无数据日断开环比链
-            }
-            const rateC = function (v) {
-                return v >= 95 ? '#34d399' : (v >= 85 ? '#60a5fa' : (v >= 70 ? '#fbbf24' : '#fb7185'));
-            };
-            const bodyHtml = rows.map(function (row, ri) {
-                const pt = row.pt;
-                if (!pt || pt.noData) {
-                    // v4.15：无数据行晨/夕会胶囊同样置灰不可点（与整行 opacity-40 一致）
-                    const meetGrey = isMgr ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">晨会</span></td><td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">夕会</span></td>' : '';
-                    return '<tr class="opacity-40" data-ri="' + ri + '">' +
-                        '<td class="px-3 py-2.5 text-sm text-slate-300 whitespace-nowrap border-b border-white/5">' + row.ds + '</td>' +
-                        '<td class="px-3 py-2.5 text-right text-xs text-slate-500 border-b border-white/5" colspan="' + (isMgr ? 4 : 6) + '">' + (pt ? '当日无该人评估数据' : '无日报数据') + '</td>' + meetGrey + '</tr>';
-                }
-                let deltaHtml = '<span class="text-slate-500">—</span>';
-                if (row.prevRate !== null && row.prevRate !== undefined) {
-                    const d = pt.rate - row.prevRate;
-                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
-                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
-                }
-                const realTag = row.isRealRow ? ' <span class="ml-1 text-[10px] text-emerald-400">导入</span>' : '';
-                return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
-                    '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项标准分（日标准得分）之和（无数据项不计入分母）">' + clNum(pt.stdCover != null ? pt.stdCover : pt.capCover) + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
-                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
-                    '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
-                    // v4.15：晨会 / 夕会报表胶囊（仅销售店长；stopPropagation 避免触发行点击的诊断抽屉）
-                    (isMgr
-                        ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="am" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 cursor-pointer hover:bg-amber-500/25 transition">晨会 ▸</span></td>' +
-                          '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="pm" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 cursor-pointer hover:bg-indigo-500/25 transition">夕会 ▸</span></td>'
-                        : '') +
-                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300">明细 ▸</span></td>' +
-                    '</tr>';
-            }).join('');
-            list.innerHTML =
-                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
-                    '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
-                    '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
-                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项标准分（日标准得分 = 100%，超出按比例计，如 150%；当日无评估数据的拿分项不计入分母）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
-                '</div>' +
-                '<table class="min-w-full border-collapse text-sm">' +
-                    '<thead><tr>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估标准分</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
-                    // v4.15：晨会 / 夕会报表列（仅销售店长）
-                    (isMgr
-                        ? '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">晨会报表</th>' +
-                          '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">夕会报表</th>'
-                        : '') +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">明细</th>' +
-                    '</tr></thead>' +
-                    '<tbody>' + bodyHtml + '</tbody></table>';
-            // 行点击 → 构建单日抽屉上下文并打开诊断抽屉（复用闭环 clOpenDrawer 全部内容与图表）
-            list.querySelectorAll('tr[data-date]').forEach(function (tr) {
-                tr.addEventListener('click', function () {
-                    const ds = tr.dataset.date;
-                    const isReal = tr.dataset.real === '1';
-                    let day = null;
-                    let pt;
-                    if (isReal && realMap.has(ds)) {
-                        day = realMap.get(ds);
-                        pt = drillRealPoint(cur, rule, day);
-                    } else {
-                        pt = drillDailyPoint(cur, ds);
-                    }
-                    if (!pt || pt.noData) return;
-                    const openIt = function () {
-                        CL_DRAW_CTX = {
-                            points: [pt], rule: rule, dates: [ds],
-                            teamScores: pt.dims.map(function (v) { return v === null || v === undefined ? 0 : v; })   // 单人场景：均值线与本人重合
-                        };
-                        clOpenDrawer(0);
-                    };
-                    if (isReal) {
-                        // 真实导入行：异步补充证据链（/scoring/details）再打开抽屉；失败则照常去空事实表打开
-                        fetchJson(API_BASE + '/api/scoring/details?date=' + ds + '&personId=' + cur.id)
-                            .then(function (resp) {
-                                if (resp && resp.ok && Array.isArray(resp.details) && resp.details.length) {
-                                    pt.dedRows = resp.details.map(function (r) {
-                                        return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
-                                    });
-                                    // v5.6：同步构建扣分明细（抽屉「扣分明细」表 / 扣分单数 / 累计扣分 / 标签）
-                                    const deds = clDedsFromDetails(resp.details);
-                                    pt.deductions = deds;
-                                    pt.dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
-                                    pt.dedTotal = Math.round(deds.reduce(function (s, d) { return s + d.total; }, 0) * 100) / 100;
-                                    if (deds.length) pt.tag = clTagOf(deds);
-                                }
-                                openIt();
-                            })
-                            .catch(function () { openIt(); });
-                    } else {
-                        openIt();
-                    }
-                });
-            });
-            // v4.15：晨会 / 夕会报表胶囊点击 —— stopPropagation 避免触发行点击的诊断抽屉
-            list.querySelectorAll('span[data-meet-btn]').forEach(function (sp) {
-                sp.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    openMeetReport(cur, sp.dataset.date, sp.dataset.meetBtn);
-                });
-            });
-        }
-
-        // ==================== v4.15：销售店长 · 晨会 / 夕会报表 ====================
-        // 晨会管理关键目标 = 对某个具体岗位的人发布任务；夕会 = 核对晨会任务有没有完成。
-        // 仅 salesManager 岗位人员逐日表显示入口；晨夕共用同一任务集合，确定性生成（seed 前缀 meeting|），
-        // 同一人同一天刷新后数据稳定；只读查看，不持久化。
-
-        // 销售店长晨会任务模板：任务名 / 衡量标准（目标值） / 时限 / 任务来源（拿分项或上级指令）
         const MEET_TASK_TPL = [
             { task: '新增建档并完成 DMS 录入', metric: '新增建档 ≥ {n} 组', n: [6, 10], source: '新增建档' },
             { task: '当日首访线索 2 小时内跟进登记', metric: '首访登记及时率 100%', n: null, source: '线索跟进' },
@@ -1402,8 +1135,6 @@
             { task: '夕会前完成当日战报与明日计划', metric: '夕会 19:00 前提交战报', n: null, source: '上级指令' }
         ];
         const MEET_DEADLINES = ['12:00 前', '15:00 前', '18:00 前', '今日内', '夕会前'];
-
-        // 晨会任务确定性生成（晨夕共用）：同一人 + 同一日期结果稳定
         function meetingTasksOf(personNode, ds) {
             const rnd = clRng('meeting|' + personNode.id + '|' + ds);
             // 从模板确定性抽取 3-5 条（不重复），按时间轴递增排布
@@ -1446,8 +1177,6 @@
                 };
             });
         }
-
-        // 打开晨会 / 夕会报表抽屉（type = 'am' | 'pm'）
         function openMeetReport(personNode, ds, type) {
             const d = document.getElementById('meetDrawer');
             const body = document.getElementById('meetDrawerBody');
@@ -1521,10 +1250,6 @@
                     : '夕会报表 = 对照当日晨会任务逐条核对完成情况（实际完成 / 完成状态 / 差距说明）· 完成率 = 完成 100% + 部分完成 50% 计权 · 数据为确定性模拟演示，待接真实夕会接口') + '</div>';
             d.classList.remove('hidden');
         }
-
-        // ---------- v4.13：产品专家下钻后追加四象限图（X=积分达成率%，Y=交付量） ----------
-        // 仅在「岗位 = 产品专家」下钻后渲染；其它岗位/层级调用方直接清空 #drillPostQuad
-        // 风格与 clRenderQuad 保持一致：均值虚线 + 四象限背景 + 文字解读
         function renderDrillPostQuad(postNode, persons, r, pr) {
             const box = document.getElementById('drillPostQuad');
             if (!box) return;
@@ -1649,8 +1374,6 @@
             try { chartInst.resize(); } catch (_) {}
             requestAnimationFrame(function () { try { chartInst.resize(); } catch (_) {} });
         }
-
-        // ---------- 趋势分析 ----------
         function buildBuckets(start, end, mode, targets, metrics) {
             metrics = metrics || TREND_METRICS;
             const buckets = [];
@@ -1833,8 +1556,6 @@
                 })
             }, true);
         }
-
-        // ---------- 积分排行榜 ----------
         function renderPoints() {
             const r = currentIdx();
             const sub = document.getElementById('pointsSubtitle');
@@ -1932,16 +1653,12 @@
                 }]
             }, true);
         }
-
-        // v4.4：排行榜维度跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员、否则→人员）
         function autoRankDim() {
             const t = (currentNode() || {}).type;
             if (t === '门店') return '岗位';
             if (t === '岗位') return '人员';
             return '门店';
         }
-
-        // ---------- 明细数据表 ----------
         function renderDetail() {
             const r = currentIdx(), pr = prevRange();
             const thead = document.getElementById('detailThead');
@@ -2078,8 +1795,6 @@
                     '<td class="py-2 px-2 text-right">' + lastCell + '</td></tr>';
             }).join('');
         }
-
-        // ==================== PART6：业务执行与闭环看板（v4.6 · 灯塔真实积分 + 规则驱动模拟）====================
         const STORE_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#22d3ee', '#fbbf24', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#60a5fa', '#c084fc', '#f87171'];
         function closureStoreColor(idx) { return STORE_PALETTE[idx % STORE_PALETTE.length]; }
         const CL_REGION_PALETTE = {
@@ -2100,8 +1815,6 @@
         }
         function clHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
         function clRng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-
-        // ---------- 灯塔真实积分数据（lighthouse_scoring_v4.6.js）----------
         const LH = window.LH_SCORING || null;
         const LH_OK = !!(LH && LH.details && LH.persons && LH.persons.length);
         const CL_DATES = LH_OK ? (LH.meta.dates || []).slice() : [];
@@ -2167,11 +1880,6 @@
             });
             return out.filter(function (x) { return x.v !== ''; });
         }
-        // v5.9：0 分行未达成判定（扣分明细 + AI 证据链徽章共用口径）—— 结论前缀优先 + 描述式反向判定：
-        // ① 「不满足/未满足」开头 → 未达成；「已满足/全满足/满分」开头 → 达成（「不满足：…其余2项满足」尾部的
-        //    「满足」不得翻转结论）；② 无结论前缀的描述式证据（如「4必讲侧0项命中」「无收尾动作」「未就五个维度
-        //    主动探索需求」，全库 9/10 有 291 行，如张涛试乘试驾 2 行 0 分）按达成词白名单反向判定，防漏进扣分明细。
-        // 顺带修正旧口径两处误判：描述式失败证据漏判 291 行；交付店长「已满足【…未逾期】」被「逾期」关键词误计未达成 239 行
         function clZeroRowBad(evidence) {
             const ev = String(evidence || '').trim();
             if (!ev) return true;
@@ -2179,7 +1887,6 @@
             if (/^(已满足|全满足|满足|已达标|满分)/.test(ev)) return false;
             return !/全满足|(?<![不未])满足|不扣分|(?<!未)达标|(?<![未不])通过|满分|未逾期|未超时|不判/.test(ev);
         }
-        // v5.9c：分数明细解析器 —— 动作文本按 1-1-x 编号拆条款清单（去重保序）
         function clParseClauses(actionText) {
             if (!actionText) return [];
             const out = [];
@@ -2196,8 +1903,6 @@
             }
             return out;
         }
-        // v5.9c：分数明细解析器 —— AI 证据结构化（verdict/failCodes/basis/restOk）
-        // verdict 与 clZeroRowBad 口径对齐：前缀「不满足/未达成」=fail；「全满足/满足」=pass；描述式反向判定
         function clParseAiReason(evidenceText) {
             const ev = String(evidenceText || '').trim();
             if (!ev) return { verdict: 'unknown', failCodes: [], basis: '', restOk: '' };
@@ -2227,8 +1932,6 @@
             if (restMatch) restOk = '其余' + restMatch[1] + '项满足';
             return { verdict: verdict, failCodes: failCodes, basis: basis, restOk: restOk };
         }
-        // v5.6：真实导入明细行 → 扣分明细（抽屉「扣分明细」表与 dedByItem/totalDed 数据源）
-        // 口径：score<0（交付岗位负分行）或 score=0 且证据判定未达成（v5.9 起反向判定，见 clZeroRowBad）
         function clDedsFromDetails(details) {
             const isBad = function (r) {
                 return r.score < 0 || (r.score === 0 && clZeroRowBad(r.evidence));
@@ -2254,8 +1957,6 @@
                 return d;
             }).sort(function (a, b) { return b.total - a.total || b.count - a.count; });
         }
-
-        // ---------- 岗位积分规则（灯塔规则表；无规则表的岗位用通用动作兜底）----------
         function clRuleFor(postKey) {
             if (CL_MEMO['rule|' + postKey]) return CL_MEMO['rule|' + postKey];
             const meta = POSTS_BY_KEY[postKey] || { name: postKey, color: '#94a3b8' };
@@ -2300,8 +2001,6 @@
             CL_MEMO['rule|' + postKey] = rule;
             return rule;
         }
-
-        // ---------- 组织：真实专营店 → 大区 / 小区 ----------
         function clOrgIndex() {
             if (CL_MEMO.org) return CL_MEMO.org;
             const stores = [], regionMap = new Map(), byCode = {};
@@ -2327,17 +2026,12 @@
             CL_MEMO.org = { stores: stores, regions: regions, byCode: byCode, allCodes: stores.map(function (s) { return s.code; }) };
             return CL_MEMO.org;
         }
-
-        // ---------- v4.8：闭环日报单日游标（与顶栏日期区间彻底解耦）----------
-        // 闭环日期由独立日报翻阅器（state.clDate）决定；游标非法时回落到数据文件最后一份
         function clViewDate() {
             if (!CL_DATES.length) return '';
             return CL_DATES.indexOf(state.clDate) >= 0 ? state.clDate : CL_DATES[CL_DATES.length - 1];
         }
-        // 闭环口径的生效日期 = 当前选定日报的单日（结果缓存 key 也随之单日化）
         function clAllowedDates() { const d = clViewDate(); return d ? [d] : []; }
         function clEffectiveDates() { return clAllowedDates(); }
-        // v4.14：按任意日期集合建明细索引（原 clDataIndex 逻辑参数化，闭环默认走单日游标不变）
         function clDataIndexFor(dates) {
             const key = dates.join(',') || '__none__';
             if (CL_MEMO['idx|' + key]) return CL_MEMO['idx|' + key];
@@ -2400,10 +2094,7 @@
             });
             return idx;
         }
-        // 闭环原入口：日期来源 = 日报游标单日（行为不变）
         function clDataIndex() { return clDataIndexFor(clEffectiveDates()); }
-
-        // ---------- 筛选范围：大区 / 小区 / 门店多选 ----------
         function closureScopeStores() {
             const org = clOrgIndex();
             const reg = state.closure.region, area = state.closure.area;
@@ -2413,7 +2104,6 @@
                 return true;
             });
         }
-        // 门店多选（v4.7 层级筛选语义）：null = 未单独勾选（当前大区/小区范围内全部门店生效，胶囊不点亮），数组 = 显式勾选（[] = 显式清空）
         function clScopeSelect() {
             const scope = closureScopeStores();
             const ok = new Set(scope.map(function (s) { return s.code; }));
@@ -2424,8 +2114,6 @@
             return { scope: scope, scopeCodes: scope.map(function (s) { return s.code; }), sel: codes, selSet: codes ? new Set(codes) : null };
         }
         function clSelectedStoreIdx(sc) { return sc.sel === null ? sc.scope.map(function (s) { return s.idx; }) : sc.scope.filter(function (s) { return sc.selSet.has(s.code); }).map(function (s) { return s.idx; }); }
-
-        // ---------- 人员得分点（真实 / 模拟共用结构）----------
         function clTagOf(deds) {
             if (!deds.length) return { text: '动作全达标', warn: false };
             const top = deds[0], nm = clShortItem(top.item);
@@ -2490,7 +2178,6 @@
             });
             return out;
         }
-        // 模拟岗位：按规则表的拿分项与封顶，为选中的每家专营店生成 1 名模拟人员（确定性随机）
         function clMockPoints(rule, storeIdx, sc) {
             const org = clOrgIndex();
             const items = rule.scoreItems;
@@ -2530,7 +2217,6 @@
             });
             return out;
         }
-        // 当前岗位 + 组织范围下的人员得分点（按当日积分降序）
         function closureComputePoints() {
             const rule = clRuleFor(state.closure.postKey);
             const sc = clScopeSelect();
@@ -2543,7 +2229,6 @@
             CL_MEMO.range = { rule: rule, scope: sc.scope, scopeCodes: sc.scopeCodes, sel: sc.sel, storeIdx: storeIdx, mockCapped: mockCapped };
             return list;
         }
-        // ---------- v4.5：闭环图表公共样式（深色主题） ----------
         function clDisposeChart(key) {
             if (extCharts[key]) { try { extCharts[key].dispose(); } catch (_) {} delete extCharts[key]; }
         }
@@ -2562,7 +2247,6 @@
                 extraCssText: 'box-shadow:0 8px 24px rgba(0,0,0,0.6);'
             };
         }
-        // v4.6：人员 × 拿分项 得分热力图（单元格值 = 该拿分项达成率 %，标签 = 实际得分）
         function clRenderHeat(points, rule) {
             const el = document.getElementById('clHeat'); if (!el) return;
             clDisposeChart('clHeat');
@@ -2629,7 +2313,6 @@
             try { heat.resize(); } catch (_) {}
             requestAnimationFrame(function () { try { heat.resize(); } catch (_) {} });
         }
-        // v4.6：当日积分 × 销量四象限（门店 ≤ 8 家按门店着色，否则单系列）
         function clRenderQuad(points, rule) {
             const el = document.getElementById('clQuad'); if (!el) return;
             clDisposeChart('clQuad');
@@ -2707,7 +2390,6 @@
             requestAnimationFrame(function () { try { quad.resize(); } catch (_) {} });
             return byStore ? groups.map(function (g, gi) { return { name: g.name, color: closureStoreColor(gi) }; }) : [];
         }
-        // v4.6：人员动作积分诊断抽屉（拿分项构成 / 扣分明细 / AI 证据链时间线）
         function clOpenDrawer(idx) {
             const ctx = CL_DRAW_CTX; if (!ctx) return;
             const d = document.getElementById('clDrawer'); if (!d) return;
@@ -2961,7 +2643,6 @@
             if (d) d.classList.add('hidden');
             clDisposeChart('clRadar'); clDisposeChart('clWeek');
         }
-
         function renderClosure() {
             if (DATA_MODE === 'api') {
                 apiLoading(true);
@@ -3278,8 +2959,6 @@
                 }
             }
         }
-
-        // v4.6：岗位动作规则视图（拿分项 / 封顶 / 判断逻辑 / 凭证来源 / 采集接入状态）
         function renderRuleView(rule, items) {
             const rows = rule.items.map(function (it) {
                 const st = it.deprecated ? '<span class="cl-tag">已取消</span>'
@@ -3322,8 +3001,6 @@
                     : '<div class="text-xs" style="color:#64748b">规则表已收起，点击右上「展开规则表」查看 ' + rule.items.length + ' 个拿分项的分值与判定口径。</div>') +
                 '</div>';
         }
-
-        // ---------- 统一渲染 ----------
         function toggleMode() {
             const single = state.mode === 'single';
             document.getElementById('singleView').classList.toggle('hidden', !single);
@@ -3336,42 +3013,6 @@
                 Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) { panelCharts[k].dispose(); } delete panelCharts[k]; });
             }
         }
-        async function preloadForRender() {
-            try {
-                const r = currentIdx(), pr = prevRange();
-                const from = idxToDate(r[0]), to = idxToDate(r[1]);
-                const pfrom = idxToDate(pr.i0), pto = idxToDate(pr.i1);
-                // 收集本视图可能访问的节点：
-                // ① sumNodes —— 只需区间合计（下钻子级、PK 候选、榜单/明细维度）
-                // ② dailyNodes —— 需要逐日序列（当前节点、PK 已选、下钻链，用于趋势/面板折线）
-                const sumNodes = [], dailyNodes = [], seen = {};
-                function addSum(n) { if (n && n.level !== '人员' && !seen[n.id]) { seen[n.id] = 1; sumNodes.push(n); } }
-                function addDaily(n) { if (n && !seen[n.id]) { seen[n.id] = 1; dailyNodes.push(n); if (n.level !== '人员') sumNodes.push(n); } }
-                const cur = currentNode();
-                addDaily(cur);
-                collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
-                collectLevel(tree, state.pkLevel, []).forEach(addSum);
-                // v4.4：排行榜维度由 autoRankDim 跟随当前组织筛选节点，无法静态预知，预热门店/岗位/人员三层
-                ['门店', '岗位', '人员'].forEach(function (lv) { collectLevel(tree, lv, []).forEach(addSum); });
-                collectLevel(tree, state.tableDim, []).forEach(addSum);
-                state.drillIds.forEach(function (id) {
-                    const n = nodeById(id);
-                    addDaily(n);
-                    if (n) collectLevel(n, NEXT_LEVEL[n.level], []).forEach(addSum);
-                });
-                pkNodes().forEach(addDaily);
-                // 并行预载：人员合计（当前+对比周期）× 节点批量合计 × 逐日序列
-                await Promise.all([
-                    ensurePersons(tree, from, to),
-                    ensurePersons(tree, pfrom, pto),
-                    ensureNodeSums(sumNodes, from, to),
-                    ensureNodeSums(sumNodes, pfrom, pto),
-                    ensureSeries(dailyNodes)
-                ]);
-                return true;
-            } catch (e) { apiError(e); return false; }
-        }
-
         function renderAll() {
             if (DATA_MODE === 'api') {
                 apiLoading(true);
@@ -3410,8 +3051,6 @@
             renderDutyTable();
             $rangeText.textContent = state.start + ' 至 ' + state.end;
         }
-
-        // ---------- 交互 ----------
         function setRange(days) {
             const end = TODAY;
             const start = addDays(end, -(days - 1));
@@ -3424,6 +3063,423 @@
             clearMetricCache();
             renderAll();
         }
+        function clShiftDaily(step) {
+            const i = CL_DATES.indexOf(clViewDate());
+            if (i < 0) return;
+            const j = i + step;
+            if (j < 0 || j >= CL_DATES.length) return;
+            state.clDate = CL_DATES[j];
+            renderAll();
+        }
+        function renderDutyTable() {
+            const box = document.getElementById('dutyBody');
+            if (!box) return;
+            let total = 0;
+            box.innerHTML = POSTS.map(function (p) {
+                const duties = POST_DUTIES[p.key] || [];
+                total += duties.length;
+                const rows = duties.length ? duties.map(function (d) {
+                    return '<tr><td style="white-space:nowrap;color:' + p.color + '">' + d.action + '</td><td>' + d.detail + '</td></tr>';
+                }).join('') : '<tr><td colspan="2" class="text-slate-500">暂无职责条目</td></tr>';
+                return '<div>' +
+                    '<div class="flex items-center gap-2 mb-1">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + p.color + '"></span>' +
+                    '<span class="text-sm text-slate-100 font-medium">' + p.name + '</span>' +
+                    '<span class="text-[11px] text-slate-500">' + p.note + ' · ' + duties.length + ' 项关键动作</span>' +
+                    '</div>' +
+                    '<table class="cl-rule-table"><thead><tr><th style="width:180px">关键动作</th><th>具体内容（示意文案，待业务确认）</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                    '</div>';
+            }).join('');
+            const sub = document.getElementById('dutySubtitle');
+            if (sub) sub.textContent = POSTS.length + ' 岗位 · ' + total + ' 项关键动作 · 示意文案，待业务确认';
+        }
+        const $showInactiveWrap = document.getElementById('showInactiveWrap');
+        const $showInactive = document.getElementById('showInactive');
+        function sanitizeSelection() {
+            Object.keys(state.sel).forEach(function (k) {
+                const id = state.sel[k];
+                if (id !== '__all__' && !NODE_BY_ID.has(id)) state.sel[k] = '__all__';
+            });
+            state.pkIds = state.pkIds.filter(function (id) { return NODE_BY_ID.has(id); });
+            if (state.pkBase && !NODE_BY_ID.has(state.pkBase)) state.pkBase = state.pkIds[0] || null;
+            state.drillIds = state.drillIds.filter(function (id) { return NODE_BY_ID.has(id); });
+            const sn = state.sel.store !== '__all__' ? NODE_BY_ID.get(state.sel.store) : null;
+            const pn = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
+            if (pn && (!sn || pn.parent !== sn)) state.sel.post = '__all__';
+            const pn2 = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
+            if (pn2 && state.sel.person !== '__all__') {
+                const pr = NODE_BY_ID.get(state.sel.person);
+                if (!pr || pr.parent !== pn2) state.sel.person = '__all__';
+            }
+        }
+        function updateTime() {
+            const el = document.getElementById('current-time');
+            if (el) el.textContent = new Date().toLocaleTimeString('zh-CN');
+        }
+
+// ===== startApp：仅保留执行语句（初始化 + 事件绑定）=====
+        function startApp() {
+            if (DATA_MODE === 'mock') tree = buildTree();
+            // v4：开关仅在 API 模式下出现；mock 演示模式界面与 v3.8 完全一致
+            if (swWrap) swWrap.classList.toggle('hidden', DATA_MODE !== 'api');
+
+        // ==================== PART3：状态、组织筛选器、单选视图 ====================
+        reindexTree();
+
+
+
+        // 单选模式下的当前节点：取最深一级的有效选择
+        // 「返回上级」辅助：返回顶栏筛选中最深选中层级在 SEL_ORDER 中的下标；全为 __all__（全国）返回 -1
+        // v5.2：级联回填 —— 选中下级节点（小区/门店）后，沿 parent 链自动把上级大区/小区勾上。
+        // 只补「__all__」空位，不覆盖用户已显式选择的层级；保证筛选区始终呈现完整的逐级路径
+        // v5.2：登录默认范围 —— 按自动派生的范围根，把组织筛选预勾到本人管理层级：
+        // 员工→本人、店长→门店、小区主管→小区、大区总监→大区（祖先链由级联回填补齐）；
+        // 总部（无范围根）保持全国；显式多根授权无法映射单一链路，保持全国由用户自行筛选
+
+        // ---------- 下拉框填充 ----------
+        // v5.3：候选改为按 level 语义收集（collectLevel）而非直接 children ——
+        // 树中存在「虚拟区→虚拟1区(华东大区)」这类大区套大区的归整结构，直取 children 会整级错位
+
+        // ---------- PK 候选 ----------
+        // v4.3：候选严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；
+        // 岗位层级 = 跨店同岗对比：候选为范围内各门店的「同一岗位」节点（如 上海东风南方威铭 · 销售店长）
+
+        // ---------- 图标 ----------
+
+        // ---------- 单选视图 ----------
+
+        // ==================== PART4：PK 对比视图 + 全链路七阶段漏斗 ====================
+
+        // ---------- 全链路七阶段漏斗 ----------
+
+        // ==================== PART5：下钻 / 趋势 / 积分 / 明细 / 交互 ====================
+        // v4.9：左柱图已移除，drillList 独占整行；此处仅保留选中态辅助函数
+
+        // ---------- 板块展开：按日多指标折线图 ----------
+
+        // v4.16：下钻 ↔ 顶栏「组织范围」双向同步 —— 把当前下钻节点路径写入 state.sel
+        // 直接改 state.sel 后由 renderAll 的 fillSelect 回显下拉，不派发 change 事件
+        //（change 监听会清空下钻栈，见 $selRegion 等监听器），nodePath 保证父层先设置，依赖链天然合法。
+
+        // ==================== v4.9：下钻区选中态 + 列表联动 ====================
+        // 统一管理 state.drillSelectedId，让 drillList 行保持高亮（柱状图已移除）
+        // 点击左柱图柱条 / drillList 行的统一入口：
+        //   - 与当前选中相同时：取消选中
+        //   - 选中后自动下钻（保留原「点击继续下钻」行为）
+
+        // ---------- v4.12：岗位 → 人员 动作得分率矩阵 ----------
+        // 行 = 该岗位下的每位人员，列 = 该岗位的关键动作（取岗位职责说明表同一份文案）
+        // 单元格 = 得分率（完成量 ÷ 该人被分配的任务量）+ 环比（与上一等长周期的百分点差）
+
+        // 单人动作得分率明细（点击人员行展开）：动作名 + 进度条 + 完成/分配 + 得分率 + 环比
+
+        // ==================== v4.14：人员层下钻 · 区间逐日动作积分完成率 ====================
+        // 点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏区间内逐日的动作积分完成率表；
+        // 点击某日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（取数 = 该行单日）。
+        // 数据说明：下钻组织树为演示树（树人员无真实工号）。真实评分岗位按 hashSeed(人员id) 确定性映射到
+        // 灯塔数据中同岗位的一名人员取数 —— 同一人员刷新后数据稳定，且明细结构与真实数据完全一致；
+        // 模拟岗位按 (人员id + 日期) seed 规则驱动生成（参照 clMockPoints 的扣分证据格式）。
+
+        // 单人单日得分点：真实岗位走灯塔单日索引；模拟岗位规则驱动生成；无数据日期返回 null
+
+        // 人员层主渲染：区间逐日完成率表（列表区）+ 区间动作得分率汇总（#drillDutyDetail，复用 renderDutyPersonDetail）
+        // v5.4：人员层主渲染 · 区间逐日动作积分完成率（接入动作评分导入数据）
+        // 取数优先级（v5.7 修订）：
+        //   1) 接口真实区间（/api/scoring/range）—— 有数据日期显示真实积分/完成率；
+        //   2) v5.7：岗位已导入评分（/api/scoring/meta detailRows>0）但该人无任何记录 —— 整表置灰「当日无该人评估数据」，不再回退模拟；
+        //   3) LH 真实日报路径（交付专员/店长，未导入评分的岗位）—— 走原 drillDailyPoint，CL_DATES 置灰；
+        //   4) 其余（mock 模式 / 从未导入的演示岗位）—— 走 drillDailyPoint 的规则驱动模拟分支（确定性生成），并在 dataNote 标明「规则驱动模拟数据（确定性生成）」。
+        // 行点击：真实数据来源异步补充 /scoring/details 证据链再打开诊断抽屉。
+
+        // v5.7：动作评分导入元信息（/api/scoring/meta，API 模式懒加载一次）—— 判断「该岗位是否已导入评分明细」。
+        // 用途：API 模式下岗位已有导入数据、但当前人员无导入记录时，逐日表不再回退确定性模拟，整表置灰。
+
+        async function renderDrillPersonDaily(cur, r) {
+            const list = document.getElementById('drillList');
+            if (!list) return;
+            state.drillPersonId = cur.id;                 // 供区间汇总明细复用
+            renderDutyPersonDetail();
+            const postKey = cur.postKey || postKeyOfPerson(cur) || POSTS[0].key;
+            const rule = clRuleFor(postKey);
+            const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
+
+            // v5.8：区间日期串直接取顶栏日期筛选 state.start/end（不按指标数据窗口钳制）——
+            // 此前用入参 r（currentIdx() 被 clampIdx 钳制到指标数据范围，如 9/10~9/16），
+            // 顶栏选 9/9~9/20 应用后逐日表日期串不变，表现为「日期筛选不同步」；
+            // 窗口外日期由既有分支自然处理：导入未命中/置灰、LH 无日报返回 null 置灰
+            const dates = [];
+            {
+                let d = parseDate(state.start);
+                const dEnd = parseDate(state.end);
+                let guard = 0;
+                while (d <= dEnd && guard++ < 400) {
+                    dates.push(dateStr(d));
+                    d = new Date(d.getTime() + ONE_DAY);
+                }
+            }
+            if (!dates.length) { dates.push(dateStr(parseDate(state.start))); }
+            const dsFrom = dates[0], dsTo = dates[dates.length - 1];
+
+            // v5.4：拉取该人员的真实区间数据（动作评分导入）；
+            // v5.6：交付等 LH 岗位也拉取 —— 逐日取数优先级改为「导入数据 > LH 真实日报 > 置灰」，
+            // 否则导入的 9/10 评分数据在 LH 岗位（仅 5/22 有日报）的逐日表上永远不出现
+            const realMap = new Map();
+            if (cur.id) {
+                try {
+                    const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
+                    if (resp && resp.ok && Array.isArray(resp.days)) {
+                        resp.days.forEach(function (d) { realMap.set(d.date, d); });
+                    }
+                } catch (e) { /* 接口失败：静默回退到 LH/mock */ }
+            }
+            let realNote = '';
+            if (realMap.size) {
+                const ks = Array.from(realMap.keys()).sort();
+                realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
+            }
+            // v5.7：API 模式下查询岗位导入元信息 —— 岗位已有导入评分但该人无记录 → 整表置灰，不回退模拟
+            const smetaPosts = await smetaLoad();
+            const postHasImport = !!(smetaPosts && smetaPosts.has(postKey));
+            let dataNote = (LH_OK && rule.real)
+                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）' + (realMap.size ? '；' + realNote : '')
+                : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
+            if (postHasImport && !realMap.size) {
+                dataNote = '该岗位已导入动作评分（导入日期 ' + (SMETA.days.join('、') || '—') + '），当前人员无导入记录 —— 逐日置灰，不展示模拟数据';
+            }
+
+            // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
+            const rows = [];
+            let prevRate = null;
+            // v5.4：若 realMap 有任一日期数据，则其余未命中日期视为「无评估数据」，行置灰 + 文案「当日无该人评估数据」；仅当 realMap 完全为空时才回退 mock
+            const useRealOnly = realMap.size > 0;
+            for (const ds of dates) {
+                let pt, isRealRow = false;
+                if (realMap.has(ds)) {
+                    pt = drillRealPoint(cur, rule, realMap.get(ds));
+                    isRealRow = true;
+                } else if (postHasImport) {
+                    // v5.7：岗位已导入评分但该人当日无记录 → 置灰（不再回退确定性模拟 / LH 映射，杜绝「天天都有假数据」）
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else if (LH_OK && rule.real) {
+                    pt = drillDailyPoint(cur, ds);
+                } else if (useRealOnly) {
+                    // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else {
+                    pt = drillDailyPoint(cur, ds);
+                }
+                rows.push({ ds: ds, pt: pt, prevRate: prevRate, isRealRow: isRealRow });
+                prevRate = (pt && !pt.noData) ? pt.rate : null;   // 无数据日断开环比链
+            }
+            const rateC = function (v) {
+                return v >= 95 ? '#34d399' : (v >= 85 ? '#60a5fa' : (v >= 70 ? '#fbbf24' : '#fb7185'));
+            };
+            const bodyHtml = rows.map(function (row, ri) {
+                const pt = row.pt;
+                if (!pt || pt.noData) {
+                    // v4.15：无数据行晨/夕会胶囊同样置灰不可点（与整行 opacity-40 一致）
+                    const meetGrey = isMgr ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">晨会</span></td><td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">夕会</span></td>' : '';
+                    return '<tr class="opacity-40" data-ri="' + ri + '">' +
+                        '<td class="px-3 py-2.5 text-sm text-slate-300 whitespace-nowrap border-b border-white/5">' + row.ds + '</td>' +
+                        '<td class="px-3 py-2.5 text-right text-xs text-slate-500 border-b border-white/5" colspan="' + (isMgr ? 4 : 6) + '">' + (pt ? '当日无该人评估数据' : '无日报数据') + '</td>' + meetGrey + '</tr>';
+                }
+                let deltaHtml = '<span class="text-slate-500">—</span>';
+                if (row.prevRate !== null && row.prevRate !== undefined) {
+                    const d = pt.rate - row.prevRate;
+                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
+                }
+                const realTag = row.isRealRow ? ' <span class="ml-1 text-[10px] text-emerald-400">导入</span>' : '';
+                return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
+                    '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项标准分（日标准得分）之和（无数据项不计入分母）">' + clNum(pt.stdCover != null ? pt.stdCover : pt.capCover) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
+                    // v4.15：晨会 / 夕会报表胶囊（仅销售店长；stopPropagation 避免触发行点击的诊断抽屉）
+                    (isMgr
+                        ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="am" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 cursor-pointer hover:bg-amber-500/25 transition">晨会 ▸</span></td>' +
+                          '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="pm" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 cursor-pointer hover:bg-indigo-500/25 transition">夕会 ▸</span></td>'
+                        : '') +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300">明细 ▸</span></td>' +
+                    '</tr>';
+            }).join('');
+            list.innerHTML =
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
+                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项标准分（日标准得分 = 100%，超出按比例计，如 150%；当日无评估数据的拿分项不计入分母）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
+                '</div>' +
+                '<table class="min-w-full border-collapse text-sm">' +
+                    '<thead><tr>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估标准分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
+                    // v4.15：晨会 / 夕会报表列（仅销售店长）
+                    (isMgr
+                        ? '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">晨会报表</th>' +
+                          '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">夕会报表</th>'
+                        : '') +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">明细</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + bodyHtml + '</tbody></table>';
+            // 行点击 → 构建单日抽屉上下文并打开诊断抽屉（复用闭环 clOpenDrawer 全部内容与图表）
+            list.querySelectorAll('tr[data-date]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    const ds = tr.dataset.date;
+                    const isReal = tr.dataset.real === '1';
+                    let day = null;
+                    let pt;
+                    if (isReal && realMap.has(ds)) {
+                        day = realMap.get(ds);
+                        pt = drillRealPoint(cur, rule, day);
+                    } else {
+                        pt = drillDailyPoint(cur, ds);
+                    }
+                    if (!pt || pt.noData) return;
+                    const openIt = function () {
+                        CL_DRAW_CTX = {
+                            points: [pt], rule: rule, dates: [ds],
+                            teamScores: pt.dims.map(function (v) { return v === null || v === undefined ? 0 : v; })   // 单人场景：均值线与本人重合
+                        };
+                        clOpenDrawer(0);
+                    };
+                    if (isReal) {
+                        // 真实导入行：异步补充证据链（/scoring/details）再打开抽屉；失败则照常去空事实表打开
+                        fetchJson(API_BASE + '/api/scoring/details?date=' + ds + '&personId=' + cur.id)
+                            .then(function (resp) {
+                                if (resp && resp.ok && Array.isArray(resp.details) && resp.details.length) {
+                                    pt.dedRows = resp.details.map(function (r) {
+                                        return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
+                                    });
+                                    // v5.6：同步构建扣分明细（抽屉「扣分明细」表 / 扣分单数 / 累计扣分 / 标签）
+                                    const deds = clDedsFromDetails(resp.details);
+                                    pt.deductions = deds;
+                                    pt.dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
+                                    pt.dedTotal = Math.round(deds.reduce(function (s, d) { return s + d.total; }, 0) * 100) / 100;
+                                    if (deds.length) pt.tag = clTagOf(deds);
+                                }
+                                openIt();
+                            })
+                            .catch(function () { openIt(); });
+                    } else {
+                        openIt();
+                    }
+                });
+            });
+            // v4.15：晨会 / 夕会报表胶囊点击 —— stopPropagation 避免触发行点击的诊断抽屉
+            list.querySelectorAll('span[data-meet-btn]').forEach(function (sp) {
+                sp.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    openMeetReport(cur, sp.dataset.date, sp.dataset.meetBtn);
+                });
+            });
+        }
+
+        // ==================== v4.15：销售店长 · 晨会 / 夕会报表 ====================
+        // 晨会管理关键目标 = 对某个具体岗位的人发布任务；夕会 = 核对晨会任务有没有完成。
+        // 仅 salesManager 岗位人员逐日表显示入口；晨夕共用同一任务集合，确定性生成（seed 前缀 meeting|），
+        // 同一人同一天刷新后数据稳定；只读查看，不持久化。
+
+        // 销售店长晨会任务模板：任务名 / 衡量标准（目标值） / 时限 / 任务来源（拿分项或上级指令）
+
+        // 晨会任务确定性生成（晨夕共用）：同一人 + 同一日期结果稳定
+
+        // 打开晨会 / 夕会报表抽屉（type = 'am' | 'pm'）
+
+        // ---------- v4.13：产品专家下钻后追加四象限图（X=积分达成率%，Y=交付量） ----------
+        // 仅在「岗位 = 产品专家」下钻后渲染；其它岗位/层级调用方直接清空 #drillPostQuad
+        // 风格与 clRenderQuad 保持一致：均值虚线 + 四象限背景 + 文字解读
+
+        // ---------- 趋势分析 ----------
+
+        // ---------- 积分排行榜 ----------
+
+        // v4.4：排行榜维度跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员、否则→人员）
+
+        // ---------- 明细数据表 ----------
+
+        // ==================== PART6：业务执行与闭环看板（v4.6 · 灯塔真实积分 + 规则驱动模拟）====================
+
+        // ---------- 灯塔真实积分数据（lighthouse_scoring_v4.6.js）----------
+        // v5.9：0 分行未达成判定（扣分明细 + AI 证据链徽章共用口径）—— 结论前缀优先 + 描述式反向判定：
+        // ① 「不满足/未满足」开头 → 未达成；「已满足/全满足/满分」开头 → 达成（「不满足：…其余2项满足」尾部的
+        //    「满足」不得翻转结论）；② 无结论前缀的描述式证据（如「4必讲侧0项命中」「无收尾动作」「未就五个维度
+        //    主动探索需求」，全库 9/10 有 291 行，如张涛试乘试驾 2 行 0 分）按达成词白名单反向判定，防漏进扣分明细。
+        // 顺带修正旧口径两处误判：描述式失败证据漏判 291 行；交付店长「已满足【…未逾期】」被「逾期」关键词误计未达成 239 行
+        // v5.9c：分数明细解析器 —— 动作文本按 1-1-x 编号拆条款清单（去重保序）
+        // v5.9c：分数明细解析器 —— AI 证据结构化（verdict/failCodes/basis/restOk）
+        // verdict 与 clZeroRowBad 口径对齐：前缀「不满足/未达成」=fail；「全满足/满足」=pass；描述式反向判定
+        // v5.6：真实导入明细行 → 扣分明细（抽屉「扣分明细」表与 dedByItem/totalDed 数据源）
+        // 口径：score<0（交付岗位负分行）或 score=0 且证据判定未达成（v5.9 起反向判定，见 clZeroRowBad）
+
+        // ---------- 岗位积分规则（灯塔规则表；无规则表的岗位用通用动作兜底）----------
+
+        // ---------- 组织：真实专营店 → 大区 / 小区 ----------
+
+        // ---------- v4.8：闭环日报单日游标（与顶栏日期区间彻底解耦）----------
+        // 闭环日期由独立日报翻阅器（state.clDate）决定；游标非法时回落到数据文件最后一份
+        // 闭环口径的生效日期 = 当前选定日报的单日（结果缓存 key 也随之单日化）
+        // v4.14：按任意日期集合建明细索引（原 clDataIndex 逻辑参数化，闭环默认走单日游标不变）
+        // 闭环原入口：日期来源 = 日报游标单日（行为不变）
+
+        // ---------- 筛选范围：大区 / 小区 / 门店多选 ----------
+        // 门店多选（v4.7 层级筛选语义）：null = 未单独勾选（当前大区/小区范围内全部门店生效，胶囊不点亮），数组 = 显式勾选（[] = 显式清空）
+
+        // ---------- 人员得分点（真实 / 模拟共用结构）----------
+        // 模拟岗位：按规则表的拿分项与封顶，为选中的每家专营店生成 1 名模拟人员（确定性随机）
+        // 当前岗位 + 组织范围下的人员得分点（按当日积分降序）
+        // ---------- v4.5：闭环图表公共样式（深色主题） ----------
+        // v4.6：人员 × 拿分项 得分热力图（单元格值 = 该拿分项达成率 %，标签 = 实际得分）
+        // v4.6：当日积分 × 销量四象限（门店 ≤ 8 家按门店着色，否则单系列）
+        // v4.6：人员动作积分诊断抽屉（拿分项构成 / 扣分明细 / AI 证据链时间线）
+
+
+        // v4.6：岗位动作规则视图（拿分项 / 封顶 / 判断逻辑 / 凭证来源 / 采集接入状态）
+
+        // ---------- 统一渲染 ----------
+        async function preloadForRender() {
+            try {
+                const r = currentIdx(), pr = prevRange();
+                const from = idxToDate(r[0]), to = idxToDate(r[1]);
+                const pfrom = idxToDate(pr.i0), pto = idxToDate(pr.i1);
+                // 收集本视图可能访问的节点：
+                // ① sumNodes —— 只需区间合计（下钻子级、PK 候选、榜单/明细维度）
+                // ② dailyNodes —— 需要逐日序列（当前节点、PK 已选、下钻链，用于趋势/面板折线）
+                const sumNodes = [], dailyNodes = [], seen = {};
+                function addSum(n) { if (n && n.level !== '人员' && !seen[n.id]) { seen[n.id] = 1; sumNodes.push(n); } }
+                function addDaily(n) { if (n && !seen[n.id]) { seen[n.id] = 1; dailyNodes.push(n); if (n.level !== '人员') sumNodes.push(n); } }
+                const cur = currentNode();
+                addDaily(cur);
+                collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
+                collectLevel(tree, state.pkLevel, []).forEach(addSum);
+                // v4.4：排行榜维度由 autoRankDim 跟随当前组织筛选节点，无法静态预知，预热门店/岗位/人员三层
+                ['门店', '岗位', '人员'].forEach(function (lv) { collectLevel(tree, lv, []).forEach(addSum); });
+                collectLevel(tree, state.tableDim, []).forEach(addSum);
+                state.drillIds.forEach(function (id) {
+                    const n = nodeById(id);
+                    addDaily(n);
+                    if (n) collectLevel(n, NEXT_LEVEL[n.level], []).forEach(addSum);
+                });
+                pkNodes().forEach(addDaily);
+                // 并行预载：人员合计（当前+对比周期）× 节点批量合计 × 逐日序列
+                await Promise.all([
+                    ensurePersons(tree, from, to),
+                    ensurePersons(tree, pfrom, pto),
+                    ensureNodeSums(sumNodes, from, to),
+                    ensureNodeSums(sumNodes, pfrom, pto),
+                    ensureSeries(dailyNodes)
+                ]);
+                return true;
+            } catch (e) { apiError(e); return false; }
+        }
+
+
+        // ---------- 交互 ----------
         document.querySelectorAll('[data-range]').forEach(function (b) {
             b.addEventListener('click', function () {
                 document.querySelectorAll('[data-range]').forEach(function (x) { x.classList.toggle('active', x === b); });
@@ -3545,14 +3601,6 @@
             });
         })();
         // v4.8：日报翻阅器交互（◀ / ▶ / 日期下拉）——仅改闭环游标，经营总览取数不受影响
-        function clShiftDaily(step) {
-            const i = CL_DATES.indexOf(clViewDate());
-            if (i < 0) return;
-            const j = i + step;
-            if (j < 0 || j >= CL_DATES.length) return;
-            state.clDate = CL_DATES[j];
-            renderAll();
-        }
         (function () {
             const bc = document.getElementById('boardClosure');
             if (!bc) return;
@@ -3589,28 +3637,6 @@
             renderAll();
         });
         // ---------- 岗位职责说明表（v4.11：页面最下方，默认收起，可展开/收起） ----------
-        function renderDutyTable() {
-            const box = document.getElementById('dutyBody');
-            if (!box) return;
-            let total = 0;
-            box.innerHTML = POSTS.map(function (p) {
-                const duties = POST_DUTIES[p.key] || [];
-                total += duties.length;
-                const rows = duties.length ? duties.map(function (d) {
-                    return '<tr><td style="white-space:nowrap;color:' + p.color + '">' + d.action + '</td><td>' + d.detail + '</td></tr>';
-                }).join('') : '<tr><td colspan="2" class="text-slate-500">暂无职责条目</td></tr>';
-                return '<div>' +
-                    '<div class="flex items-center gap-2 mb-1">' +
-                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + p.color + '"></span>' +
-                    '<span class="text-sm text-slate-100 font-medium">' + p.name + '</span>' +
-                    '<span class="text-[11px] text-slate-500">' + p.note + ' · ' + duties.length + ' 项关键动作</span>' +
-                    '</div>' +
-                    '<table class="cl-rule-table"><thead><tr><th style="width:180px">关键动作</th><th>具体内容（示意文案，待业务确认）</th></tr></thead><tbody>' + rows + '</tbody></table>' +
-                    '</div>';
-            }).join('');
-            const sub = document.getElementById('dutySubtitle');
-            if (sub) sub.textContent = POSTS.length + ' 岗位 · ' + total + ' 项关键动作 · 示意文案，待业务确认';
-        }
         (function () {
             const btn = document.getElementById('dutyToggle');
             const body = document.getElementById('dutyBody');
@@ -3666,26 +3692,7 @@
             renderAll();
         });
         // v4：「显示已停用」开关（仅 API 模式）—— 重新拉取组织树后刷新下拉/榜单，保持已选日期区间
-        const $showInactiveWrap = document.getElementById('showInactiveWrap');
-        const $showInactive = document.getElementById('showInactive');
         // 树结构变化后清理指向已隐藏节点的选中项，避免选中项静默失效
-        function sanitizeSelection() {
-            Object.keys(state.sel).forEach(function (k) {
-                const id = state.sel[k];
-                if (id !== '__all__' && !NODE_BY_ID.has(id)) state.sel[k] = '__all__';
-            });
-            state.pkIds = state.pkIds.filter(function (id) { return NODE_BY_ID.has(id); });
-            if (state.pkBase && !NODE_BY_ID.has(state.pkBase)) state.pkBase = state.pkIds[0] || null;
-            state.drillIds = state.drillIds.filter(function (id) { return NODE_BY_ID.has(id); });
-            const sn = state.sel.store !== '__all__' ? NODE_BY_ID.get(state.sel.store) : null;
-            const pn = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
-            if (pn && (!sn || pn.parent !== sn)) state.sel.post = '__all__';
-            const pn2 = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
-            if (pn2 && state.sel.person !== '__all__') {
-                const pr = NODE_BY_ID.get(state.sel.person);
-                if (!pr || pr.parent !== pn2) state.sel.person = '__all__';
-            }
-        }
         if ($showInactive) {
             $showInactive.addEventListener('change', function () {
                 showInactive = !!$showInactive.checked;
@@ -3875,10 +3882,6 @@
         document.getElementById('funnelDrillLink').addEventListener('click', function () {
             document.getElementById('drillPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
         });
-        function updateTime() {
-            const el = document.getElementById('current-time');
-            if (el) el.textContent = new Date().toLocaleTimeString('zh-CN');
-        }
         setInterval(updateTime, 1000);
         updateTime();
         window.addEventListener('resize', function () {
@@ -3890,4 +3893,4 @@
         // 初始
         initOrgSelDefaults();   // v5.2：按登录者层级预勾组织筛选（员工→本人 / 店长→门店 / 主管→小区 / 总监→大区）
         setRange(7);
-        } // ---- end startApp ----
+        }
