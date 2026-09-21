@@ -1124,6 +1124,191 @@
             }
             return SMETA.req;
         }
+        async function renderDrillPersonDaily(cur, r) {
+            const list = document.getElementById('drillList');
+            if (!list) return;
+            state.drillPersonId = cur.id;                 // 供区间汇总明细复用
+            renderDutyPersonDetail();
+            const postKey = cur.postKey || postKeyOfPerson(cur) || POSTS[0].key;
+            const rule = clRuleFor(postKey);
+            const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
+
+            // v5.8：区间日期串直接取顶栏日期筛选 state.start/end（不按指标数据窗口钳制）——
+            // 此前用入参 r（currentIdx() 被 clampIdx 钳制到指标数据范围，如 9/10~9/16），
+            // 顶栏选 9/9~9/20 应用后逐日表日期串不变，表现为「日期筛选不同步」；
+            // 窗口外日期由既有分支自然处理：导入未命中/置灰、LH 无日报返回 null 置灰
+            const dates = [];
+            {
+                let d = parseDate(state.start);
+                const dEnd = parseDate(state.end);
+                let guard = 0;
+                while (d <= dEnd && guard++ < 400) {
+                    dates.push(dateStr(d));
+                    d = new Date(d.getTime() + ONE_DAY);
+                }
+            }
+            if (!dates.length) { dates.push(dateStr(parseDate(state.start))); }
+            const dsFrom = dates[0], dsTo = dates[dates.length - 1];
+
+            // v5.4：拉取该人员的真实区间数据（动作评分导入）；
+            // v5.6：交付等 LH 岗位也拉取 —— 逐日取数优先级改为「导入数据 > LH 真实日报 > 置灰」，
+            // 否则导入的 9/10 评分数据在 LH 岗位（仅 5/22 有日报）的逐日表上永远不出现
+            const realMap = new Map();
+            if (cur.id) {
+                try {
+                    const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
+                    if (resp && resp.ok && Array.isArray(resp.days)) {
+                        resp.days.forEach(function (d) { realMap.set(d.date, d); });
+                    }
+                } catch (e) { /* 接口失败：静默回退到 LH/mock */ }
+            }
+            let realNote = '';
+            if (realMap.size) {
+                const ks = Array.from(realMap.keys()).sort();
+                realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
+            }
+            // v5.7：API 模式下查询岗位导入元信息 —— 岗位已有导入评分但该人无记录 → 整表置灰，不回退模拟
+            const smetaPosts = await smetaLoad();
+            const postHasImport = !!(smetaPosts && smetaPosts.has(postKey));
+            let dataNote = (LH_OK && rule.real)
+                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）' + (realMap.size ? '；' + realNote : '')
+                : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
+            if (postHasImport && !realMap.size) {
+                dataNote = '该岗位已导入动作评分（导入日期 ' + (SMETA.days.join('、') || '—') + '），当前人员无导入记录 —— 逐日置灰，不展示模拟数据';
+            }
+
+            // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
+            const rows = [];
+            let prevRate = null;
+            // v5.4：若 realMap 有任一日期数据，则其余未命中日期视为「无评估数据」，行置灰 + 文案「当日无该人评估数据」；仅当 realMap 完全为空时才回退 mock
+            const useRealOnly = realMap.size > 0;
+            for (const ds of dates) {
+                let pt, isRealRow = false;
+                if (realMap.has(ds)) {
+                    pt = drillRealPoint(cur, rule, realMap.get(ds));
+                    isRealRow = true;
+                } else if (postHasImport) {
+                    // v5.7：岗位已导入评分但该人当日无记录 → 置灰（不再回退确定性模拟 / LH 映射，杜绝「天天都有假数据」）
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else if (LH_OK && rule.real) {
+                    pt = drillDailyPoint(cur, ds);
+                } else if (useRealOnly) {
+                    // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else {
+                    pt = drillDailyPoint(cur, ds);
+                }
+                rows.push({ ds: ds, pt: pt, prevRate: prevRate, isRealRow: isRealRow });
+                prevRate = (pt && !pt.noData) ? pt.rate : null;   // 无数据日断开环比链
+            }
+            const rateC = function (v) {
+                return v >= 95 ? '#34d399' : (v >= 85 ? '#60a5fa' : (v >= 70 ? '#fbbf24' : '#fb7185'));
+            };
+            const bodyHtml = rows.map(function (row, ri) {
+                const pt = row.pt;
+                if (!pt || pt.noData) {
+                    // v4.15：无数据行晨/夕会胶囊同样置灰不可点（与整行 opacity-40 一致）
+                    const meetGrey = isMgr ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">晨会</span></td><td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">夕会</span></td>' : '';
+                    return '<tr class="opacity-40" data-ri="' + ri + '">' +
+                        '<td class="px-3 py-2.5 text-sm text-slate-300 whitespace-nowrap border-b border-white/5">' + row.ds + '</td>' +
+                        '<td class="px-3 py-2.5 text-right text-xs text-slate-500 border-b border-white/5" colspan="' + (isMgr ? 4 : 6) + '">' + (pt ? '当日无该人评估数据' : '无日报数据') + '</td>' + meetGrey + '</tr>';
+                }
+                let deltaHtml = '<span class="text-slate-500">—</span>';
+                if (row.prevRate !== null && row.prevRate !== undefined) {
+                    const d = pt.rate - row.prevRate;
+                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
+                }
+                const realTag = row.isRealRow ? ' <span class="ml-1 text-[10px] text-emerald-400">导入</span>' : '';
+                return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
+                    '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项标准分（日标准得分）之和（无数据项不计入分母）">' + clNum(pt.stdCover != null ? pt.stdCover : pt.capCover) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
+                    // v4.15：晨会 / 夕会报表胶囊（仅销售店长；stopPropagation 避免触发行点击的诊断抽屉）
+                    (isMgr
+                        ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="am" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 cursor-pointer hover:bg-amber-500/25 transition">晨会 ▸</span></td>' +
+                          '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="pm" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 cursor-pointer hover:bg-indigo-500/25 transition">夕会 ▸</span></td>'
+                        : '') +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300">明细 ▸</span></td>' +
+                    '</tr>';
+            }).join('');
+            list.innerHTML =
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
+                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项标准分（日标准得分 = 100%，超出按比例计，如 150%；当日无评估数据的拿分项不计入分母）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
+                '</div>' +
+                '<table class="min-w-full border-collapse text-sm">' +
+                    '<thead><tr>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估标准分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
+                    // v4.15：晨会 / 夕会报表列（仅销售店长）
+                    (isMgr
+                        ? '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">晨会报表</th>' +
+                          '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">夕会报表</th>'
+                        : '') +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">明细</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + bodyHtml + '</tbody></table>';
+            // 行点击 → 构建单日抽屉上下文并打开诊断抽屉（复用闭环 clOpenDrawer 全部内容与图表）
+            list.querySelectorAll('tr[data-date]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    const ds = tr.dataset.date;
+                    const isReal = tr.dataset.real === '1';
+                    let day = null;
+                    let pt;
+                    if (isReal && realMap.has(ds)) {
+                        day = realMap.get(ds);
+                        pt = drillRealPoint(cur, rule, day);
+                    } else {
+                        pt = drillDailyPoint(cur, ds);
+                    }
+                    if (!pt || pt.noData) return;
+                    const openIt = function () {
+                        CL_DRAW_CTX = {
+                            points: [pt], rule: rule, dates: [ds],
+                            teamScores: pt.dims.map(function (v) { return v === null || v === undefined ? 0 : v; })   // 单人场景：均值线与本人重合
+                        };
+                        clOpenDrawer(0);
+                    };
+                    if (isReal) {
+                        // 真实导入行：异步补充证据链（/scoring/details）再打开抽屉；失败则照常去空事实表打开
+                        fetchJson(API_BASE + '/api/scoring/details?date=' + ds + '&personId=' + cur.id)
+                            .then(function (resp) {
+                                if (resp && resp.ok && Array.isArray(resp.details) && resp.details.length) {
+                                    pt.dedRows = resp.details.map(function (r) {
+                                        return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
+                                    });
+                                    // v5.6：同步构建扣分明细（抽屉「扣分明细」表 / 扣分单数 / 累计扣分 / 标签）
+                                    const deds = clDedsFromDetails(resp.details);
+                                    pt.deductions = deds;
+                                    pt.dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
+                                    pt.dedTotal = Math.round(deds.reduce(function (s, d) { return s + d.total; }, 0) * 100) / 100;
+                                    if (deds.length) pt.tag = clTagOf(deds);
+                                }
+                                openIt();
+                            })
+                            .catch(function () { openIt(); });
+                    } else {
+                        openIt();
+                    }
+                });
+            });
+            // v4.15：晨会 / 夕会报表胶囊点击 —— stopPropagation 避免触发行点击的诊断抽屉
+            list.querySelectorAll('span[data-meet-btn]').forEach(function (sp) {
+                sp.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    openMeetReport(cur, sp.dataset.date, sp.dataset.meetBtn);
+                });
+            });
+        }
         const MEET_TASK_TPL = [
             { task: '新增建档并完成 DMS 录入', metric: '新增建档 ≥ {n} 组', n: [6, 10], source: '新增建档' },
             { task: '当日首访线索 2 小时内跟进登记', metric: '首访登记及时率 100%', n: null, source: '线索跟进' },
@@ -3013,6 +3198,41 @@
                 Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) { panelCharts[k].dispose(); } delete panelCharts[k]; });
             }
         }
+        async function preloadForRender() {
+            try {
+                const r = currentIdx(), pr = prevRange();
+                const from = idxToDate(r[0]), to = idxToDate(r[1]);
+                const pfrom = idxToDate(pr.i0), pto = idxToDate(pr.i1);
+                // 收集本视图可能访问的节点：
+                // ① sumNodes —— 只需区间合计（下钻子级、PK 候选、榜单/明细维度）
+                // ② dailyNodes —— 需要逐日序列（当前节点、PK 已选、下钻链，用于趋势/面板折线）
+                const sumNodes = [], dailyNodes = [], seen = {};
+                function addSum(n) { if (n && n.level !== '人员' && !seen[n.id]) { seen[n.id] = 1; sumNodes.push(n); } }
+                function addDaily(n) { if (n && !seen[n.id]) { seen[n.id] = 1; dailyNodes.push(n); if (n.level !== '人员') sumNodes.push(n); } }
+                const cur = currentNode();
+                addDaily(cur);
+                collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
+                collectLevel(tree, state.pkLevel, []).forEach(addSum);
+                // v4.4：排行榜维度由 autoRankDim 跟随当前组织筛选节点，无法静态预知，预热门店/岗位/人员三层
+                ['门店', '岗位', '人员'].forEach(function (lv) { collectLevel(tree, lv, []).forEach(addSum); });
+                collectLevel(tree, state.tableDim, []).forEach(addSum);
+                state.drillIds.forEach(function (id) {
+                    const n = nodeById(id);
+                    addDaily(n);
+                    if (n) collectLevel(n, NEXT_LEVEL[n.level], []).forEach(addSum);
+                });
+                pkNodes().forEach(addDaily);
+                // 并行预载：人员合计（当前+对比周期）× 节点批量合计 × 逐日序列
+                await Promise.all([
+                    ensurePersons(tree, from, to),
+                    ensurePersons(tree, pfrom, pto),
+                    ensureNodeSums(sumNodes, from, to),
+                    ensureNodeSums(sumNodes, pfrom, pto),
+                    ensureSeries(dailyNodes)
+                ]);
+                return true;
+            } catch (e) { apiError(e); return false; }
+        }
         function renderAll() {
             if (DATA_MODE === 'api') {
                 apiLoading(true);
@@ -3194,191 +3414,6 @@
         // v5.7：动作评分导入元信息（/api/scoring/meta，API 模式懒加载一次）—— 判断「该岗位是否已导入评分明细」。
         // 用途：API 模式下岗位已有导入数据、但当前人员无导入记录时，逐日表不再回退确定性模拟，整表置灰。
 
-        async function renderDrillPersonDaily(cur, r) {
-            const list = document.getElementById('drillList');
-            if (!list) return;
-            state.drillPersonId = cur.id;                 // 供区间汇总明细复用
-            renderDutyPersonDetail();
-            const postKey = cur.postKey || postKeyOfPerson(cur) || POSTS[0].key;
-            const rule = clRuleFor(postKey);
-            const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
-
-            // v5.8：区间日期串直接取顶栏日期筛选 state.start/end（不按指标数据窗口钳制）——
-            // 此前用入参 r（currentIdx() 被 clampIdx 钳制到指标数据范围，如 9/10~9/16），
-            // 顶栏选 9/9~9/20 应用后逐日表日期串不变，表现为「日期筛选不同步」；
-            // 窗口外日期由既有分支自然处理：导入未命中/置灰、LH 无日报返回 null 置灰
-            const dates = [];
-            {
-                let d = parseDate(state.start);
-                const dEnd = parseDate(state.end);
-                let guard = 0;
-                while (d <= dEnd && guard++ < 400) {
-                    dates.push(dateStr(d));
-                    d = new Date(d.getTime() + ONE_DAY);
-                }
-            }
-            if (!dates.length) { dates.push(dateStr(parseDate(state.start))); }
-            const dsFrom = dates[0], dsTo = dates[dates.length - 1];
-
-            // v5.4：拉取该人员的真实区间数据（动作评分导入）；
-            // v5.6：交付等 LH 岗位也拉取 —— 逐日取数优先级改为「导入数据 > LH 真实日报 > 置灰」，
-            // 否则导入的 9/10 评分数据在 LH 岗位（仅 5/22 有日报）的逐日表上永远不出现
-            const realMap = new Map();
-            if (cur.id) {
-                try {
-                    const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
-                    if (resp && resp.ok && Array.isArray(resp.days)) {
-                        resp.days.forEach(function (d) { realMap.set(d.date, d); });
-                    }
-                } catch (e) { /* 接口失败：静默回退到 LH/mock */ }
-            }
-            let realNote = '';
-            if (realMap.size) {
-                const ks = Array.from(realMap.keys()).sort();
-                realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
-            }
-            // v5.7：API 模式下查询岗位导入元信息 —— 岗位已有导入评分但该人无记录 → 整表置灰，不回退模拟
-            const smetaPosts = await smetaLoad();
-            const postHasImport = !!(smetaPosts && smetaPosts.has(postKey));
-            let dataNote = (LH_OK && rule.real)
-                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）' + (realMap.size ? '；' + realNote : '')
-                : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
-            if (postHasImport && !realMap.size) {
-                dataNote = '该岗位已导入动作评分（导入日期 ' + (SMETA.days.join('、') || '—') + '），当前人员无导入记录 —— 逐日置灰，不展示模拟数据';
-            }
-
-            // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
-            const rows = [];
-            let prevRate = null;
-            // v5.4：若 realMap 有任一日期数据，则其余未命中日期视为「无评估数据」，行置灰 + 文案「当日无该人评估数据」；仅当 realMap 完全为空时才回退 mock
-            const useRealOnly = realMap.size > 0;
-            for (const ds of dates) {
-                let pt, isRealRow = false;
-                if (realMap.has(ds)) {
-                    pt = drillRealPoint(cur, rule, realMap.get(ds));
-                    isRealRow = true;
-                } else if (postHasImport) {
-                    // v5.7：岗位已导入评分但该人当日无记录 → 置灰（不再回退确定性模拟 / LH 映射，杜绝「天天都有假数据」）
-                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
-                } else if (LH_OK && rule.real) {
-                    pt = drillDailyPoint(cur, ds);
-                } else if (useRealOnly) {
-                    // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
-                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
-                } else {
-                    pt = drillDailyPoint(cur, ds);
-                }
-                rows.push({ ds: ds, pt: pt, prevRate: prevRate, isRealRow: isRealRow });
-                prevRate = (pt && !pt.noData) ? pt.rate : null;   // 无数据日断开环比链
-            }
-            const rateC = function (v) {
-                return v >= 95 ? '#34d399' : (v >= 85 ? '#60a5fa' : (v >= 70 ? '#fbbf24' : '#fb7185'));
-            };
-            const bodyHtml = rows.map(function (row, ri) {
-                const pt = row.pt;
-                if (!pt || pt.noData) {
-                    // v4.15：无数据行晨/夕会胶囊同样置灰不可点（与整行 opacity-40 一致）
-                    const meetGrey = isMgr ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">晨会</span></td><td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">夕会</span></td>' : '';
-                    return '<tr class="opacity-40" data-ri="' + ri + '">' +
-                        '<td class="px-3 py-2.5 text-sm text-slate-300 whitespace-nowrap border-b border-white/5">' + row.ds + '</td>' +
-                        '<td class="px-3 py-2.5 text-right text-xs text-slate-500 border-b border-white/5" colspan="' + (isMgr ? 4 : 6) + '">' + (pt ? '当日无该人评估数据' : '无日报数据') + '</td>' + meetGrey + '</tr>';
-                }
-                let deltaHtml = '<span class="text-slate-500">—</span>';
-                if (row.prevRate !== null && row.prevRate !== undefined) {
-                    const d = pt.rate - row.prevRate;
-                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
-                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
-                }
-                const realTag = row.isRealRow ? ' <span class="ml-1 text-[10px] text-emerald-400">导入</span>' : '';
-                return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
-                    '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项标准分（日标准得分）之和（无数据项不计入分母）">' + clNum(pt.stdCover != null ? pt.stdCover : pt.capCover) + '</td>' +
-                    '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
-                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
-                    '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
-                    // v4.15：晨会 / 夕会报表胶囊（仅销售店长；stopPropagation 避免触发行点击的诊断抽屉）
-                    (isMgr
-                        ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="am" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 cursor-pointer hover:bg-amber-500/25 transition">晨会 ▸</span></td>' +
-                          '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="pm" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 cursor-pointer hover:bg-indigo-500/25 transition">夕会 ▸</span></td>'
-                        : '') +
-                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300">明细 ▸</span></td>' +
-                    '</tr>';
-            }).join('');
-            list.innerHTML =
-                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
-                    '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
-                    '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
-                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项标准分（日标准得分 = 100%，超出按比例计，如 150%；当日无评估数据的拿分项不计入分母）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
-                '</div>' +
-                '<table class="min-w-full border-collapse text-sm">' +
-                    '<thead><tr>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估标准分</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
-                    // v4.15：晨会 / 夕会报表列（仅销售店长）
-                    (isMgr
-                        ? '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">晨会报表</th>' +
-                          '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">夕会报表</th>'
-                        : '') +
-                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">明细</th>' +
-                    '</tr></thead>' +
-                    '<tbody>' + bodyHtml + '</tbody></table>';
-            // 行点击 → 构建单日抽屉上下文并打开诊断抽屉（复用闭环 clOpenDrawer 全部内容与图表）
-            list.querySelectorAll('tr[data-date]').forEach(function (tr) {
-                tr.addEventListener('click', function () {
-                    const ds = tr.dataset.date;
-                    const isReal = tr.dataset.real === '1';
-                    let day = null;
-                    let pt;
-                    if (isReal && realMap.has(ds)) {
-                        day = realMap.get(ds);
-                        pt = drillRealPoint(cur, rule, day);
-                    } else {
-                        pt = drillDailyPoint(cur, ds);
-                    }
-                    if (!pt || pt.noData) return;
-                    const openIt = function () {
-                        CL_DRAW_CTX = {
-                            points: [pt], rule: rule, dates: [ds],
-                            teamScores: pt.dims.map(function (v) { return v === null || v === undefined ? 0 : v; })   // 单人场景：均值线与本人重合
-                        };
-                        clOpenDrawer(0);
-                    };
-                    if (isReal) {
-                        // 真实导入行：异步补充证据链（/scoring/details）再打开抽屉；失败则照常去空事实表打开
-                        fetchJson(API_BASE + '/api/scoring/details?date=' + ds + '&personId=' + cur.id)
-                            .then(function (resp) {
-                                if (resp && resp.ok && Array.isArray(resp.details) && resp.details.length) {
-                                    pt.dedRows = resp.details.map(function (r) {
-                                        return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
-                                    });
-                                    // v5.6：同步构建扣分明细（抽屉「扣分明细」表 / 扣分单数 / 累计扣分 / 标签）
-                                    const deds = clDedsFromDetails(resp.details);
-                                    pt.deductions = deds;
-                                    pt.dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
-                                    pt.dedTotal = Math.round(deds.reduce(function (s, d) { return s + d.total; }, 0) * 100) / 100;
-                                    if (deds.length) pt.tag = clTagOf(deds);
-                                }
-                                openIt();
-                            })
-                            .catch(function () { openIt(); });
-                    } else {
-                        openIt();
-                    }
-                });
-            });
-            // v4.15：晨会 / 夕会报表胶囊点击 —— stopPropagation 避免触发行点击的诊断抽屉
-            list.querySelectorAll('span[data-meet-btn]').forEach(function (sp) {
-                sp.addEventListener('click', function (e) {
-                    e.stopPropagation();
-                    openMeetReport(cur, sp.dataset.date, sp.dataset.meetBtn);
-                });
-            });
-        }
 
         // ==================== v4.15：销售店长 · 晨会 / 夕会报表 ====================
         // 晨会管理关键目标 = 对某个具体岗位的人发布任务；夕会 = 核对晨会任务有没有完成。
@@ -3442,41 +3477,6 @@
         // v4.6：岗位动作规则视图（拿分项 / 封顶 / 判断逻辑 / 凭证来源 / 采集接入状态）
 
         // ---------- 统一渲染 ----------
-        async function preloadForRender() {
-            try {
-                const r = currentIdx(), pr = prevRange();
-                const from = idxToDate(r[0]), to = idxToDate(r[1]);
-                const pfrom = idxToDate(pr.i0), pto = idxToDate(pr.i1);
-                // 收集本视图可能访问的节点：
-                // ① sumNodes —— 只需区间合计（下钻子级、PK 候选、榜单/明细维度）
-                // ② dailyNodes —— 需要逐日序列（当前节点、PK 已选、下钻链，用于趋势/面板折线）
-                const sumNodes = [], dailyNodes = [], seen = {};
-                function addSum(n) { if (n && n.level !== '人员' && !seen[n.id]) { seen[n.id] = 1; sumNodes.push(n); } }
-                function addDaily(n) { if (n && !seen[n.id]) { seen[n.id] = 1; dailyNodes.push(n); if (n.level !== '人员') sumNodes.push(n); } }
-                const cur = currentNode();
-                addDaily(cur);
-                collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
-                collectLevel(tree, state.pkLevel, []).forEach(addSum);
-                // v4.4：排行榜维度由 autoRankDim 跟随当前组织筛选节点，无法静态预知，预热门店/岗位/人员三层
-                ['门店', '岗位', '人员'].forEach(function (lv) { collectLevel(tree, lv, []).forEach(addSum); });
-                collectLevel(tree, state.tableDim, []).forEach(addSum);
-                state.drillIds.forEach(function (id) {
-                    const n = nodeById(id);
-                    addDaily(n);
-                    if (n) collectLevel(n, NEXT_LEVEL[n.level], []).forEach(addSum);
-                });
-                pkNodes().forEach(addDaily);
-                // 并行预载：人员合计（当前+对比周期）× 节点批量合计 × 逐日序列
-                await Promise.all([
-                    ensurePersons(tree, from, to),
-                    ensurePersons(tree, pfrom, pto),
-                    ensureNodeSums(sumNodes, from, to),
-                    ensureNodeSums(sumNodes, pfrom, pto),
-                    ensureSeries(dailyNodes)
-                ]);
-                return true;
-            } catch (e) { apiError(e); return false; }
-        }
 
 
         // ---------- 交互 ----------
