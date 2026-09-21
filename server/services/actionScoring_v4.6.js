@@ -222,19 +222,9 @@ function importScoring(db, buffer, filename, opts) {
     return storeCache.get(name) || 0;
   }
 
-  /** 人员解析：有工号走实名通道（兼容旧行为）；virtual 且无工号 → 店级虚拟人员（不建登录账号） */
+  /** 人员解析：有工号走实名通道；无工号 → 拒绝导入（不再生成虚拟人物） */
   function personOf(emp, name, storeId, storeCode, storeName) {
-    if (!emp) {
-      if (!o.virtual || !storeId) return null;
-      const vkey = 'V|' + (storeCode || storeId);
-      if (personCache.has(vkey)) return personCache.get(vkey);
-      const postNodeId = ensureNode(postName, '岗位', storeId, postKey);
-      const label = '[' + postName + ']' + (storeName || db.prepare('SELECT name FROM org_nodes WHERE id = ?').get(storeId).name);
-      const id = ensureNode(label, '人员', postNodeId, postKey);
-      const node = { id, name: label };
-      personCache.set(vkey, node);
-      return node;
-    }
+    if (!emp) return null;
     const key = emp;
     if (personCache.has(key)) return personCache.get(key);
     let node = dbh.findPersonByEmpNo(db, emp);
@@ -255,7 +245,7 @@ function importScoring(db, buffer, filename, opts) {
     (person_id, emp_no, person_name, post_key, store_id, store_code, store_name, date, item, action, score, ok, evidence, order_no)
     VALUES (@personId, @empNo, @name, @postKey, @storeId, @storeCode, @storeName, @date, @item, @action, @score, @ok, @evidence, @orderNo)`);
   const insSum = db.prepare('INSERT OR REPLACE INTO action_daily_sums (person_id, emp_no, post_key, store_id, date, item, target, cnt, target_score, score) VALUES (?,?,?,?,?,?,?,?,?,?)');
-  let rowsOk = 0, rowsSum = 0;
+  let rowsOk = 0, rowsSum = 0, rejectedNoEmp = 0;
 
   /** 单行归属解析：返回 { sid, storeName } 或 null（跳过） */
   function resolveStore(code, rawName) {
@@ -278,7 +268,7 @@ function importScoring(db, buffer, filename, opts) {
       const loc = resolveStore(d.storeCode, d.storeName);
       if (!loc) continue;
       const p = personOf(d.emp, d.personName, loc.sid, d.storeCode, loc.storeName);
-      if (!p) continue;
+      if (!p) { if (!d.emp) rejectedNoEmp++; continue; }
       insDetail.run({
         personId: p.id, empNo: d.emp || null, name: d.personName || p.name, postKey: d.postKey,
         storeId: loc.sid, storeCode: d.storeCode, storeName: loc.storeName, date: d.date,
@@ -293,7 +283,7 @@ function importScoring(db, buffer, filename, opts) {
       const loc = resolveStore(s.storeCode, s.storeName);
       if (!loc) continue;
       const p = personOf(s.emp, s.personName, loc.sid, s.storeCode, loc.storeName);
-      if (!p) continue;
+      if (!p) { if (!s.emp) rejectedNoEmp++; continue; }
       insSum.run(p.id, s.emp || null, s.postKey, loc.sid, s.date, s.item, s.target, s.cnt, s.targetScore, s.score);
       personIds.push(p.id);
       rowsSum++;
@@ -302,7 +292,7 @@ function importScoring(db, buffer, filename, opts) {
   tx();
   return {
     postKey, postName,
-    detailRows: rowsOk, sumRows: rowsSum,
+    detailRows: rowsOk, sumRows: rowsSum, rejectedNoEmp,
     persons: new Set(personIds).size,
     storesFromRoster: storeCache.size - unmatchedStores.size,
     storesCreated: Array.from(unmatchedStores).slice(0, 50),
