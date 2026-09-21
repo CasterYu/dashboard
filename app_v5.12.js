@@ -1,0 +1,3893 @@
+// 业务数据看板 v5.12 — 应用启动与渲染（P3 抽离，依赖 data/utils/mock/api_auth，须在它们之后加载）
+
+        function startApp() {
+            if (DATA_MODE === 'mock') tree = buildTree();
+            // v4：开关仅在 API 模式下出现；mock 演示模式界面与 v3.8 完全一致
+            const swWrap = document.getElementById('showInactiveWrap');
+            if (swWrap) swWrap.classList.toggle('hidden', DATA_MODE !== 'api');
+
+        // ==================== PART3：状态、组织筛选器、单选视图 ====================
+        const NODE_BY_ID = new Map();
+        function reindexTree() {
+            NODE_BY_ID.clear();
+            (function indexNode(n) { NODE_BY_ID.set(n.id, n); n.children.forEach(indexNode); })(tree);
+        }
+        reindexTree();
+        function nodeById(id) { return NODE_BY_ID.get(id) || tree; }
+
+        const state = {
+            board: 'overview',                 // 当前看板：overview（经营总览） / closure（业务执行与闭环）
+            start: '', end: '',
+            mode: 'single',
+            sel: { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' },
+            pkLevel: '门店',
+            pkPost: POSTS[0].key,              // PK 层级=岗位 时的二级岗位选择
+            pkIds: [],
+            pkBase: null,
+            drillIds: [],
+            drillSelectedId: null,            // v4.9：左柱图 / drillList 共享的选中态（节点 id；null = 无选中）
+            drillPersonId: null,              // v4.14：人员层下钻后，区间动作得分率汇总（#drillDutyDetail）对应的人员节点 id
+            trendMode: 'day',
+            trendMetrics: ['intentLeads', 'arrivals', 'locked'], // 经营总览趋势分析默认指标
+            trendNorm: null,   // 绝对量归一化：null=自动, true=强制, false=强制关闭
+            pointsDim: '门店',   // 兼容字段，v4.4 起由 autoRankDim 自动推导，保留旧值以防外部引用
+            pointsRank: 'sales',  // v4.4：积分/销量排行榜排序优先级（'sales' 销量优先 / 'points' 积分优先）
+            tableDim: '门店',
+            expanded: [false, false, false],   // 三大板块各自的展开状态
+            panelSel: {},                      // 各板块勾选的指标 key
+            // 业务执行与闭环看板状态
+            closure: { postKey: 'deliverySpecialist', region: null, area: null, storeCodes: null, storeSearch: '', storeMulti: false, showRules: true, showMonthly: false },
+            clDate: ''                          // v4.8：闭环独立日报游标（空串 = 自动取数据文件最后一天）
+        };
+        const panelCharts = {};                // 板块展开态折线图实例
+
+        const $start = document.getElementById('startDate');
+        const $end = document.getElementById('endDate');
+        const $rangeText = document.getElementById('rangeText');
+        const $selRegion = document.getElementById('orgRegion');
+        const $selArea = document.getElementById('orgArea');
+        const $selStore = document.getElementById('orgStore');
+        const $selPost = document.getElementById('orgPost');
+        const $selPerson = document.getElementById('orgPerson');
+        const $orgPath = document.getElementById('orgPath');
+        const $orgSummary = document.getElementById('orgSummary');
+        const $pkBar = document.getElementById('pkBar');
+        const $pkOptionsWrap = document.getElementById('pkOptionsWrap');
+        const $pkOptions = document.getElementById('pkOptions');
+
+        function prevRange() {
+            const r = rangeIdx(state.start, state.end);
+            const span = r[1] - r[0] + 1;
+            const i1 = Math.max(0, r[0] - 1);
+            const i0 = Math.max(0, i1 - span + 1);
+            return { i0: i0, i1: i1 };
+        }
+        function currentIdx() { return rangeIdx(state.start, state.end); }
+
+        // 单选模式下的当前节点：取最深一级的有效选择
+        function currentNode() {
+            const chain = [state.sel.region, state.sel.area, state.sel.store, state.sel.post, state.sel.person];
+            let last = tree;
+            chain.forEach(function (id) {
+                if (id && id !== '__all__') last = nodeById(id);
+            });
+            return last;
+        }
+        // 「返回上级」辅助：返回顶栏筛选中最深选中层级在 SEL_ORDER 中的下标；全为 __all__（全国）返回 -1
+        const SEL_ORDER = ['region', 'area', 'store', 'post', 'person'];
+        function drillDeepestSelIdx() {
+            for (let i = SEL_ORDER.length - 1; i >= 0; i--) {
+                if (state.sel[SEL_ORDER[i]] && state.sel[SEL_ORDER[i]] !== '__all__') return i;
+            }
+            return -1;
+        }
+        // v5.2：级联回填 —— 选中下级节点（小区/门店）后，沿 parent 链自动把上级大区/小区勾上。
+        // 只补「__all__」空位，不覆盖用户已显式选择的层级；保证筛选区始终呈现完整的逐级路径
+        const LEVEL_STATE_KEY = { '大区': 'region', '小区': 'area', '门店': 'store', '岗位': 'post', '人员': 'person' };
+        function backfillAncestors(node) {
+            let n = node && node.parent;
+            while (n) {
+                const key = LEVEL_STATE_KEY[n.level];
+                if (key && (!state.sel[key] || state.sel[key] === '__all__')) state.sel[key] = n.id;
+                n = n.parent;
+            }
+        }
+        // v5.2：登录默认范围 —— 按自动派生的范围根，把组织筛选预勾到本人管理层级：
+        // 员工→本人、店长→门店、小区主管→小区、大区总监→大区（祖先链由级联回填补齐）；
+        // 总部（无范围根）保持全国；显式多根授权无法映射单一链路，保持全国由用户自行筛选
+        function initOrgSelDefaults() {
+            if (DATA_MODE !== 'api' || !cachedUser || !cachedUser.scopeRootId) return;
+            if (cachedUser.scopeMode === 'explicit') return;
+            const node = NODE_BY_ID.get('n' + cachedUser.scopeRootId);
+            if (!node) return;
+            const key = LEVEL_STATE_KEY[node.level];
+            if (key) state.sel[key] = node.id;
+            backfillAncestors(node);
+        }
+
+        // ---------- 下拉框填充 ----------
+        function fillSelect(el, list, allLabel, current, placeholder) {
+            let html = '<option value="__all__">' + (placeholder || allLabel) + '</option>';
+            list.forEach(function (n) {
+                // v4：已停用节点弱化显示（名称本身已带「（已停用）」后缀）
+                html += '<option value="' + n.id + '"' + (n.disabled ? ' disabled' : '') +
+                    (n.status === 0 ? ' class="inactive"' : '') + '>' + n.name + '</option>';
+            });
+            el.innerHTML = html;
+            el.value = current || '__all__';
+            const picked = el.options[el.selectedIndex];
+            if (!picked || picked.disabled || el.value !== (current || '__all__')) el.value = '__all__';
+        }
+        // v5.3：候选改为按 level 语义收集（collectLevel）而非直接 children ——
+        // 树中存在「虚拟区→虚拟1区(华东大区)」这类大区套大区的归整结构，直取 children 会整级错位
+        function storesOfArea(areaId) {
+            const area = areaId === '__all__' ? null : nodeById(areaId);
+            return area ? collectLevel(area, '门店') : [];
+        }
+        function areasOfRegion(regionId) {
+            const region = regionId === '__all__' ? null : nodeById(regionId);
+            return region ? collectLevel(region, '小区') : [];
+        }
+        function renderOrgSelectors() {
+            // 大区
+            fillSelect($selRegion, tree.children, '全国', state.sel.region, '全国');
+            // 小区
+            const areas = state.sel.region === '__all__' ? collectLevel(tree, '小区') : areasOfRegion(state.sel.region);
+            fillSelect($selArea, areas, '全部小区', state.sel.area, state.sel.region === '__all__' ? '全部小区' : '全部小区');
+            $selArea.disabled = areas.length === 0;
+            // 门店
+            const stores = state.sel.area === '__all__' ? collectLevel(tree, '门店') : storesOfArea(state.sel.area);
+            fillSelect($selStore, stores, '全部门店', state.sel.store);
+            $selStore.disabled = stores.length === 0;
+            // 岗位（需先选门店；未选门店时置灰禁用）
+            const storeNode = state.sel.store !== '__all__' ? nodeById(state.sel.store) : null;
+            // 容错：门店切换后若原选岗位不属于该门店，自动回退为全部岗位
+            if (storeNode && state.sel.post !== '__all__') {
+                const pn = NODE_BY_ID.get(state.sel.post);
+                if (!pn || pn.parent !== storeNode) { state.sel.post = '__all__'; state.sel.person = '__all__'; }
+            }
+            if (storeNode) {
+                const existKeys = {};
+                // v5.3：只取「岗位」层子节点（防归整/异常结构下非岗位节点混入导致全列「本店暂无」）
+                collectLevel(storeNode, '岗位', []).forEach(function (p) { existKeys[p.postKey] = p; });
+                const posts = POSTS.map(function (p) {
+                    const node = existKeys[p.key];
+                    if (node) return { id: node.id, name: p.name + (node.status === 0 ? '（已停用）' : ''), status: node.status };
+                    return { id: '__none__' + p.key, name: p.name + '（本店暂无）', disabled: true };
+                });
+                fillSelect($selPost, posts, '全部岗位', state.sel.post);
+                $selPost.disabled = false;
+            } else {
+                $selPost.innerHTML = '<option value="__all__">全部岗位（请先选门店）</option>';
+                $selPost.value = '__all__';
+                $selPost.disabled = true;
+            }
+            // 人员
+            const postNode = state.sel.post !== '__all__' && state.sel.post.indexOf('__none__') !== 0 ? nodeById(state.sel.post) : null;
+            if (postNode) {
+                fillSelect($selPerson, postNode.children, '全部人员', state.sel.person);
+                $selPerson.disabled = false;
+            } else if (storeNode) {
+                // v5.3：按 level 语义收集门店下全部人员（原双层 children 遍历会漏/错层级）
+                const persons = collectLevel(storeNode, '人员', []);
+                fillSelect($selPerson, persons, '全部人员', state.sel.person);
+                $selPerson.disabled = false;
+            } else {
+                $selPerson.innerHTML = '<option value="__all__">全部人员（请先选门店）</option>';
+                $selPerson.value = '__all__';
+                $selPerson.disabled = true;
+            }
+            // 路径与范围摘要
+            const node = currentNode();
+            const path = nodePath(node);
+            $orgPath.innerHTML = path.map(function (n, i) {
+                const last = i === path.length - 1;
+                return '<span class="crumb' + (last ? '' : ' muted') + (n.status === 0 ? ' inactive' : '') + '">' + n.name + '</span>' +
+                    (last ? '' : '<span class="text-slate-600">/</span>');
+            }).join('');
+            const storeCount = Math.max(1, countStores(node));
+            // v4：区分在岗/已停用人数（「显示已停用」打开时树里含停用节点，摘要需据实描述）
+            const personsInScope = [];
+            if (node.level === '人员') personsInScope.push(node);
+            else collectLevel(node, '人员', personsInScope);
+            const inactivePersons = personsInScope.filter(function (p) { return p.status === 0; }).length;
+            const activePersons = personsInScope.length - inactivePersons;
+            // 空岗提示
+            const missing = [];
+            collectLevel(node, '门店', []).forEach(function (s) {
+                (s.postStats ? s.postStats.missing : []).forEach(function (pk) {
+                    if (missing.indexOf(pk) < 0) missing.push(pk);
+                });
+            });
+            let summary;
+            if (node.level === '人员') {
+                summary = '所属门店 ' + node.storeName + ' · ' + node.postName + ' · 当前范围 1 人' + (node.status === 0 ? '（已停用）' : '');
+            } else if (node.level === '岗位') {
+                const pActive = node.children.filter(function (p) { return p.status !== 0; }).length;
+                const pInactive = node.children.length - pActive;
+                summary = node.storeName + ' · ' + node.name + ' · 在岗 ' + pActive + ' 人（' +
+                    (node.children.length > 1 ? '一岗多人' : '一岗一人') + '）' +
+                    (pInactive ? ' · 另有 ' + pInactive + ' 人已停用' : '');
+            } else {
+                summary = '覆盖 ' + storeCount + ' 家门店 / ' + activePersons + ' 名在岗人员';
+                if (inactivePersons) summary += '（另有 ' + inactivePersons + ' 人已停用）';
+                if (missing.length) {
+                    const missingNames = missing.map(function (pk) { return (POSTS_BY_KEY[pk] || {}).name || pk; });
+                    summary += ' · 其中 ' + missingNames.join(' / ') + ' 岗位在部分门店空缺';
+                }
+            }
+            $orgSummary.textContent = summary;
+            // v4：显示已停用时给出提示（停用只影响可见性，聚合口径不变，故榜单求和可能小于上级合计）
+            const hintEl = document.getElementById('inactiveHint');
+            if (hintEl) {
+                const shownInactive = showInactive ? countInactive(tree) : 0;
+                if (shownInactive > 0) {
+                    hintEl.textContent = '已显示 ' + shownInactive + ' 个已停用节点：其历史指标仍完整保留并计入上级合计，因此榜单求和可能小于上级合计';
+                    hintEl.classList.remove('hidden');
+                } else {
+                    hintEl.classList.add('hidden');
+                }
+            }
+        }
+
+        // ---------- PK 候选 ----------
+        // v4.3：候选严格按当前组织范围收集，不再回退全树（修复「筛选范围外对象出现在候选区」）；
+        // 岗位层级 = 跨店同岗对比：候选为范围内各门店的「同一岗位」节点（如 上海东风南方威铭 · 销售店长）
+        function pkCandidates() {
+            let list;
+            if (state.pkLevel === '岗位') {
+                list = collectLevel(currentNode(), '岗位', []).filter(function (n) { return n.postKey === state.pkPost; });
+            } else {
+                list = collectLevel(currentNode(), state.pkLevel, []);
+            }
+            return list.slice().sort(function (a, b) {
+                const ma = metricsOf(a, currentIdx()[0], currentIdx()[1]);
+                const mb = metricsOf(b, currentIdx()[0], currentIdx()[1]);
+                return (mb ? mb.leads : 0) - (ma ? ma.leads : 0);
+            });
+        }
+        function renderPkPostTabs() {
+            const $bar = document.getElementById('pkPostBar');
+            const $tabs = document.getElementById('pkPostTabs');
+            if (!$bar || !$tabs) return;
+            const on = state.mode === 'pk' && state.pkLevel === '岗位';
+            $bar.classList.toggle('hidden', !on);
+            $bar.classList.toggle('flex', on);
+            if (!on) return;
+            if (!POSTS_BY_KEY[state.pkPost]) state.pkPost = POSTS[0].key;
+            $tabs.innerHTML = POSTS.map(function (p) {
+                return '<button class="quick-btn' + (p.key === state.pkPost ? ' active' : '') + '" data-pk-post="' + p.key + '"' +
+                    ' style="' + (p.key === state.pkPost ? 'background:' + p.color + ';border-color:' + p.color + ';color:#fff;font-weight:600' : '') + '">' + p.name + '</button>';
+            }).join('');
+        }
+        function renderPkOptions() {
+            const list = pkCandidates();
+            $pkOptions.innerHTML = list.map(function (n) {
+                const on = state.pkIds.indexOf(n.id) >= 0;
+                const nm = state.pkLevel === '岗位' || state.pkLevel === '人员' ? (n.storeName ? n.storeName + ' · ' + n.name : n.name) : n.name;
+                return '<button class="pk-opt' + (on ? ' on' : '') + (n.status === 0 ? ' inactive' : '') + '" data-id="' + n.id + '">' + nm + '</button>';
+            }).join('');
+            if (!list.length) {
+                $pkOptions.innerHTML = '<span class="text-xs text-slate-500 py-2">当前组织范围下没有该层级的可比对象 —— 请在上方「组织范围」放宽筛选（如选回上级大区 / 小区）</span>';
+            }
+            // 空缺岗位置灰展示（体现「本店暂无」而非 0）— 仅针对当前选中的对比岗位
+            if (state.pkLevel === '岗位') {
+                const postDef = POSTS_BY_KEY[state.pkPost];
+                if (postDef) {   // v5.0：空缺改为 min:0 岗位确定性随机生成，postStats.missing 依旧准确
+                    const scopeRoot = currentNode().level === '门店' ? currentNode().parent : currentNode();
+                    const storeNodes = collectLevel(scopeRoot, '门店', []);
+                    const missing = storeNodes.filter(function (s) { return (s.postStats.missing || []).indexOf(state.pkPost) >= 0; });
+                    if (missing.length) {
+                        $pkOptions.innerHTML += missing.map(function (s) {
+                            return '<span class="pk-opt empty">' + s.name + ' · ' + postDef.name + '（暂无）</span>';
+                        }).join('');
+                    }
+                }
+            }
+            $pkOptions.querySelectorAll('button[data-id]').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    const id = b.dataset.id;
+                    const i = state.pkIds.indexOf(id);
+                    if (i >= 0) {
+                        state.pkIds.splice(i, 1);
+                        if (state.pkBase === id) state.pkBase = state.pkIds[0] || null;
+                    } else {
+                        if (state.pkIds.length >= 6) return;
+                        state.pkIds.push(id);
+                        if (!state.pkBase) state.pkBase = id;
+                    }
+                    renderAll();
+                });
+            });
+        }
+        function pkNodes() { return state.pkIds.map(nodeById); }
+        function pkBaseNode() { return state.pkBase ? nodeById(state.pkBase) : (pkNodes()[0] || null); }
+
+        // ---------- 图标 ----------
+        const ICONS = {
+            user: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 21v-2a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v2"/></svg>',
+            phone: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.1a2 2 0 0 1 2.1-.5c.9.3 1.9.6 2.8.7a2 2 0 0 1 1.7 2Z"/></svg>',
+            car: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 17h14M6 17V9l2-4h8l2 4v8"/><circle cx="7.5" cy="17" r="1.6"/><circle cx="16.5" cy="17" r="1.6"/></svg>',
+            lock: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+            target: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg>',
+            star: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2.9 6 6.6.9-4.8 4.6 1.2 6.5L12 18l-5.9 3 1.2-6.5L2.5 9.9 9.1 9Z"/></svg>'
+        };
+        function iconOf(key) {
+            if (key === 'invites') return ICONS.phone;
+            if (key === 'testDrives' || key === 'delivered') return ICONS.car;
+            if (key === 'locked') return ICONS.lock;
+            if (key === 'opportunities') return ICONS.target;
+            if (key === 'points') return ICONS.star;
+            return ICONS.user;
+        }
+
+        // ---------- 单选视图 ----------
+        const MODULE_GROUPS = [
+            { title: '线索入口', keys: ['leads', 'validLeads', 'intentLeads', 'invites'] },
+            { title: '到店接待', keys: ['arrivals', 'testDrives', 'returnVisits', 'opportunities'] },
+            { title: '结果面板', keys: ['locked', 'delivered'] }
+        ];
+        function cardHTML(key, prefix) {
+            const color = METRIC_COLOR[key];
+            const id = prefix + key;
+            return '<div class="metric-card" style="--accent-color:' + color + '">' +
+                '<div class="flex items-start justify-between gap-2">' +
+                '<div class="metric-label"><span class="metric-icon">' + iconOf(key) + '</span>' + METRIC_LABEL[key] + '</div>' +
+                '<span class="chip flat" id="' + id + '_d">--</span></div>' +
+                '<div class="metric-value" id="' + id + '_v">0<span class="metric-unit">' + METRIC_UNIT[key] + '</span></div>' +
+                '<div class="metric-meta"><span id="' + id + '_r" class="text-slate-400"></span></div></div>';
+        }
+        function renderSingleView() {
+            const r = currentIdx(), pr = prevRange();
+            const node = currentNode();
+            const m = metricsOf(node, r[0], r[1]);
+            const pm = metricsOf(node, pr.i0, pr.i1);
+
+            // 重绘前释放已展开的折线图实例
+            Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) panelCharts[k].dispose(); delete panelCharts[k]; });
+
+            // 总览条（3 列 × 2 行）
+            const ovItems = [
+                { k: 'leads', label: '线索量', unit: '条' },
+                { k: 'arrivals', label: '到店量', unit: '人' },
+                { k: 'locked', label: '锁单量', unit: '单' },
+                { k: 'delivered', label: '交付量', unit: '辆' },
+                { rate: 'l2a', label: '线索到店率' },
+                { rate: 'conv', label: '线索转化率' }
+            ];
+            const ovHTML = ovItems.map(function (it, i) {
+                if (it.rate === 'l2a') {
+                    const cur = m.leads ? m.arrivals / m.leads * 100 : 0;
+                    const pv = pm.leads ? pm.arrivals / pm.leads * 100 : 0;
+                    return ovCell(it.label, cur.toFixed(1) + '%', (cur - pv >= 0 ? '+' : '') + (cur - pv).toFixed(1) + 'pt', cur - pv >= 0);
+                }
+                if (it.rate === 'conv') {
+                    const cur = m.leads ? m.delivered / m.leads * 100 : 0;
+                    const pv = pm.leads ? pm.delivered / pm.leads * 100 : 0;
+                    return ovCell(it.label, cur.toFixed(1) + '%', (cur - pv >= 0 ? '+' : '') + (cur - pv).toFixed(1) + 'pt', cur - pv >= 0);
+                }
+                const d = pct(m[it.k], pm[it.k]);
+                return ovCell(it.label, fmt(m[it.k]) + ' ' + it.unit, (d >= 0 ? '↑ ' : '↓ ') + Math.abs(d).toFixed(1) + '%', d >= 0);
+            }).join('');
+
+            // 三大模块（支持各自展开为随时间变化的折线图）
+            const blocks = MODULE_GROUPS.map(function (g, gi) {
+                const expanded = !!state.expanded[gi];
+                if (!state.panelSel[gi] || !state.panelSel[gi].length) state.panelSel[gi] = g.keys.slice();
+                let body;
+                if (expanded) {
+                    const chips = g.keys.map(function (k) {
+                        const on = state.panelSel[gi].indexOf(k) >= 0;
+                        return '<span class="metric-chip' + (on ? ' on' : '') + '" data-chip="' + k + '" data-g="' + gi + '">' +
+                            '<span class="mc-dot" style="background:' + METRIC_COLOR[k] + '"></span>' + METRIC_LABEL[k] + '</span>';
+                    }).join('');
+                    const allOn = state.panelSel[gi].length === g.keys.length;
+                    body = '<div class="panel-chips">' + chips +
+                        (allOn ? '' : '<span class="mchip-all" data-all="' + gi + '">全选</span>') + '</div>' +
+                        '<div class="panel-chart" id="svChart' + gi + '"></div>';
+                } else {
+                    const cards = g.keys.map(function (k) { return cardHTML(k, 'sv_'); }).join('');
+                    const cols = g.keys.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 2xl:grid-cols-4';
+                    body = '<div class="grid ' + cols + ' gap-4">' + cards + '</div>';
+                }
+                return '<section class="panel p-6">' +
+                    '<div class="flex items-center justify-between mb-4 gap-3 flex-wrap">' +
+                    '<div class="panel-title"><span class="dot"></span>' + g.title + '</div>' +
+                    '<div class="flex items-center gap-3">' +
+                    '<div class="text-xs text-slate-400" id="svSub' + gi + '"></div>' +
+                    '<button class="expand-btn" data-expand="' + gi + '">' + (expanded ? '收起 ▲' : '展开时间轴 ▼') + '</button>' +
+                    '</div></div>' + body + '</section>';
+            }).join('');
+
+            document.getElementById('singleView').innerHTML =
+                '<div class="overview-bar">' + ovHTML + '</div>' + blocks;
+
+            // 填充数值
+            MODULE_GROUPS.forEach(function (g) {
+                g.keys.forEach(function (k) {
+                    const id = 'sv_' + k;
+                    const cur = m[k], prev = pm[k];
+                    const d = pct(cur, prev);
+                    const vel = document.getElementById(id + '_v');
+                    if (vel) vel.innerHTML = fmt(cur) + '<span class="metric-unit">' + METRIC_UNIT[k] + '</span>';
+                    const del = document.getElementById(id + '_d');
+                    if (del) {
+                        del.className = 'chip ' + (d > 0.5 ? 'up' : d < -0.5 ? 'down' : 'flat');
+                        del.textContent = (d > 0.5 ? '↑ ' : d < -0.5 ? '↓ ' : '→ ') + Math.abs(d).toFixed(1) + '%';
+                    }
+                    const rel = document.getElementById(id + '_r');
+                    if (rel) {
+                        const chain = RATIO_CHAIN.filter(function (p) { return p[0] === k; })[0];
+                        if (chain) {
+                            const base = m[chain[1]];
+                            const rate = base ? (cur / base) * 100 : 0;
+                            rel.textContent = '相对' + METRIC_LABEL[chain[1]] + ' ' + rate.toFixed(1) + '%';
+                        } else {
+                            rel.textContent = '';
+                        }
+                    }
+                });
+            });
+            MODULE_GROUPS.forEach(function (g, gi) {
+                const el = document.getElementById('svSub' + gi);
+                if (el) el.textContent = node.name + ' · ' + g.keys.length + ' 项指标';
+            });
+            // 展开板块的按日折线图
+            MODULE_GROUPS.forEach(function (g, gi) {
+                if (state.expanded[gi]) renderPanelChart(gi);
+            });
+        }
+        function ovCell(label, value, deltaText, up) {
+            return '<div class="overview-item"><div class="label">' + label + '</div>' +
+                '<div class="value">' + value + '</div>' +
+                '<div class="delta ' + (up ? 'text-emerald-400' : 'text-rose-400') + '">' + deltaText + '</div></div>';
+        }
+
+        // ==================== PART4：PK 对比视图 + 全链路七阶段漏斗 ====================
+        const PK_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899'];
+        function pkColorOf(node) {
+            const i = state.pkIds.indexOf(node.id);
+            return PK_PALETTE[(i >= 0 ? i : 0) % PK_PALETTE.length];
+        }
+        function pkRows() {
+            // 动态生成 PK 行：硬编码部分 + 按 POSTS 顺序展开岗位行（空缺岗位显示 —）
+            const rows = [
+                { group: '核心指标' },
+                { label: '线索量', key: 'leads', unit: '条' },
+                { label: '到店量', key: 'arrivals', unit: '人' },
+                { label: '锁单量', key: 'locked', unit: '单' },
+                { label: '交付量', key: 'delivered', unit: '辆' },
+                { label: '积分', key: 'points', unit: '分' },
+                { group: '效率指标（比率按分子 / 分母重算，不做平均）' },
+                { label: '线索到店率', ratio: ['arrivals', 'leads'] },
+                { label: '线索转化率', ratio: ['delivered', 'leads'] },
+                { label: '有效率', ratio: ['validLeads', 'leads'] },
+                { label: '锁单率', ratio: ['locked', 'opportunities'] },
+                { label: '交付率', ratio: ['delivered', 'locked'] },
+                { group: '入口环节' },
+                { label: '有效线索', key: 'validLeads', unit: '条' },
+                { label: '意向线索', key: 'intentLeads', unit: '条' },
+                { label: '邀约排程', key: 'invites', unit: '次' },
+                { group: '到店环节' },
+                { label: '有效试驾', key: 'testDrives', unit: '人' },
+                { label: '试驾点评数', key: 'testReviews', unit: '条' },
+                { label: '二次回访', key: 'returnVisits', unit: '人' },
+                { group: '结果环节' },
+                { label: '商机量', key: 'opportunities', unit: '个' },
+                { group: '岗位构成 · 线索量（空缺岗位显示 —）' }
+            ];
+            POSTS.forEach(function (p) {
+                rows.push({ label: p.name, post: p.key, unit: '条' });
+            });
+            rows.push({ group: '环比（各对象各自对比上一等长周期）' });
+            rows.push({ label: '线索量环比', mom: 'leads' });
+            rows.push({ label: '到店量环比', mom: 'arrivals' });
+            rows.push({ label: '锁单量环比', mom: 'locked' });
+            rows.push({ label: '交付量环比', mom: 'delivered' });
+            return rows;
+        }
+        function pkRowValue(node, row, r, pr) {
+            const m = metricsOf(node, r[0], r[1]);
+            if (row.key) return m[row.key];
+            if (row.ratio) {
+                const base = m[row.ratio[1]];
+                return base ? (m[row.ratio[0]] / base) * 100 : 0;
+            }
+            if (row.post) {
+                const p = node.children.filter(function (c) { return c.postKey === row.post; })[0];
+                if (!p) return null; // 空岗：显示 —，不参与排名与差值
+                return metricsOf(p, r[0], r[1]).leads;
+            }
+            if (row.mom) {
+                const pm = metricsOf(node, pr.i0, pr.i1);
+                return pct(m[row.mom], pm[row.mom]);
+            }
+            return null;
+        }
+        function rowText(row, v) {
+            if (v === null || v === undefined) return '—';
+            if (row.ratio) return v.toFixed(1) + '%';
+            if (row.mom) return fmtSigned(v, 1) + '%';
+            return fmt(v);
+        }
+        function renderPkView() {
+            const el = document.getElementById('pkView');
+            const nodes = pkNodes();
+            if (nodes.length < 2) {
+                el.innerHTML = '<div class="panel p-12 text-center">' +
+                    '<div class="text-slate-300 font-medium mb-2">PK 模式已开启 · 尚未完成选择</div>' +
+                    '<div class="text-sm text-slate-500">请在上方「PK 层级」中勾选 2 ~ 6 个同级对象开始横向比较（例如门店比较）。<br/>PK 模式下不显示任何合计值，仅做并列对比。</div></div>';
+                return;
+            }
+            const r = currentIdx(), pr = prevRange();
+            const base = pkBaseNode();
+            const head = '<tr><th>指标</th>' + nodes.map(function (n) {
+                const isBase = base && n.id === base.id;
+                return '<th class="base-badge" data-base="' + n.id + '" title="点击设为基准对象">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + pkColorOf(n) + ';margin-right:6px"></span>' +
+                    n.name + (isBase ? '<span style="color:#93c5fd;font-weight:700"> ★基准</span>' : '') + '</th>';
+            }).join('') + '</tr>';
+
+            let body = '';
+            pkRows().forEach(function (row) {
+                if (row.group) {
+                    body += '<tr class="group-row"><td colspan="' + (nodes.length + 1) + '">' + row.group + '</td></tr>';
+                    return;
+                }
+                const vals = nodes.map(function (n) { return pkRowValue(n, row, r, pr); });
+                const valid = vals.filter(function (v) { return v !== null; });
+                const max = valid.length > 1 ? Math.max.apply(null, valid) : null;
+                const min = valid.length > 1 ? Math.min.apply(null, valid) : null;
+                const baseVal = base ? pkRowValue(base, row, r, pr) : null;
+
+                body += '<tr><td>' + row.label + (row.unit ? ' <span class="text-slate-600">(' + row.unit + ')</span>' : '') + '</td>';
+                vals.forEach(function (v, i) {
+                    if (v === null) { body += '<td class="na">—<span class="diff">无此岗位</span></td>'; return; }
+                    let cls = '';
+                    if (max !== null && v === max) cls = 'best';
+                    else if (min !== null && v === min) cls = 'worst';
+                    let diff = '';
+                    if (baseVal !== null && nodes[i].id !== (base ? base.id : '')) {
+                        if (row.ratio || row.mom) {
+                            const d = v - baseVal;
+                            diff = '<span class="diff">' + fmtSigned(d, 1) + 'pt</span>';
+                        } else {
+                            const d = v - baseVal;
+                            const dp = baseVal ? (d / baseVal) * 100 : 0;
+                            diff = '<span class="diff">' + fmtSigned(d, 0) + ' / ' + fmtSigned(dp, 1) + '%</span>';
+                        }
+                    }
+                    body += '<td class="' + cls + '">' + rowText(row, v) + diff + '</td>';
+                });
+                body += '</tr>';
+            });
+            el.innerHTML = '<div class="panel p-6">' +
+                '<div class="flex items-center justify-between mb-1 flex-wrap gap-3">' +
+                '<div><div class="panel-title"><span class="dot"></span>横向 PK 对比</div>' +
+                '<div class="panel-subtitle">' + state.pkLevel + '层级 · ' + nodes.length + ' 个对象 · 同一时间区间 · 绿色为最优、红色为最差、— 表示该岗位不存在</div></div>' +
+                '<div class="text-xs text-slate-400">点击表头可切换基准对象</div></div>' +
+                '<div class="mt-4 overflow-auto" style="max-height:760px"><table class="cmp-table">' +
+                '<thead>' + head + '</thead><tbody>' + body + '</tbody></table></div></div>';
+            el.querySelectorAll('[data-base]').forEach(function (th) {
+                th.addEventListener('click', function () {
+                    state.pkBase = th.dataset.base;
+                    renderAll();
+                });
+            });
+        }
+
+        // ---------- 全链路七阶段漏斗 ----------
+        function renderFunnel() {
+            const r = currentIdx(), pr = prevRange();
+            const body = document.getElementById('funnelBody');
+            const footer = document.getElementById('funnelFooter');
+            const sub = document.getElementById('funnelSub');
+
+            if (state.mode === 'single') {
+                const node = currentNode();
+                const m = metricsOf(node, r[0], r[1]);
+                const first = m[FUNNEL_STAGES[0].key] || 0;
+                sub.textContent = FUNNEL_STAGES.length + ' 阶段 · ' + node.name + ' · 区间合计';
+                let worst = null;
+                // v5.12：右侧百分比统一改为「意向线索 → 本层」的累计转化率（以意向线索为基准）
+                body.innerHTML = FUNNEL_STAGES.map(function (st, i) {
+                    const v = m[st.key];
+                    const prevV = i === 0 ? v : m[FUNNEL_STAGES[i - 1].key];
+                    const stepRate = prevV ? (v / prevV) * 100 : 100;
+                    const cumRate = first ? (v / first) * 100 : 100;
+                    if (i > 0 && (worst === null || stepRate < worst.rate)) worst = { rate: stepRate, from: FUNNEL_STAGES[i - 1].name, to: st.name };
+                    const w = Math.max(10, Math.min(100, cumRate));
+                    const rateClass = i === 0 ? 'ghost' : (cumRate < 10 ? 'warn' : '');
+                    const rateText = i === 0 ? '基准' : cumRate.toFixed(1) + '%';
+                    return '<div class="funnel-row" data-key="' + st.key + '" style="--w:' + w + '%;--fc:' + st.color + '" title="' + st.name + '：' + fmt(v) + '（意向线索→' + st.name + ' ' + cumRate.toFixed(1) + '%' + (i > 0 ? '，上一层→本层 ' + stepRate.toFixed(1) + '%' : '') + '）">' +
+                        '<div class="fr-track">' +
+                        '<div class="fr-bar">' +
+                        '<div class="fr-inner">' +
+                        '<span class="fr-name">' + st.name + '</span>' +
+                        '<span class="fr-value">' + fmt(v) + '</span>' +
+                        '</div></div></div>' +
+                        '<div class="fr-rate ' + rateClass + '">' + rateText + '</div>' +
+                        '</div>';
+                }).join('');
+                const conv = first ? (m.delivered / first) * 100 : 0;
+                footer.innerHTML =
+                    '<div class="flex items-center justify-between"><span class="text-slate-400">整体转化率（意向线索 → 交付）</span>' +
+                    '<span class="text-white font-bold">' + conv.toFixed(2) + '%</span></div>' +
+                    (worst ? '<div class="flex items-center justify-between"><span class="text-slate-400">最大流失环节</span>' +
+                        '<span class="text-rose-400 font-medium">' + worst.from + ' → ' + worst.to + '（' + worst.rate.toFixed(1) + '%）</span></div>' : '') +
+                    '<div class="flex items-center justify-between"><span class="text-slate-400">线索量</span>' +
+                    '<span class="text-slate-200">意向线索 ' + fmt(first) + ' 条 → 交付 ' + fmt(m.delivered) + ' 辆</span></div>' +
+                    (m.delivered < 5 ? '<div class="text-[11px] text-amber-300/80 pt-1 leading-relaxed">当前范围样本较小（交付 ' + fmt(m.delivered) +
+                        ' 辆），深层指标会出现 0 值，建议放宽时间区间或组织范围后再看转化率</div>' : '');
+            } else {
+                const nodes = pkNodes();
+                sub.textContent = FUNNEL_STAGES.length + ' 阶段 · PK 并列对比';
+                if (nodes.length < 2) {
+                    body.innerHTML = '<div class="text-sm text-slate-500 py-6 text-center">请先在上方勾选 2 ~ 6 个对象</div>';
+                    footer.innerHTML = '';
+                    return;
+                }
+                body.innerHTML = FUNNEL_STAGES.map(function (st, i) {
+                    const vals = nodes.map(function (n) { return metricsOf(n, r[0], r[1])[st.key]; });
+                    const max = Math.max.apply(null, vals) || 1;
+                    const min = Math.min.apply(null, vals);
+                    const bars = vals.map(function (v, bi) {
+                        const h = Math.max(6, (v / max) * 100);
+                        return '<div style="flex:1;height:' + h + '%;background:' + pkColorOf(nodes[bi]) + ';border-radius:2px 2px 0 0" title="' + nodes[bi].name + '：' + fmt(v) + '"></div>';
+                    }).join('');
+                    return '<div class="funnel-row pk-funnel-row" data-key="' + st.key + '" style="flex-direction:column;align-items:stretch;gap:4px">' +
+                        '<div class="flex items-center justify-between">' +
+                        '<span class="fr-name">' + (i + 1) + '. ' + st.name + '</span>' +
+                        '<span class="fr-sub">最高 ' + fmt(max) + ' / 最低 ' + fmt(min) + '</span></div>' +
+                        '<div style="display:flex;align-items:flex-end;gap:3px;height:46px">' + bars + '</div></div>';
+                }).join('');
+                footer.innerHTML = nodes.map(function (n, i) {
+                    const m = metricsOf(n, r[0], r[1]);
+                    const conv = m.leads ? (m.delivered / m.leads) * 100 : 0;
+                    return '<div class="flex items-center justify-between gap-2">' +
+                        '<span class="flex items-center gap-2 text-slate-400 truncate"><span style="width:8px;height:8px;border-radius:2px;background:' + pkColorOf(n) + ';display:inline-block"></span>' + n.name + '</span>' +
+                        '<span class="text-slate-200 font-medium whitespace-nowrap">' + conv.toFixed(2) + '%</span></div>';
+                }).join('');
+            }
+        }
+
+        // ==================== PART5：下钻 / 趋势 / 积分 / 明细 / 交互 ====================
+        const extCharts = {};
+        function chart(id) {
+            const el = document.getElementById(id);
+            if (!el) return null;
+            if (!extCharts[id]) extCharts[id] = echarts.init(el);
+            return extCharts[id];
+        }
+        // v4.9：左柱图已移除，drillList 独占整行；此处仅保留选中态辅助函数
+        const AXIS_STYLE = {
+            axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+            axisTick: { show: false },
+            axisLabel: { color: '#94a3b8', fontSize: 11 },
+            splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
+        };
+        const TOOLTIP_STYLE = {
+            backgroundColor: 'rgba(11,18,32,0.95)',
+            borderColor: 'rgba(148,163,184,0.2)',
+            textStyle: { color: '#e2e8f0', fontSize: 12 }
+        };
+
+        // ---------- 板块展开：按日多指标折线图 ----------
+        function renderPanelChart(gi) {
+            const g = MODULE_GROUPS[gi];
+            const el = document.getElementById('svChart' + gi);
+            if (!el) return;
+            const cid = 'svChart' + gi;
+            if (panelCharts[cid]) { panelCharts[cid].dispose(); delete panelCharts[cid]; }
+            const c = echarts.init(el);
+            panelCharts[cid] = c;
+
+            const node = currentNode();
+            const r = currentIdx();
+            const sel = (state.panelSel[gi] && state.panelSel[gi].length) ? state.panelSel[gi] : g.keys.slice();
+            const span = r[1] - r[0] + 1;
+            const step = Math.max(1, Math.ceil(span / 90));
+            const xs = [], idxs = [];
+            for (let i = r[0]; i <= r[1]; i += step) {
+                idxs.push(i);
+                xs.push(dateStr(new Date(START_DATE.getTime() + i * ONE_DAY)).slice(5));
+            }
+            c.setOption({
+                grid: { left: 10, right: 24, top: 44, bottom: 6, containLabel: true },
+                legend: {
+                    data: sel.map(function (k) { return METRIC_LABEL[k]; }),
+                    textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0,
+                    icon: 'roundRect', itemWidth: 10, itemHeight: 10
+                },
+                tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+                xAxis: {
+                    type: 'category', data: xs, boundaryGap: false, ...AXIS_STYLE,
+                    splitLine: { show: false },
+                    axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(xs.length / 14) - 1) }
+                },
+                yAxis: { type: 'value', ...AXIS_STYLE },
+                series: sel.map(function (k) {
+                    const color = METRIC_COLOR[k];
+                    return {
+                        name: METRIC_LABEL[k], type: 'line', smooth: true,
+                        symbol: 'circle', symbolSize: 4, showSymbol: xs.length <= 40,
+                        data: idxs.map(function (i) { return Math.round(node.series[k][i]); }),
+                        lineStyle: { color: color, width: 2 }, itemStyle: { color: color },
+                        areaStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: scaleColor(color, 0.28) },
+                                { offset: 1, color: scaleColor(color, 0) }
+                            ])
+                        }
+                    };
+                })
+            }, true);
+
+            const sub = document.getElementById('svSub' + gi);
+            if (sub) sub.textContent = node.name + ' · 按日 ' + sel.length + '/' + g.keys.length + ' 项';
+        }
+        function drillNode() {
+            let node = currentNode();
+            state.drillIds.forEach(function (id) {
+                const n = nodeById(id);
+                if (n && nodePath(n).indexOf(node) >= 0) node = n;
+            });
+            return node;
+        }
+
+        // v4.16：下钻 ↔ 顶栏「组织范围」双向同步 —— 把当前下钻节点路径写入 state.sel
+        // 直接改 state.sel 后由 renderAll 的 fillSelect 回显下拉，不派发 change 事件
+        //（change 监听会清空下钻栈，见 $selRegion 等监听器），nodePath 保证父层先设置，依赖链天然合法。
+        function syncSelToDrill(node) {
+            if (!node) return;
+            const LV = { '大区': 'region', '小区': 'area', '门店': 'store', '岗位': 'post', '人员': 'person' };
+            const sel = { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' };
+            nodePath(node).forEach(function (n) { if (LV[n.level]) sel[LV[n.level]] = n.id; });
+            state.sel = sel;
+        }
+
+        // ==================== v4.9：下钻区选中态 + 列表联动 ====================
+        // 统一管理 state.drillSelectedId，让 drillList 行保持高亮（柱状图已移除）
+        function setDrillSelected(id) {
+            state.drillSelectedId = id;
+            applyListSelection();
+        }
+        function applyListSelection() {
+            const list = document.getElementById('drillList');
+            if (!list) return;
+            const sel = state.drillSelectedId || '';
+            // 兼容列表 button 与矩阵 tr 两种行结构
+            list.querySelectorAll('button[data-id], tr[data-id]').forEach(function (el) {
+                if (el.dataset.id === sel) {
+                    el.classList.add('bg-cyan-500/15', 'ring-1', 'ring-cyan-400/40');
+                } else {
+                    el.classList.remove('bg-cyan-500/15', 'ring-1', 'ring-cyan-400/40');
+                }
+            });
+        }
+        // 点击左柱图柱条 / drillList 行的统一入口：
+        //   - 与当前选中相同时：取消选中
+        //   - 选中后自动下钻（保留原「点击继续下钻」行为）
+        function selectOrDrill(id) {
+            if (!id) return;
+            if (state.drillSelectedId === id) {
+                setDrillSelected(null);
+                return;
+            }
+            setDrillSelected(id);
+            const n = nodeById(id);
+            // v4.14：人员（叶子节点）也允许下钻 —— 进入该人的区间逐日动作积分完成率表
+            const isPersonLeaf = n && n.level === '人员';
+            if (n && (n.children.length > 0 || isPersonLeaf)) {
+                // 逐级压栈：保留中间层级，便于「返回上级」逐层回退；先裁掉不在当前路径上的残留 id
+                const chainIds = nodePath(n).map(function (x) { return x.id; });
+                state.drillIds = state.drillIds.filter(function (x) { return chainIds.indexOf(x) >= 0; });
+                if (state.drillIds.indexOf(n.id) < 0) state.drillIds.push(n.id);
+                syncSelToDrill(n);   // v4.16：每次下钻同步收窄顶栏组织范围（全页看板随下钻范围联动）
+                renderAll();
+            }
+        }
+        function renderDrill() {
+            const r = currentIdx(), pr = prevRange();
+            const bc = document.getElementById('drillBreadcrumb');
+            const subEl = document.getElementById('drillSubtitle');
+
+            if (state.mode === 'pk') {
+                const nodes = pkNodes();
+                if (nodes.length < 2) {
+                    bc.innerHTML = '';
+                    document.getElementById('drillList').innerHTML = '<div class="text-xs text-slate-500 py-2">PK 模式下请先勾选 2 ~ 6 个对象</div>';
+                    subEl.textContent = 'PK 模式 · 展示各对象在所选指标上的下级构成并列';
+                    return;
+                }
+                const level = NEXT_LEVEL[nodes[0].level];
+                subEl.textContent = 'PK 模式 · ' + (level || '已到末级') + '构成对比';
+                bc.innerHTML = nodes.map(function (n, i) {
+                    return '<span class="px-2 py-1 rounded-md" style="background:' + scaleColor(pkColorOf(n), 0.14) + ';color:' + pkColorOf(n) + '">' + n.name + '</span>';
+                }).join('<span class="text-slate-600">/</span>');
+                const childNames = [];
+                if (level) {
+                    nodes.forEach(function (n) {
+                        n.children.forEach(function (c) { if (childNames.indexOf(c.name) < 0) childNames.push(c.name); });
+                    });
+                }
+                const listEl = document.getElementById('drillList');
+                listEl.innerHTML = '<div class="text-xs text-slate-500 py-2">PK 模式下已锁定对比范围，如需单对象下钻请切回单选模式</div>';
+                const matrixSubEl = document.getElementById('drillMatrixSub');
+                if (matrixSubEl) matrixSubEl.textContent = 'PK 模式 · 矩阵已锁定多对象对比';
+                document.getElementById('drillBack').style.opacity = '.45';
+                return;
+            }
+
+            const cur = drillNode();
+            // 渲染期校验 drillSelectedId 是否落在当前 cur.children 范围内，跨层级残留则清空
+            const _curChildrenIds = (cur.children || []).map(function (n) { return n.id; });
+            if (state.drillSelectedId && _curChildrenIds.indexOf(state.drillSelectedId) < 0) {
+                state.drillSelectedId = null;
+            }
+            // v4.12：人员动作明细展开态同样按当前层级校验，跨层残留则收起
+            if (state.drillPersonId && _curChildrenIds.indexOf(state.drillPersonId) < 0) {
+                state.drillPersonId = null;
+            }
+            subEl.textContent = '全国 → 大区 → 小区 → 门店 → 岗位 → 人员 · 点击列表行继续下钻';
+            // 岗位 → 人员（含顶栏直接筛到人员）：矩阵切换为「人员 × 关键动作得分率」
+            const isDutyLevel = (cur.level === '岗位' || cur.level === '人员');
+            const matrixTitleEl = document.getElementById('drillMatrixTitle');
+            if (matrixTitleEl) matrixTitleEl.textContent = isDutyLevel ? '关键动作得分率矩阵' : '指标环比矩阵';
+            const matrixSubEl = document.getElementById('drillMatrixSub');
+            if (matrixSubEl) {
+                const pathText = nodePath(cur).map(function (n) { return n.name; }).join(' → ');
+                matrixSubEl.textContent = (cur.level === '人员')
+                    ? pathText + ' · 已到人员级 · 区间逐日动作积分完成率见下方（完成率 = 当日积分 ÷ 已评估拿分项标准分，日标准得分 = 100%）'
+                    : (isDutyLevel
+                        ? pathText + ' · 人员 × 关键动作 · 得分率 = 完成量 ÷ 分配任务量 · 环比 = 对比上一等长周期（百分点）· 点击人员行下钻查看逐日积分'
+                        : pathText + ' · 按所选范围 · 环比 = 对比上一等长周期 · 点击行继续下钻（至人员级）');
+            }
+            bc.innerHTML = nodePath(cur).map(function (n, i, arr) {
+                const active = i === arr.length - 1;
+                return '<button data-idx="' + i + '" class="px-2 py-1 rounded-md transition ' +
+                    (active ? 'bg-blue-500/20 text-blue-300' : 'text-slate-400 hover:text-white hover:bg-white/5') + '">' + n.name + '</button>';
+            }).join('<span class="text-slate-600">/</span>');
+            const pathNodes = nodePath(cur);
+            bc.querySelectorAll('button').forEach(function (b) {
+                b.addEventListener('click', function () {
+                    const idx = parseInt(b.dataset.idx, 10);
+                    const target = pathNodes[idx];
+                    // 点面包屑即跳转对应层级；跳转后清掉左柱图与列表的旧选中，避免视觉残留
+                    state.drillSelectedId = null;
+                    state.drillPersonId = null;
+                    state.drillIds = nodePath(target).slice(1).map(function (n) { return n.id; });
+                    syncSelToDrill(target);   // v4.16：面包屑跳转同步放宽顶栏组织范围到该层级
+                    renderAll();
+                });
+            });
+            const backBtn = document.getElementById('drillBack');
+            // 可返回 = 下钻栈非空（点击行下钻过） 或 顶栏筛选已选到具体层级（可回退一层筛选）
+            const canBack = state.drillIds.length > 0 || drillDeepestSelIdx() >= 0;
+            backBtn.style.opacity = canBack ? '1' : '.45';
+            backBtn.dataset.enabled = canBack ? '1' : '0';
+
+            // 排序：岗位级（人员列表）按综合得分率降序；门店级按积分；其余按线索量（均与各自矩阵首列一致）
+            const children = cur.children.slice();
+            if (isDutyLevel) {
+                children.sort(function (a, b) {
+                    const ra = dutyRateOf(a, r[0], r[1]).rate, rb = dutyRateOf(b, r[0], r[1]).rate;
+                    return (rb === null ? -1 : rb) - (ra === null ? -1 : ra);
+                });
+            } else {
+                const sortKey = (cur.level === '门店') ? 'points' : 'leads';
+                children.sort(function (a, b) {
+                    return metricsOf(b, r[0], r[1])[sortKey] - metricsOf(a, r[0], r[1])[sortKey];
+                });
+            }
+            const hasChild = children.length > 0;
+
+            const list = document.getElementById('drillList');
+            const dutyDetailEl = document.getElementById('drillDutyDetail');
+            if (!isDutyLevel && dutyDetailEl) dutyDetailEl.innerHTML = '';   // 离开岗位级时收起人员动作明细
+            // v4.13：进入 renderDrill 时统一清掉四象限容器与图表实例，仅在产品专家岗位分支重新渲染
+            const quadEl = document.getElementById('drillPostQuad');
+            if (quadEl) quadEl.innerHTML = '';
+            clDisposeChart('drillPostQuad');
+            if (!hasChild) {
+                if (cur.level === '人员') {
+                    // v4.14：人员层（含顶栏直接筛到人员 / 从岗位矩阵点击人员行下钻）→ 区间逐日动作积分完成率表
+                    renderDrillPersonDaily(cur, r);
+                    return;
+                }
+                list.innerHTML = '<div class="text-xs text-slate-500 py-2">已到达最末级（人员），无下级数据</div>';
+                return;
+            }
+            // 岗位 → 人员：矩阵列切换为该岗位的关键动作（单元格 = 得分率 + 环比）
+            if (isDutyLevel) {
+                renderDutyMatrix(cur, children, r, pr);
+                // v4.13：产品专家额外追加「达成率 × 交付量」四象限散点；其它岗位清空容器 + 销毁图表
+                const postKey = cur.postKey || (children[0] && postKeyOfPerson(children[0])) || '';
+                if (postKey === 'productExpert') {
+                    renderDrillPostQuad(cur, children, r, pr);
+                } else {
+                    clDisposeChart('drillPostQuad');
+                    const quadEl = document.getElementById('drillPostQuad');
+                    if (quadEl) quadEl.innerHTML = '';
+                }
+                return;
+            }
+            const cols = (cur.level === '门店') ? DRILL_MATRIX_COLS_POST : DRILL_MATRIX_COLS;
+            const headHtml = '<tr>' +
+                    '<th class="sticky left-0 top-0 z-20 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:160px">下级</th>' +
+                    cols.map(function (col) {
+                        return '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:104px">' +
+                            col.label + '</th>';
+                    }).join('') + '</tr>';
+            const bodyHtml = children.map(function (c, i) {
+                const curM = metricsOf(c, r[0], r[1]);
+                const prevM = metricsOf(c, pr.i0, pr.i1);
+                const cells = cols.map(function (col) {
+                    const cell = fmtMatrixCell(curM[col.key] || 0, prevM[col.key] || 0);
+                    return '<td class="px-3 py-2.5 text-right whitespace-nowrap border-b border-white/5">' + cell.html + '</td>';
+                }).join('');
+                const dim = c.status === 0 ? ' style="color:#64748b"' : '';
+                // v4.12：岗位行也可下钻（进入人员 × 关键动作得分率）
+                const drillable = (c.level === '大区' || c.level === '小区' || c.level === '门店' || c.level === '岗位');
+                const rowCls = drillable ? 'cursor-pointer hover:bg-white/5 transition selectOrDrill-row' : '';
+                return '<tr data-id="' + c.id + '" data-i="' + i + '" data-drillable="' + (drillable ? '1' : '0') + '" class="' + rowCls + '">' +
+                    '<td class="sticky left-0 z-10 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5"' + dim + '>' +
+                    '<div class="flex items-center gap-2"><span class="font-medium">' + c.name + '</span>' +
+                    '<span class="text-slate-500 text-[11px]">' + c.level + '</span></div></td>' + cells + '</tr>';
+            }).join('');
+            list.innerHTML = '<table class="min-w-full border-collapse text-sm">' +
+                '<thead>' + headHtml + '</thead>' +
+                '<tbody>' + bodyHtml + '</tbody></table>';
+            list.querySelectorAll('tr[data-id][data-drillable="1"]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    selectOrDrill(tr.dataset.id);
+                });
+            });
+            applyListSelection();
+        }
+
+        // ---------- v4.12：岗位 → 人员 动作得分率矩阵 ----------
+        // 行 = 该岗位下的每位人员，列 = 该岗位的关键动作（取岗位职责说明表同一份文案）
+        // 单元格 = 得分率（完成量 ÷ 该人被分配的任务量）+ 环比（与上一等长周期的百分点差）
+        function renderDutyMatrix(postNode, children, r, pr) {
+            const list = document.getElementById('drillList');
+            const detailEl = document.getElementById('drillDutyDetail');
+            if (detailEl) detailEl.innerHTML = '';        // 重绘矩阵时收起旧的人员明细
+            const postKey = postNode.postKey || (children[0] && postKeyOfPerson(children[0])) || POSTS[0].key;
+            const meta = POSTS_BY_KEY[postKey] || { name: postNode.name, color: '#38bdf8' };
+            const actions = dutyActionsOf(postKey);
+            const accent = meta.color || '#38bdf8';
+            const headHtml = '<tr>' +
+                '<th class="sticky left-0 top-0 z-20 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:150px">人员</th>' +
+                '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold whitespace-nowrap border-b border-white/10" style="min-width:112px;color:' + accent + '" title="该人全部关键动作合计：完成量 ÷ 分配任务量">综合得分率</th>' +
+                actions.map(function (a) {
+                    return '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10" style="min-width:104px" title="' + a.detail + '">' +
+                        a.action + '</th>';
+                }).join('') + '</tr>';
+            const bodyHtml = children.map(function (c, i) {
+                const curD = dutyRateOf(c, r[0], r[1]);
+                const prevD = dutyRateOf(c, pr.i0, pr.i1);
+                const totalCell = fmtRateCell(curD.rate, prevD.rate);
+                const cells = curD.items.map(function (it, ai) {
+                    const prevRate = prevD.items[ai] ? prevD.items[ai].rate : null;
+                    const cell = fmtRateCell(it.rate, prevRate);
+                    const tip = it.assign > 0
+                        ? it.action + '：完成 ' + it.done + ' / 分配 ' + it.assign
+                        : it.action + '：本期无分配任务';
+                    return '<td class="px-3 py-2.5 text-right whitespace-nowrap border-b border-white/5" title="' + tip + '">' + cell.html + '</td>';
+                }).join('');
+                const dim = c.status === 0 ? ' style="color:#64748b"' : '';
+                return '<tr data-person-id="' + c.id + '" data-i="' + i + '" class="cursor-pointer hover:bg-white/5 transition">' +
+                    '<td class="sticky left-0 z-10 bg-slate-900/80 px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5"' + dim + '>' +
+                    '<div class="flex items-center gap-2"><span class="font-medium">' + c.name + '</span>' +
+                    '<span class="text-slate-500 text-[11px]">完成 ' + curD.totalDone + ' / 分配 ' + curD.totalAssign + '</span></div></td>' +
+                    '<td class="px-3 py-2.5 text-right whitespace-nowrap border-b border-white/5">' + totalCell.html + '</td>' +
+                    cells + '</tr>';
+            }).join('');
+            list.innerHTML = '<table class="min-w-full border-collapse text-sm">' +
+                '<thead>' + headHtml + '</thead>' +
+                '<tbody>' + bodyHtml + '</tbody></table>';
+            list.querySelectorAll('tr[data-person-id]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    // v4.14：点击人员行下钻 → 该人的区间逐日动作积分完成率表（替代旧的行内展开明细）
+                    selectOrDrill(tr.dataset.personId);
+                });
+            });
+            applyListSelection();
+        }
+
+        // 单人动作得分率明细（点击人员行展开）：动作名 + 进度条 + 完成/分配 + 得分率 + 环比
+        function renderDutyPersonDetail() {
+            const box = document.getElementById('drillDutyDetail');
+            const list = document.getElementById('drillList');
+            if (!box) return;
+            const id = state.drillPersonId;
+            if (list) {
+                list.querySelectorAll('tr[data-person-id]').forEach(function (tr) {
+                    tr.classList.toggle('bg-cyan-500/10', tr.dataset.personId === id);
+                });
+            }
+            const node = id ? nodeById(id) : null;
+            if (!node) { box.innerHTML = ''; return; }
+            const r = currentIdx(), pr = prevRange();
+            const curD = dutyRateOf(node, r[0], r[1]);
+            const prevD = dutyRateOf(node, pr.i0, pr.i1);
+            const rows = curD.items.map(function (it, ai) {
+                const prevRate = prevD.items[ai] ? prevD.items[ai].rate : null;
+                const w = it.rate === null ? 0 : Math.max(2, Math.min(100, it.rate));
+                const barColor = it.rate === null ? '#475569'
+                    : (it.rate >= 90 ? '#22c55e' : (it.rate >= 75 ? '#38bdf8' : (it.rate >= 60 ? '#f59e0b' : '#ef4444')));
+                let deltaHtml = '<span class="text-slate-500">—</span>';
+                if (it.rate !== null && prevRate !== null && prevRate !== undefined) {
+                    const d = it.rate - prevRate;
+                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
+                }
+                return '<div class="flex items-center gap-3 py-1.5">' +
+                    '<div class="text-xs text-slate-300 whitespace-nowrap" style="width:96px" title="' + it.detail + '">' + it.action + '</div>' +
+                    '<div class="flex-1 h-2 rounded-full" style="background:rgba(148,163,184,0.18)">' +
+                        '<div class="h-2 rounded-full" style="width:' + w + '%;background:' + barColor + '"></div></div>' +
+                    '<div class="text-xs text-slate-400 whitespace-nowrap" style="width:88px;text-align:right">完成 ' + it.done + ' / 分配 ' + it.assign + '</div>' +
+                    '<div class="text-xs font-semibold text-slate-100 whitespace-nowrap" style="width:60px;text-align:right">' + (it.rate === null ? '—' : it.rate.toFixed(1) + '%') + '</div>' +
+                    '<div class="text-xs whitespace-nowrap" style="width:66px;text-align:right">' + deltaHtml + '</div>' +
+                    '</div>';
+            }).join('');
+            const totalDelta = (curD.rate !== null && prevD.rate !== null) ? (curD.rate - prevD.rate) : null;
+            box.innerHTML = '<div class="rounded-xl p-4" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.15)">' +
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">' + node.name + ' · 动作得分率明细</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + (node.storeName || '') + ' · ' + (node.postName || '') + '</span></div>' +
+                    '<div class="text-[11px] text-slate-400">综合得分率 <b class="text-slate-100">' + (curD.rate === null ? '—' : curD.rate.toFixed(1) + '%') + '</b>' +
+                    ' · 完成 ' + curD.totalDone + ' / 分配 ' + curD.totalAssign +
+                    (totalDelta === null ? '' : ' · 环比 ' + (totalDelta > 0 ? '+' : '') + totalDelta.toFixed(1) + 'pt') + '</div>' +
+                '</div>' + rows + '</div>';
+        }
+
+        // ==================== v4.14：人员层下钻 · 区间逐日动作积分完成率 ====================
+        // 点击人员行（或顶栏直筛到人员）后，下钻列表替换为该人在顶栏区间内逐日的动作积分完成率表；
+        // 点击某日行打开与「业务执行与闭环」同款的动作积分诊断抽屉（取数 = 该行单日）。
+        // 数据说明：下钻组织树为演示树（树人员无真实工号）。真实评分岗位按 hashSeed(人员id) 确定性映射到
+        // 灯塔数据中同岗位的一名人员取数 —— 同一人员刷新后数据稳定，且明细结构与真实数据完全一致；
+        // 模拟岗位按 (人员id + 日期) seed 规则驱动生成（参照 clMockPoints 的扣分证据格式）。
+
+        // 单人单日得分点：真实岗位走灯塔单日索引；模拟岗位规则驱动生成；无数据日期返回 null
+        function drillDailyPoint(personNode, ds) {
+            const postKey = personNode.postKey || postKeyOfPerson(personNode) || POSTS[0].key;
+            const rule = clRuleFor(postKey);
+            const items = rule.scoreItems;
+            const storeName = personNode.storeName || '';
+            if (LH_OK && rule.real) {
+                if (CL_DATES.indexOf(ds) < 0) return null;          // 该日无灯塔日报 → 表格置灰行
+                const idx = clDataIndexFor([ds]);
+                const cand = (idx.byPost[rule.postKey] || []);
+                if (!cand.length) return null;
+                // 确定性映射：同一树人员永远取同一名灯塔人员（刷新稳定）
+                const pi = cand[hashSeed(personNode.id) % cand.length];
+                const p = idx.persons[pi];
+                const st = LH.stores[p.storeIdx] || { code: '', name: storeName, region: '', area: '', idx: p.storeIdx };
+                return clMakePoint(rule, items, {
+                    idx: pi, name: personNode.name, code: p.code, store: st, real: true,
+                    itemOf: function (nm) { return p.items[nm]; },
+                    deductions: p.deductions, dedRows: p.dedRows, delivered: p.delivered
+                });
+            }
+            // 模拟岗位：seed = 人员 + 日期（drillday| 前缀与闭环 mock| 前缀隔离）
+            const rnd = clRng('drillday|' + personNode.id + '|' + ds);
+            const quality = 0.42 + rnd() * 0.58;
+            const itemOf = {}, deds = [];
+            items.forEach(function (it) {
+                const cap = it.cap || 1;
+                const step = cap <= 1 ? 0.5 : Math.round(cap / 4 * 100) / 100;
+                let v = quality * cap * (0.62 + rnd() * 0.5);
+                v = Math.round(Math.min(cap, Math.max(0, v)) / step) * step;
+                v = Math.round(v * 100) / 100;
+                itemOf[it.name] = { score: v, count: Math.max(1, Math.round((cap <= 1 ? (v > 0 ? 1 : 0) : v) + rnd() * 3)), hasSum: true };
+                if (v < cap - 1e-6) {
+                    const cnt = 1 + Math.floor(rnd() * 2);
+                    const reason = String(it.noScore || it.judge || '未达到该项拿分条件').replace(/\s+/g, ' ').slice(0, 56);
+                    deds.push({
+                        item: it.name, action: it.name, per: it.per || 0.5, count: cnt,
+                        total: Math.round((it.per || 0.5) * cnt * 100) / 100, mock: true,
+                        evidence: ['判定=未满足|原因=' + reason + '|样本=' + cnt + '单'], orders: []
+                    });
+                }
+            });
+            deds.sort(function (a, b) { return b.total - a.total; });
+            return clMakePoint(rule, items, {
+                idx: -1, name: personNode.name, code: '', store: { code: '', name: storeName, region: '', area: '', idx: -1 }, real: false,
+                itemOf: function (nm) { return itemOf[nm]; },
+                deductions: deds, dedRows: [], delivered: 1 + Math.floor(rnd() * 12)
+            });
+        }
+
+        // 人员层主渲染：区间逐日完成率表（列表区）+ 区间动作得分率汇总（#drillDutyDetail，复用 renderDutyPersonDetail）
+        // v5.4：人员层主渲染 · 区间逐日动作积分完成率（接入动作评分导入数据）
+        // 取数优先级（v5.7 修订）：
+        //   1) 接口真实区间（/api/scoring/range）—— 有数据日期显示真实积分/完成率；
+        //   2) v5.7：岗位已导入评分（/api/scoring/meta detailRows>0）但该人无任何记录 —— 整表置灰「当日无该人评估数据」，不再回退模拟；
+        //   3) LH 真实日报路径（交付专员/店长，未导入评分的岗位）—— 走原 drillDailyPoint，CL_DATES 置灰；
+        //   4) 其余（mock 模式 / 从未导入的演示岗位）—— 走 drillDailyPoint 的规则驱动模拟分支（确定性生成），并在 dataNote 标明「规则驱动模拟数据（确定性生成）」。
+        // 行点击：真实数据来源异步补充 /scoring/details 证据链再打开诊断抽屉。
+        function drillRealPoint(personNode, rule, day) {
+            const itemMap = {}, itemMapN = {};
+            (day.items || []).forEach(function (it) {
+                itemMap[it.item] = it;
+                itemMapN[String(it.item || '').replace(/[%％\s]/g, '')] = it;   // v5.9：归一化键（去 %/空格）
+            });
+            // v5.9：导入拿分项与静态规则名可能不完全一致（如导入「线索处理及时率」vs 规则表「线索处理及时率%」——
+            // 数营专家规则全是 deprecated 草案，clRuleFor 兜底 slice(0,4) 后 4 项全部映射失败 → dims 全 null →
+            // every() 误判 noData，即使 /scoring/range 返回了真实数据（宋彩虹 9/10 1.48 分/148%）也整表置灰）。
+            // 修复：①查找时先精确后归一化；②接口返回的拿分项若静态规则未覆盖则补入映射
+            let items = (rule.scoreItems && rule.scoreItems.length) ? rule.scoreItems.slice() : [];
+            (day.items || []).forEach(function (d) {
+                if (d && d.item && !items.some(function (x) {
+                    return x.name === d.item || String(x.name || '').replace(/[%％\s]/g, '') === String(d.item).replace(/[%％\s]/g, '');
+                })) {
+                    items.push({ name: d.item, cap: d.cap || d.std || 1 });
+                }
+            });
+            const dims = [], ratios = [], counts = [], stds = [];
+            let point = 0, capCover = 0, stdCover = 0;
+            items.forEach(function (it) {
+                const r = itemMap[it.name] || itemMapN[String(it.name || '').replace(/[%％\s]/g, '')];
+                if (!r) { dims.push(null); ratios.push(null); counts.push(null); stds.push(null); return; }
+                const v = Number(r.score || 0);
+                // v5.5：日标准得分（100% 达标线）优先取导入汇总 target_score，缺失回退规则封顶；
+                // 单项比率与当日完成率均不封顶 —— 超出标准按比例计（如 6 分 / 标准 4 分 = 150%）
+                const std = Number(r.targetScore) > 0 ? Number(r.targetScore) : (it.cap || 1);
+                dims.push(Math.round(v * 100) / 100);
+                ratios.push(std ? Math.max(0, v / std * 100) : 0);
+                counts.push(r.count === undefined ? null : r.count);
+                point += v;
+                capCover += (it.cap || 1);
+                stdCover += std;
+                stds.push(std);
+            });
+            const capAvail = rule.capAvailable || rule.cap || 1;
+            // v5.5：完成率 = 当日积分 ÷ 当日标准分合计（分母只累计当日实际有评估数据的拿分项）
+            const rate = stdCover ? point / stdCover * 100 : 0;
+            let wi = -1, wv = 1000;
+            ratios.forEach(function (v, i) { if (v !== null && v < wv) { wv = v; wi = i; } });
+            const st = clStatusOf(rate);
+            return {
+                key: 'real|' + personNode.id + '|' + day.date,
+                idx: -1,
+                name: personNode.name, code: '',
+                postKey: rule.postKey, postName: rule.postName,
+                storeIdx: -1, storeId: '', storeCode: '', storeName: personNode.storeName || '',
+                region: '', area: '',
+                real: true, sourceKind: 'import',
+                dims: dims, ratios: ratios, counts: counts, stds: stds,
+                // v5.9 修复③：把「静态规则 + 导入自动补项」合并后的拿分项清单带出去（与 dims/stds/ratios/counts 同索引）。
+                // 此前抽屉只遍历静态规则表，导入的新拿分项（如产品专家「到店接待」）计入当日积分却无行可显示 → 三个区块对不上
+                itemNames: items.map(function (x) { return x.name; }),
+                itemCaps: items.map(function (x) { return x.cap || 1; }),
+                points: Math.round(point * 100) / 100, cap: rule.cap, capAvailable: capAvail,
+                capCover: Math.round(capCover * 100) / 100,
+                stdCover: Math.round(stdCover * 100) / 100,
+                coverCnt: dims.filter(function (v) { return v !== null; }).length, coverTotal: items.length,
+                rate: Math.round(rate * 10) / 10,
+                rateFull: capAvail ? Math.round(point / capAvail * 1000) / 10 : 0,
+                status: st.label, statusCls: st.cls,
+                weakestIdx: wi < 0 ? 0 : wi,
+                weakestName: wi < 0 ? '—' : items[wi].name,
+                weakestRate: wi < 0 ? 0 : Math.round(wv),
+                deductions: [], dedCount: 0, dedTotal: 0,
+                dedRows: [], empCode: '', delivered: 0,
+                real: true,   // v5.6：真实导入行来源徽章不再误显「模拟数据」
+                tag: { text: '动作评分导入', warn: false },
+                noData: dims.every(function (v) { return v === null; })
+            };
+        }
+
+        // v5.7：动作评分导入元信息（/api/scoring/meta，API 模式懒加载一次）—— 判断「该岗位是否已导入评分明细」。
+        // 用途：API 模式下岗位已有导入数据、但当前人员无导入记录时，逐日表不再回退确定性模拟，整表置灰。
+        const SMETA = { req: null, posts: null, days: [] };
+        function smetaLoad() {
+            if (DATA_MODE !== 'api') return Promise.resolve(null);
+            if (!SMETA.req) {
+                SMETA.req = fetchJson(API_BASE + '/api/scoring/meta').then(function (m) {
+                    if (m && m.ok && Array.isArray(m.posts)) {
+                        SMETA.posts = new Set(m.posts.filter(function (x) { return (x.detailRows || 0) > 0; }).map(function (x) { return x.postKey; }));
+                        SMETA.days = (m.days || []).slice();
+                    } else {
+                        SMETA.posts = new Set();
+                    }
+                    return SMETA.posts;
+                }).catch(function () { SMETA.posts = new Set(); return SMETA.posts; });
+            }
+            return SMETA.req;
+        }
+
+        async function renderDrillPersonDaily(cur, r) {
+            const list = document.getElementById('drillList');
+            if (!list) return;
+            state.drillPersonId = cur.id;                 // 供区间汇总明细复用
+            renderDutyPersonDetail();
+            const postKey = cur.postKey || postKeyOfPerson(cur) || POSTS[0].key;
+            const rule = clRuleFor(postKey);
+            const isMgr = postKey === 'salesManager';   // v4.15：仅销售店长显示晨会 / 夕会报表列
+
+            // v5.8：区间日期串直接取顶栏日期筛选 state.start/end（不按指标数据窗口钳制）——
+            // 此前用入参 r（currentIdx() 被 clampIdx 钳制到指标数据范围，如 9/10~9/16），
+            // 顶栏选 9/9~9/20 应用后逐日表日期串不变，表现为「日期筛选不同步」；
+            // 窗口外日期由既有分支自然处理：导入未命中/置灰、LH 无日报返回 null 置灰
+            const dates = [];
+            {
+                let d = parseDate(state.start);
+                const dEnd = parseDate(state.end);
+                let guard = 0;
+                while (d <= dEnd && guard++ < 400) {
+                    dates.push(dateStr(d));
+                    d = new Date(d.getTime() + ONE_DAY);
+                }
+            }
+            if (!dates.length) { dates.push(dateStr(parseDate(state.start))); }
+            const dsFrom = dates[0], dsTo = dates[dates.length - 1];
+
+            // v5.4：拉取该人员的真实区间数据（动作评分导入）；
+            // v5.6：交付等 LH 岗位也拉取 —— 逐日取数优先级改为「导入数据 > LH 真实日报 > 置灰」，
+            // 否则导入的 9/10 评分数据在 LH 岗位（仅 5/22 有日报）的逐日表上永远不出现
+            const realMap = new Map();
+            if (cur.id) {
+                try {
+                    const resp = await fetchJson(API_BASE + '/api/scoring/range?personId=' + cur.id + '&from=' + dsFrom + '&to=' + dsTo);
+                    if (resp && resp.ok && Array.isArray(resp.days)) {
+                        resp.days.forEach(function (d) { realMap.set(d.date, d); });
+                    }
+                } catch (e) { /* 接口失败：静默回退到 LH/mock */ }
+            }
+            let realNote = '';
+            if (realMap.size) {
+                const ks = Array.from(realMap.keys()).sort();
+                realNote = '动作评分导入数据（区间内仅 ' + ks.join('、') + ' 有数据，其余日期置灰）';
+            }
+            // v5.7：API 模式下查询岗位导入元信息 —— 岗位已有导入评分但该人无记录 → 整表置灰，不回退模拟
+            const smetaPosts = await smetaLoad();
+            const postHasImport = !!(smetaPosts && smetaPosts.has(postKey));
+            let dataNote = (LH_OK && rule.real)
+                ? '灯塔真实评分数据（当前数据文件仅 ' + CL_DATES.join('、') + ' 有日报，其余日期置灰）' + (realMap.size ? '；' + realNote : '')
+                : (realNote || (rule.real ? '规则驱动模拟数据' : '规则驱动模拟数据（确定性生成）'));
+            if (postHasImport && !realMap.size) {
+                dataNote = '该岗位已导入动作评分（导入日期 ' + (SMETA.days.join('、') || '—') + '），当前人员无导入记录 —— 逐日置灰，不展示模拟数据';
+            }
+
+            // 区间逐日行：完成率环比 = 与前一日完成率之差（首日 —）
+            const rows = [];
+            let prevRate = null;
+            // v5.4：若 realMap 有任一日期数据，则其余未命中日期视为「无评估数据」，行置灰 + 文案「当日无该人评估数据」；仅当 realMap 完全为空时才回退 mock
+            const useRealOnly = realMap.size > 0;
+            for (const ds of dates) {
+                let pt, isRealRow = false;
+                if (realMap.has(ds)) {
+                    pt = drillRealPoint(cur, rule, realMap.get(ds));
+                    isRealRow = true;
+                } else if (postHasImport) {
+                    // v5.7：岗位已导入评分但该人当日无记录 → 置灰（不再回退确定性模拟 / LH 映射，杜绝「天天都有假数据」）
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else if (LH_OK && rule.real) {
+                    pt = drillDailyPoint(cur, ds);
+                } else if (useRealOnly) {
+                    // v5.4：已有部分真实数据但当日未命中 → 置灰「当日无该人评估数据」，不展示 mock 数值
+                    pt = { noData: true, points: null, capCover: null, rate: null, weakestName: null, weakestRate: null };
+                } else {
+                    pt = drillDailyPoint(cur, ds);
+                }
+                rows.push({ ds: ds, pt: pt, prevRate: prevRate, isRealRow: isRealRow });
+                prevRate = (pt && !pt.noData) ? pt.rate : null;   // 无数据日断开环比链
+            }
+            const rateC = function (v) {
+                return v >= 95 ? '#34d399' : (v >= 85 ? '#60a5fa' : (v >= 70 ? '#fbbf24' : '#fb7185'));
+            };
+            const bodyHtml = rows.map(function (row, ri) {
+                const pt = row.pt;
+                if (!pt || pt.noData) {
+                    // v4.15：无数据行晨/夕会胶囊同样置灰不可点（与整行 opacity-40 一致）
+                    const meetGrey = isMgr ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">晨会</span></td><td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-slate-500/10 text-slate-600">夕会</span></td>' : '';
+                    return '<tr class="opacity-40" data-ri="' + ri + '">' +
+                        '<td class="px-3 py-2.5 text-sm text-slate-300 whitespace-nowrap border-b border-white/5">' + row.ds + '</td>' +
+                        '<td class="px-3 py-2.5 text-right text-xs text-slate-500 border-b border-white/5" colspan="' + (isMgr ? 4 : 6) + '">' + (pt ? '当日无该人评估数据' : '无日报数据') + '</td>' + meetGrey + '</tr>';
+                }
+                let deltaHtml = '<span class="text-slate-500">—</span>';
+                if (row.prevRate !== null && row.prevRate !== undefined) {
+                    const d = pt.rate - row.prevRate;
+                    const color = Math.abs(d) < 0.5 ? '#64748b' : (d > 0 ? '#ef4444' : '#10b981');
+                    deltaHtml = '<span style="color:' + color + '">' + (d > 0 ? '↑ +' : (d < 0 ? '↓ ' : '')) + d.toFixed(1) + 'pt</span>';
+                }
+                const realTag = row.isRealRow ? ' <span class="ml-1 text-[10px] text-emerald-400">导入</span>' : '';
+                return '<tr data-ri="' + ri + '" data-date="' + row.ds + '" data-real="' + (row.isRealRow ? '1' : '0') + '" class="cursor-pointer hover:bg-white/5 transition">' +
+                    '<td class="px-3 py-2.5 text-sm text-slate-200 whitespace-nowrap border-b border-white/5">' + row.ds + realTag + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold text-slate-100 whitespace-nowrap border-b border-white/5">' + clNum(pt.points) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs text-slate-400 whitespace-nowrap border-b border-white/5" title="当日已评估拿分项标准分（日标准得分）之和（无数据项不计入分母）">' + clNum(pt.stdCover != null ? pt.stdCover : pt.capCover) + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-sm font-semibold whitespace-nowrap border-b border-white/5" style="color:' + rateC(pt.rate) + '">' + pt.rate.toFixed(1) + '%</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + deltaHtml + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-300 whitespace-nowrap border-b border-white/5" title="' + (pt.weakestName || '') + '">' + clShortItem(pt.weakestName || '—') + ' <span class="text-slate-500">' + (pt.weakestRate === null || pt.weakestRate === undefined ? '' : pt.weakestRate + '%') + '</span></td>' +
+                    // v4.15：晨会 / 夕会报表胶囊（仅销售店长；stopPropagation 避免触发行点击的诊断抽屉）
+                    (isMgr
+                        ? '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="am" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-amber-500/15 text-amber-300 cursor-pointer hover:bg-amber-500/25 transition">晨会 ▸</span></td>' +
+                          '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span data-meet-btn="pm" data-date="' + row.ds + '" class="px-2 py-1 rounded-md bg-indigo-500/15 text-indigo-300 cursor-pointer hover:bg-indigo-500/25 transition">夕会 ▸</span></td>'
+                        : '') +
+                    '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md bg-cyan-500/15 text-cyan-300">明细 ▸</span></td>' +
+                    '</tr>';
+            }).join('');
+            list.innerHTML =
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">' + cur.name + ' · 每日动作积分完成率</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + (cur.storeName || '') + ' · ' + (cur.postName || rule.postName) + ' · 满分 ' + clNum(rule.capAvailable) + '</span></div>' +
+                    '<div class="text-[11px] text-slate-400">完成率 = 当日积分 ÷ 已评估拿分项标准分（日标准得分 = 100%，超出按比例计，如 150%；当日无评估数据的拿分项不计入分母）· 环比 = 与前一日之差 · 点击行查看当日诊断明细 · ' + dataNote + '</div>' +
+                '</div>' +
+                '<table class="min-w-full border-collapse text-sm">' +
+                    '<thead><tr>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">日期</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">当日积分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">已评估标准分</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">完成率</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">环比</th>' +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">最弱拿分项</th>' +
+                    // v4.15：晨会 / 夕会报表列（仅销售店长）
+                    (isMgr
+                        ? '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">晨会报表</th>' +
+                          '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">夕会报表</th>'
+                        : '') +
+                    '<th class="sticky top-0 z-10 bg-slate-800/95 backdrop-blur px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10">明细</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' + bodyHtml + '</tbody></table>';
+            // 行点击 → 构建单日抽屉上下文并打开诊断抽屉（复用闭环 clOpenDrawer 全部内容与图表）
+            list.querySelectorAll('tr[data-date]').forEach(function (tr) {
+                tr.addEventListener('click', function () {
+                    const ds = tr.dataset.date;
+                    const isReal = tr.dataset.real === '1';
+                    let day = null;
+                    let pt;
+                    if (isReal && realMap.has(ds)) {
+                        day = realMap.get(ds);
+                        pt = drillRealPoint(cur, rule, day);
+                    } else {
+                        pt = drillDailyPoint(cur, ds);
+                    }
+                    if (!pt || pt.noData) return;
+                    const openIt = function () {
+                        CL_DRAW_CTX = {
+                            points: [pt], rule: rule, dates: [ds],
+                            teamScores: pt.dims.map(function (v) { return v === null || v === undefined ? 0 : v; })   // 单人场景：均值线与本人重合
+                        };
+                        clOpenDrawer(0);
+                    };
+                    if (isReal) {
+                        // 真实导入行：异步补充证据链（/scoring/details）再打开抽屉；失败则照常去空事实表打开
+                        fetchJson(API_BASE + '/api/scoring/details?date=' + ds + '&personId=' + cur.id)
+                            .then(function (resp) {
+                                if (resp && resp.ok && Array.isArray(resp.details) && resp.details.length) {
+                                    pt.dedRows = resp.details.map(function (r) {
+                                        return { order: r.orderNo || '', item: r.item, act: r.action, ev: r.evidence || '', score: r.score };
+                                    });
+                                    // v5.6：同步构建扣分明细（抽屉「扣分明细」表 / 扣分单数 / 累计扣分 / 标签）
+                                    const deds = clDedsFromDetails(resp.details);
+                                    pt.deductions = deds;
+                                    pt.dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
+                                    pt.dedTotal = Math.round(deds.reduce(function (s, d) { return s + d.total; }, 0) * 100) / 100;
+                                    if (deds.length) pt.tag = clTagOf(deds);
+                                }
+                                openIt();
+                            })
+                            .catch(function () { openIt(); });
+                    } else {
+                        openIt();
+                    }
+                });
+            });
+            // v4.15：晨会 / 夕会报表胶囊点击 —— stopPropagation 避免触发行点击的诊断抽屉
+            list.querySelectorAll('span[data-meet-btn]').forEach(function (sp) {
+                sp.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    openMeetReport(cur, sp.dataset.date, sp.dataset.meetBtn);
+                });
+            });
+        }
+
+        // ==================== v4.15：销售店长 · 晨会 / 夕会报表 ====================
+        // 晨会管理关键目标 = 对某个具体岗位的人发布任务；夕会 = 核对晨会任务有没有完成。
+        // 仅 salesManager 岗位人员逐日表显示入口；晨夕共用同一任务集合，确定性生成（seed 前缀 meeting|），
+        // 同一人同一天刷新后数据稳定；只读查看，不持久化。
+
+        // 销售店长晨会任务模板：任务名 / 衡量标准（目标值） / 时限 / 任务来源（拿分项或上级指令）
+        const MEET_TASK_TPL = [
+            { task: '新增建档并完成 DMS 录入', metric: '新增建档 ≥ {n} 组', n: [6, 10], source: '新增建档' },
+            { task: '当日首访线索 2 小时内跟进登记', metric: '首访登记及时率 100%', n: null, source: '线索跟进' },
+            { task: '组织当日晨会并同步昨日交付目标', metric: '晨会 09:10 前完成宣讲', n: null, source: '上级指令' },
+            { task: '试驾邀约与试驾执行', metric: '试驾 ≥ {n} 组', n: [2, 5], source: '试驾执行' },
+            { task: '走动式管理：接待 / 讲解 / 仪式宣讲抽查', metric: '抽查 ≥ {n} 个环节', n: [2, 4], source: '接待规范' },
+            { task: '锁单客户交付群建群与自我介绍检查', metric: '当班锁单建群率 100%', n: null, source: '上级指令' },
+            { task: '当日客户投诉 / 异常第一时间响应', metric: '异常响应 ≤ 30 分钟', n: null, source: '异常核对' },
+            { task: '夕会前完成当日战报与明日计划', metric: '夕会 19:00 前提交战报', n: null, source: '上级指令' }
+        ];
+        const MEET_DEADLINES = ['12:00 前', '15:00 前', '18:00 前', '今日内', '夕会前'];
+
+        // 晨会任务确定性生成（晨夕共用）：同一人 + 同一日期结果稳定
+        function meetingTasksOf(personNode, ds) {
+            const rnd = clRng('meeting|' + personNode.id + '|' + ds);
+            // 从模板确定性抽取 3-5 条（不重复），按时间轴递增排布
+            const pool = MEET_TASK_TPL.slice();
+            const cnt = 3 + Math.floor(rnd() * 3);
+            const picks = [];
+            for (let i = 0; i < cnt && pool.length; i++) {
+                const j = Math.floor(rnd() * pool.length);
+                picks.push(pool.splice(j, 1)[0]);
+            }
+            const owner = personNode.name;
+            const team = ['张倩', '李昊', '王一诺', '赵子墨', '刘畅'];
+            let hh = 9, mm = 5 + Math.floor(rnd() * 10);
+            return picks.map(function (t) {
+                const time = String(hh).padStart(2, '0') + ':' + String(mm).padStart(2, '0');
+                mm += 6 + Math.floor(rnd() * 9);
+                if (mm >= 60) { mm -= 60; hh++; }
+                // 目标值
+                let metric = t.metric, target = null;
+                if (t.n) {
+                    target = t.n[0] + Math.floor(rnd() * (t.n[1] - t.n[0] + 1));
+                    metric = metric.replace('{n}', target);
+                } else {
+                    target = 1;   // 达成即 100%（率类 / 时点类任务）
+                }
+                // 夕会完成情况：actual 与 status（done / partial / todo）由同 seed 派生
+                const roll = rnd();
+                let status, actual;
+                if (roll < 0.55) { status = 'done'; actual = target; }
+                else if (roll < 0.85) { status = 'partial'; actual = Math.max(0, target - (1 + Math.floor(rnd() * Math.max(1, target)))); }
+                else { status = 'todo'; actual = 0; }
+                if (!t.n && status === 'partial') status = 'todo';
+                return {
+                    time: time, task: t.task, owner: owner,
+                    helper: rnd() < 0.5 ? team[Math.floor(rnd() * team.length)] : null,   // 协同人（演示）
+                    metric: metric, target: target,
+                    deadline: MEET_DEADLINES[Math.floor(rnd() * MEET_DEADLINES.length)],
+                    source: t.source, published: rnd() > 0.05,
+                    actual: actual, status: status
+                };
+            });
+        }
+
+        // 打开晨会 / 夕会报表抽屉（type = 'am' | 'pm'）
+        function openMeetReport(personNode, ds, type) {
+            const d = document.getElementById('meetDrawer');
+            const body = document.getElementById('meetDrawerBody');
+            if (!d || !body) return;
+            const tasks = meetingTasksOf(personNode, ds);
+            const isAm = type === 'am';
+            const post = POSTS_BY_KEY['salesManager'] || { name: '销售店长', color: '#8b5cf6' };
+            // KPI 摘要
+            const done = tasks.filter(function (t) { return t.status === 'done'; }).length;
+            const partial = tasks.filter(function (t) { return t.status === 'partial'; }).length;
+            const todo = tasks.filter(function (t) { return t.status === 'todo'; }).length;
+            const finishRate = tasks.length ? Math.round((done + partial * 0.5) / tasks.length * 1000) / 10 : 0;
+            const kpis = isAm
+                ? [
+                    { label: '发布任务数', v: tasks.length, unit: '条', sub: '晨会时间轴 09:05-09:40', c: '#f59e0b' },
+                    { label: '按时发布率', v: tasks.every(function (t) { return t.published; }) ? 100 : Math.round(tasks.filter(function (t) { return t.published; }).length / tasks.length * 100), unit: '%', sub: '晨会 09:40 前完成发布', c: '#22c55e' },
+                    { label: '涉及拿分项', v: tasks.filter(function (t) { return t.source !== '上级指令'; }).length, unit: '项', sub: '任务与当日积分口径对齐', c: '#06b6d4' }
+                ]
+                : [
+                    { label: '任务完成率', v: finishRate, unit: '%', sub: '完成 100% / 部分完成 50% 计权', c: '#6366f1' },
+                    { label: '全额完成', v: done, unit: '条', sub: '达到晨会衡量标准', c: '#22c55e' },
+                    { label: '部分完成', v: partial, unit: '条', sub: '接近目标，夕会复盘差距', c: '#fbbf24' },
+                    { label: '未完成', v: todo, unit: '条', sub: '列入次日晨会跟进', c: '#ef4444' }
+                ];
+            const kpiHtml = kpis.map(function (k) {
+                return '<div class="cl-kpi" style="--kpi-c:' + k.c + ';flex:1;min-width:150px"><div class="k-label">' + k.label + '</div><div class="k-value">' + k.v + ' <small>' + k.unit + '</small></div><div class="k-sub">' + k.sub + '</div></div>';
+            }).join('');
+            // 表头
+            const thC = 'px-3 py-2.5 text-left text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10';
+            const thR = 'px-3 py-2.5 text-right text-xs font-semibold text-slate-200 whitespace-nowrap border-b border-white/10';
+            const headHtml = isAm
+                ? '<tr><th class="' + thC + '">时间</th><th class="' + thC + '">任务名称</th><th class="' + thC + '">责任人</th><th class="' + thC + '">衡量标准</th><th class="' + thC + '">完成时限</th><th class="' + thC + '">任务来源</th><th class="' + thR + '">发布状态</th></tr>'
+                : '<tr><th class="' + thC + '">时间</th><th class="' + thC + '">任务名称</th><th class="' + thC + '">责任人</th><th class="' + thC + '">衡量标准</th><th class="' + thR + '">实际完成</th><th class="' + thC + '">完成状态</th><th class="' + thC + '">差距 / 说明</th></tr>';
+            const stMap = { done: { t: '✓ 完成', c: 'bg-emerald-500/15 text-emerald-300' }, partial: { t: '△ 部分完成', c: 'bg-amber-500/15 text-amber-300' }, todo: { t: '✗ 未完成', c: 'bg-rose-500/15 text-rose-300' } };
+            const bodyHtml = tasks.map(function (t) {
+                const srcCls = t.source === '上级指令' ? 'bg-violet-500/15 text-violet-300' : 'bg-cyan-500/15 text-cyan-300';
+                if (isAm) {
+                    return '<tr class="hover:bg-white/5 transition">' +
+                        '<td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap border-b border-white/5">' + t.time + '</td>' +
+                        '<td class="px-3 py-2.5 text-sm text-slate-100 border-b border-white/5">' + t.task + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:' + post.color + '"></span>' + t.owner + (t.helper ? '<span class="text-slate-500"> + ' + t.helper + '（协同）</span>' : '') + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5" style="color:#67e8f9">' + t.metric + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap border-b border-white/5">' + t.deadline + '</td>' +
+                        '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md ' + srcCls + '">' + t.source + '</span></td>' +
+                        '<td class="px-3 py-2.5 text-right text-xs whitespace-nowrap border-b border-white/5">' + (t.published ? '<span class="px-2 py-1 rounded-md bg-emerald-500/15 text-emerald-300">✓ 已发布</span>' : '<span class="px-2 py-1 rounded-md bg-slate-500/15 text-slate-400">待发布</span>') + '</td></tr>';
+                }
+                const st = stMap[t.status];
+                const actualTxt = t.target > 1 ? (t.actual + ' / ' + t.target) : (t.actual > 0 ? '达成' : '未达成');
+                let gap = '—';
+                if (t.status === 'done') gap = '达到晨会衡量标准';
+                else if (t.status === 'partial') gap = '差 ' + (t.target - t.actual) + '，夕会复盘原因';
+                else gap = t.target > 1 ? '未启动（目标 ' + t.target + '）' : '未达成，列入次日跟进';
+                return '<tr class="hover:bg-white/5 transition">' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-400 whitespace-nowrap border-b border-white/5">' + t.time + '</td>' +
+                    '<td class="px-3 py-2.5 text-sm text-slate-100 border-b border-white/5">' + t.task + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="inline-block w-2 h-2 rounded-full mr-1.5" style="background:' + post.color + '"></span>' + t.owner + (t.helper ? '<span class="text-slate-500"> + ' + t.helper + '（协同）</span>' : '') + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5" style="color:#67e8f9">' + t.metric + '</td>' +
+                    '<td class="px-3 py-2.5 text-right text-xs font-semibold whitespace-nowrap border-b border-white/5" style="color:' + (t.status === 'done' ? '#34d399' : (t.status === 'partial' ? '#fbbf24' : '#fb7185')) + '">' + actualTxt + '</td>' +
+                    '<td class="px-3 py-2.5 text-xs whitespace-nowrap border-b border-white/5"><span class="px-2 py-1 rounded-md ' + st.c + '">' + st.t + '</span></td>' +
+                    '<td class="px-3 py-2.5 text-xs text-slate-400 border-b border-white/5">' + gap + '</td></tr>';
+            }).join('');
+            body.innerHTML =
+                '<div class="p-5 pb-3 flex items-center justify-between flex-wrap gap-2">' +
+                    '<div><span class="text-base text-slate-100 font-semibold">' + personNode.name + ' · ' + ds + (isAm ? ' 晨会报表' : ' 夕会报表') + '</span>' +
+                    '<span class="text-xs text-slate-400 ml-2">' + (personNode.storeName || '') + ' · 销售店长 · ' + (isAm ? '晨会 09:05-09:40 发布 · 点击夕会报表核对完成情况' : '对照晨会任务逐条核对 · 数据为确定性模拟演示') + '</span></div>' +
+                    '<button data-meet-close class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" style="color:#94a3b8;font-size:14px">✕</button></div>' +
+                '<div class="px-5 flex flex-wrap gap-2 pb-3" style="display:flex">' + kpiHtml + '</div>' +
+                '<div class="px-5 pb-2"><table class="min-w-full border-collapse text-sm"><thead>' + headHtml + '</thead><tbody>' + bodyHtml + '</tbody></table></div>' +
+                '<div class="px-5 py-3 text-[11px] text-slate-500 border-t border-white/5">' + (isAm
+                    ? '晨会报表 = 晨会时间段向具体责任人发布的当日任务清单（时间 / 责任人 / 衡量标准 / 时限 / 任务来源）· 数据为确定性模拟演示，待接真实晨会接口'
+                    : '夕会报表 = 对照当日晨会任务逐条核对完成情况（实际完成 / 完成状态 / 差距说明）· 完成率 = 完成 100% + 部分完成 50% 计权 · 数据为确定性模拟演示，待接真实夕会接口') + '</div>';
+            d.classList.remove('hidden');
+        }
+
+        // ---------- v4.13：产品专家下钻后追加四象限图（X=积分达成率%，Y=交付量） ----------
+        // 仅在「岗位 = 产品专家」下钻后渲染；其它岗位/层级调用方直接清空 #drillPostQuad
+        // 风格与 clRenderQuad 保持一致：均值虚线 + 四象限背景 + 文字解读
+        function renderDrillPostQuad(postNode, persons, r, pr) {
+            const box = document.getElementById('drillPostQuad');
+            if (!box) return;
+            // 人员 < 2：四象限参考价值不大，给出占位提示，避免单点假象
+            if (!persons || persons.length < 2) {
+                clDisposeChart('drillPostQuad');
+                const head = postNode.storeName ? postNode.storeName + ' · ' + postNode.name : postNode.name;
+                box.innerHTML = '<div class="rounded-xl p-4 mt-3" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.15)">' +
+                    '<div class="flex items-center justify-between flex-wrap gap-2 mb-1">' +
+                    '<div><span class="text-sm text-slate-100 font-medium">达成率 × 交付量 · 四象限</span>' +
+                    '<span class="text-[11px] text-slate-400 ml-2">' + head + ' · 至少需要 2 位在岗人员才能生成四象限</span></div></div>' +
+                    '<div class="text-xs text-slate-500 py-3 text-center">当前在岗 ' + (persons ? persons.length : 0) + ' 人 · 四象限参考价值有限</div></div>';
+                return;
+            }
+            // 每人 X = round(points / cap * 10000) / 100（达成率% 保留两位小数），Y = delivered（交付量）
+            const points = persons.map(function (p) {
+                const m = metricsOf(p, r[0], r[1]) || {};
+                const cap = productExpertFullScore(p);
+                const rawX = cap > 0 ? ((m.points || 0) / cap) * 100 : 0;
+                const x = Math.max(0, Math.min(140, Math.round(rawX * 100) / 100));   // 上限 140% 防止远超满分拉散坐标
+                const y = m.delivered || 0;
+                return {
+                    name: p.name,
+                    postName: p.postName || postNode.name,
+                    storeName: p.storeName || (postNode.storeName || ''),
+                    storeCode: p.parent && p.parent.parent ? p.parent.parent.code : (p.code || ''),
+                    x: x, y: y,
+                    points: m.points || 0,
+                    delivered: y,
+                    cap: cap
+                };
+            });
+            const xs = points.map(function (p) { return p.x; });
+            const ys = points.map(function (p) { return p.y; });
+            const avgX = xs.reduce(function (s, v) { return s + v; }, 0) / xs.length;
+            const avgY = ys.reduce(function (s, v) { return s + v; }, 0) / ys.length;
+            // X 轴范围 0~120%；Y 轴按人员最大值 1.15 留白；浮动阈值避免单点塌缩
+            const xMax = 120;
+            const xMin = 0;
+            const yMaxV = Math.max.apply(null, ys);
+            const yMax = yMaxV > 0 ? yMaxV * 1.15 + 0.5 : 1;
+            const yMin = 0;
+            // 按门店分色（同门店 ≤ 8 家按门店着色，否则单系列，避免图例爆炸）
+            const storeMap = new Map();
+            points.forEach(function (p, i) {
+                const k = p.storeCode || p.storeName || '_all';
+                if (!storeMap.has(k)) storeMap.set(k, { name: p.storeName || '全部人员', idxs: [] });
+                storeMap.get(k).idxs.push(i);
+            });
+            const groups = Array.from(storeMap.values()).sort(function (a, b) { return b.idxs.length - a.idxs.length; });
+            const byStore = groups.length > 1 && groups.length <= 8;
+            function mkSeries(name, color, idxs) {
+                return {
+                    name: name, type: 'scatter', symbolSize: 16,
+                    itemStyle: {
+                        color: color, opacity: 0.85,
+                        borderColor: 'rgba(255,255,255,0.65)', borderWidth: 1.5,
+                        shadowBlur: 8, shadowColor: scaleColor(color, 0.4)
+                    },
+                    emphasis: { focus: 'self', scale: 1.35 },
+                    data: idxs.map(function (i) {
+                        return { name: points[i].name, value: [points[i].x, points[i].y], _idx: i };
+                    })
+                };
+            }
+            // 先 dispose 旧实例，避免多轮重渲叠加
+            clDisposeChart('drillPostQuad');
+            box.innerHTML = '';
+            const head = postNode.storeName ? postNode.storeName + ' · ' + postNode.name : postNode.name;
+            box.style.height = '';   // 让外层自适应
+            box.innerHTML = '<div class="rounded-xl p-4" style="background:rgba(15,23,42,0.5);border:1px solid rgba(148,163,184,0.15)">' +
+                '<div class="flex items-center justify-between flex-wrap gap-2 mb-2">' +
+                '<div><span class="text-sm text-slate-100 font-medium">达成率 × 交付量 · 四象限</span>' +
+                '<span class="text-[11px] text-slate-400 ml-2">' + head + ' · 横轴 = 区间积分达成率%（个人区间积分 ÷ 个人满分梯度）· 纵轴 = 区间交付量 · 共 ' + persons.length + ' 人</span></div>' +
+                '<div class="text-[11px] text-slate-400">均值线 达成率 <b class="text-amber-300">' + avgX.toFixed(1) + '%</b> · 交付 <b class="text-amber-300">' + avgY.toFixed(1) + '</b> 台</div>' +
+                '</div>' +
+                '<div id="drillPostQuadChart" style="height:380px"></div>' +
+                '</div>';
+            const el = document.getElementById('drillPostQuadChart');
+            if (!el) return;
+            const accent = (POSTS_BY_KEY['productExpert'] || {}).color || '#06b6d4';
+            const series = byStore
+                ? groups.map(function (g, gi) { return mkSeries(g.name, closureStoreColor(gi), g.idxs); })
+                : [mkSeries('全部人员', accent, points.map(function (_, i) { return i; }))];
+            series[0].markLine = {
+                silent: true, symbol: 'none', animation: false,
+                data: [
+                    { xAxis: avgX, label: { formatter: '达成率均值 ' + avgX.toFixed(1) + '%', color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } },
+                    { yAxis: avgY, label: { formatter: '交付均值 ' + avgY.toFixed(1) + ' 台', color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } }
+                ]
+            };
+            series[0].markArea = {
+                silent: true,
+                data: [
+                    [{ xAxis: avgX, yAxis: avgY, itemStyle: { color: 'rgba(16,185,129,0.1)' }, label: { show: true, position: 'insideTopRight', color: '#34d399', fontSize: 12, fontWeight: 700, formatter: '标杆 · 高达成高交付' } }, { xAxis: xMax, yAxis: yMax }],
+                    [{ xAxis: xMin, yAxis: yMin, itemStyle: { color: 'rgba(244,63,94,0.1)' }, label: { show: true, position: 'insideBottomLeft', color: '#fb7185', fontSize: 12, fontWeight: 700, formatter: '待辅导 · 低达成低交付' } }, { xAxis: avgX, yAxis: avgY }],
+                    [{ xAxis: xMin, yAxis: avgY, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideTopLeft', color: '#94a3b8', fontSize: 11, formatter: '高达成低交付 · 流程找卡点' } }, { xAxis: avgX, yAxis: yMax }],
+                    [{ xAxis: avgX, yAxis: yMin, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideBottomRight', color: '#94a3b8', fontSize: 11, formatter: '低达成高交付 · 动作待复制' } }, { xAxis: xMax, yAxis: avgY }]
+                ]
+            };
+            const chartInst = echarts.init(el);
+            extCharts.drillPostQuad = chartInst;
+            chartInst.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        const p = points[it.data._idx];
+                        if (!p) return '';
+                        return '<div style="font-weight:700;margin-bottom:4px">' + p.name + '</div>' +
+                            '<div style="opacity:.7;font-size:11px">' + p.storeName + ' · ' + p.postName + '</div>' +
+                            '<div style="margin-top:6px">达成率：<b>' + p.x.toFixed(2) + '%</b></div>' +
+                            '<div>区间积分：<b>' + clNum(p.points) + '</b> / ' + clNum(p.cap) + ' 分</div>' +
+                            '<div>交付量：<b>' + fmt(p.delivered) + '</b> 台</div>';
+                    }
+                }),
+                grid: { left: 48, right: 20, top: 30, bottom: byStore ? 56 : 44 },
+                xAxis: Object.assign({ type: 'value', name: '达成率 %', nameLocation: 'middle', nameGap: 26, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: xMin, max: xMax, axisLabel: { color: '#94a3b8', fontSize: 11, formatter: '{value}%' } }, clChartAxis()),
+                yAxis: Object.assign({ type: 'value', name: '交付量（台）', nameLocation: 'middle', nameGap: 40, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: yMin, max: yMax }, clChartAxis()),
+                legend: byStore ? { bottom: 0, itemWidth: 12, itemHeight: 8, textStyle: { color: '#94a3b8', fontSize: 11 } } : { show: false },
+                series: series
+            }, true);
+            try { chartInst.resize(); } catch (_) {}
+            requestAnimationFrame(function () { try { chartInst.resize(); } catch (_) {} });
+        }
+
+        // ---------- 趋势分析 ----------
+        function buildBuckets(start, end, mode, targets, metrics) {
+            metrics = metrics || TREND_METRICS;
+            const buckets = [];
+            const s = parseDate(start), e = parseDate(end);
+            let cursor = new Date(s);
+            while (cursor <= e) {
+                let bs = new Date(cursor), be = new Date(cursor), label = '';
+                if (mode === 'day') {
+                    label = (cursor.getMonth() + 1) + '/' + cursor.getDate();
+                    cursor = addDays(cursor, 1);
+                } else if (mode === 'week') {
+                    const wd = cursor.getDay() === 0 ? 7 : cursor.getDay();
+                    bs = addDays(cursor, -(wd - 1));
+                    be = addDays(bs, 6);
+                    if (bs < s) bs = new Date(s);
+                    if (be > e) be = new Date(e);
+                    label = (bs.getMonth() + 1) + '/' + bs.getDate() + ' 周';
+                    cursor = addDays(be, 1);
+                } else {
+                    bs = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
+                    be = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 0);
+                    if (bs < s) bs = new Date(s);
+                    if (be > e) be = new Date(e);
+                    label = bs.getFullYear() + '/' + (bs.getMonth() + 1);
+                    cursor = addDays(be, 1);
+                }
+                const i0 = clampIdx(dayIndex(dateStr(bs))), i1 = clampIdx(dayIndex(dateStr(be)));
+                const values = {};
+                metrics.forEach(function (m) {
+                    if (m.type === 'rate') {
+                        const num = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[m.num], i0, i1) : 0); }, 0);
+                        const den = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[m.den], i0, i1) : 0); }, 0);
+                        values[m.key] = den ? (num / den) * 100 : 0;
+                    } else {
+                        values[m.key] = targets.reduce(function (sum, n) { return sum + (n.series ? sumIdx(n.series[m.key], i0, i1) : 0); }, 0);
+                    }
+                });
+                buckets.push({ label: label, values: values });
+            }
+            return buckets;
+        }
+        function renderTrend() {
+            const sub = document.getElementById('trendSubtitle');
+            const chipsEl = document.getElementById('trendChips');
+            const c = chart('trendChart');
+            if (!c || !chipsEl) return;
+            if (state.mode === 'pk') {
+                const nodes = pkNodes();
+                if (nodes.length < 2) { c.clear(); sub.textContent = 'PK 模式下请先勾选 2 ~ 6 个对象'; return; }
+                sub.textContent = 'PK 模式 · 各对象新增线索走势（' + state.trendMode + '粒度）';
+                const buckets = buildBuckets(state.start, state.end, state.trendMode, nodes);
+                c.setOption({
+                    grid: { left: 10, right: 22, top: 42, bottom: 6, containLabel: true },
+                    legend: { data: nodes.map(function (n) { return n.name; }), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
+                    tooltip: { trigger: 'axis', ...TOOLTIP_STYLE },
+                    xAxis: { type: 'category', data: buckets.map(function (b) { return b.label; }), boundaryGap: false, ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) } },
+                    yAxis: { type: 'value', ...AXIS_STYLE },
+                    series: nodes.map(function (n) {
+                        const col = pkColorOf(n);
+                        return {
+                            name: n.name, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+                            showSymbol: buckets.length <= 40,
+                            data: buckets.map(function (b) { return Math.round(b.values.leads); }),
+                            lineStyle: { color: col, width: 2 }, itemStyle: { color: col }
+                        };
+                    })
+                }, true);
+                return;
+            }
+            const node = currentNode();
+            const selected = TREND_METRICS.filter(function (m) { return state.trendMetrics.indexOf(m.key) >= 0; });
+            const absSelected = selected.filter(function (m) { return m.type === 'abs'; });
+            // 自动判断是否需要归一化：绝对量指标之间峰值差距 >=10 倍时开启
+            let normAuto = false;
+            if (state.mode !== 'pk' && absSelected.length >= 2) {
+                const peakBuckets = buildBuckets(state.start, state.end, state.trendMode, [node], absSelected);
+                const peaks = absSelected.map(function (m) {
+                    return Math.max.apply(null, peakBuckets.map(function (b) { return b.values[m.key] || 0; }));
+                });
+                const mx = Math.max.apply(null, peaks);
+                const mn = Math.min.apply(null, peaks.filter(function (p) { return p > 0; }));
+                normAuto = mn > 0 && mx / mn >= 10;
+            }
+            const normEff = state.mode !== 'pk' && selected.some(function (m) { return m.type === 'abs'; }) &&
+                (state.trendNorm === null ? normAuto : state.trendNorm);
+            state._trendNormEff = normEff; // 供点击切换时知道当前生效状态
+
+            // 渲染指标多选胶囊（加上归一化切换按钮）
+            let chipsHtml = TREND_METRICS.map(function (m) {
+                const on = state.trendMetrics.indexOf(m.key) >= 0;
+                return '<span class="metric-chip' + (on ? ' on' : '') + '" data-trend-metric="' + m.key + '">' +
+                    '<span class="mc-dot" style="background:' + m.color + '"></span>' + m.label + '</span>';
+            }).join('');
+            chipsHtml += '<span class="metric-chip' + (normEff ? ' on' : '') + ' norm-chip" data-trend-norm="1" title="自动：绝对量指标峰值相差 10 倍以上时开启。点击强制切换">' +
+                '<span class="mc-dot" style="background:#cbd5e1"></span>' + (normEff ? '归一化对比' : '绝对量对比') + '</span>';
+            chipsEl.innerHTML = chipsHtml;
+
+            sub.textContent = node.name + ' · ' + (selected.length ? selected.map(function (m) { return m.label; }).join(' / ') : '未选择指标');
+            if (normEff) sub.textContent += ' · 已归一化（各绝对量按自身峰值缩放为 100%）';
+
+            const buckets = buildBuckets(state.start, state.end, state.trendMode, [node], selected);
+            const hasRate = selected.some(function (m) { return m.type === 'rate'; });
+
+            // 预计算每个绝对量指标的峰值
+            const absPeak = {};
+            absSelected.forEach(function (m) {
+                absPeak[m.key] = Math.max.apply(null, buckets.map(function (b) { return b.values[m.key] || 0; }));
+            });
+
+            const tooltipFormatter = function (p) {
+                let s = p[0].name + '<br/>';
+                p.forEach(function (it) {
+                    const ms = selected.filter(function (x) { return x.label === it.seriesName; });
+                    const m = ms[0];
+                    if (!m) return;
+                    if (m.type === 'rate') {
+                        s += it.marker + ' ' + it.seriesName + '：<b>' + it.value.toFixed(1) + '%</b><br/>';
+                    } else if (normEff) {
+                        const peak = absPeak[m.key] || 0;
+                        const real = peak ? (it.value * peak / 100) : 0;
+                        s += it.marker + ' ' + it.seriesName + '：<b>' + it.value.toFixed(1) + '%</b> 缩放（实值 <b>' + fmt(real) + '</b> ' + (METRIC_UNIT[m.key] || '') + '）<br/>';
+                    } else {
+                        s += it.marker + ' ' + it.seriesName + '：<b>' + fmt(it.value) + '</b> ' + (METRIC_UNIT[m.key] || '') + '<br/>';
+                    }
+                });
+                return s;
+            };
+
+            let yAxis, gridRight, yAxisIndexForRate;
+            if (normEff) {
+                // 归一化模式下所有可展示的系列都落在 0-100% 区间内，统一一个 Y 轴
+                yAxis = [{ type: 'value', name: '%', nameTextStyle: { color: '#64748b', padding: [0, 0, 0, -16] }, min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 }, ...AXIS_STYLE }];
+                gridRight = 22;
+                yAxisIndexForRate = 0;
+            } else {
+                yAxis = [];
+                if (absSelected.length) yAxis.push({ type: 'value', name: '数量', nameTextStyle: { color: '#64748b', padding: [0, 0, 0, -24] }, ...AXIS_STYLE });
+                if (hasRate) yAxis.push({ type: 'value', name: '转化率', nameTextStyle: { color: '#64748b', padding: [0, -24, 0, 0] }, min: 0, max: 100, axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 }, ...AXIS_STYLE });
+                gridRight = hasRate ? 52 : 22;
+                yAxisIndexForRate = absSelected.length ? 1 : 0;
+            }
+
+            c.setOption({
+                grid: { left: 10, right: gridRight, top: 42, bottom: 6, containLabel: true },
+                legend: { data: selected.map(function (m) { return m.label; }), textStyle: { color: '#94a3b8', fontSize: 12 }, top: 0, icon: 'roundRect', itemWidth: 10, itemHeight: 10 },
+                tooltip: { trigger: 'axis', ...TOOLTIP_STYLE, formatter: tooltipFormatter },
+                // v5.10：数量类指标贴边会被裁切，含柱状时保留类目两侧空隙；纯比率时折线仍贴边
+                xAxis: { type: 'category', data: buckets.map(function (b) { return b.label; }), boundaryGap: absSelected.length > 0, ...AXIS_STYLE, splitLine: { show: false }, axisLabel: { color: '#94a3b8', fontSize: 11, interval: Math.max(0, Math.ceil(buckets.length / 12) - 1) } },
+                yAxis: yAxis,
+                // v5.10 图形分型：具体数据（type='abs'）用柱状图对比、百分比比率（type='rate'）用折线图；
+                // 系列顺序固定「先柱后线」，折线压在柱体上方不被遮挡
+                series: selected.slice().sort(function (a, b) {
+                    return (a.type === 'abs' ? 0 : 1) - (b.type === 'abs' ? 0 : 1);
+                }).map(function (m) {
+                    if (m.type === 'rate') {
+                        return {
+                            name: m.label, type: 'line', smooth: true, symbol: 'circle', symbolSize: 5,
+                            showSymbol: buckets.length <= 40,
+                            yAxisIndex: yAxisIndexForRate,
+                            data: buckets.map(function (b) { return Math.round(b.values[m.key] * 10) / 10; }),
+                            lineStyle: { color: m.color, width: 2 }, itemStyle: { color: m.color }
+                        };
+                    }
+                    const peak = absPeak[m.key] || 0;
+                    return {
+                        name: m.label, type: 'bar', barMaxWidth: 18,
+                        yAxisIndex: 0,
+                        data: buckets.map(function (b) {
+                            const v = b.values[m.key] || 0;
+                            return normEff ? (peak ? Math.round(v / peak * 1000) / 10 : 0) : Math.round(v);
+                        }),
+                        itemStyle: {
+                            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                { offset: 0, color: scaleColor(m.color, 0.95) },
+                                { offset: 1, color: scaleColor(m.color, 0.4) }
+                            ]),
+                            borderRadius: [4, 4, 0, 0]
+                        }
+                    };
+                })
+            }, true);
+        }
+
+        // ---------- 积分排行榜 ----------
+        function renderPoints() {
+            const r = currentIdx();
+            const sub = document.getElementById('pointsSubtitle');
+            const c = chart('pointsRankChart');
+            if (!c) return;
+            if (state.mode === 'pk') {
+                const nodes = pkNodes();
+                if (nodes.length < 2) { c.clear(); sub.textContent = 'PK 模式下请先勾选 2 ~ 6 个对象'; return; }
+                const sorted = nodes.slice().sort(function (a, b) { return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points; });
+                sub.textContent = 'PK 模式 · ' + nodes.length + ' 个对象积分对比';
+                c.setOption({
+                    grid: { left: 10, right: 64, top: 12, bottom: 10, containLabel: true },
+                    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE },
+                    xAxis: { type: 'value', ...AXIS_STYLE },
+                    yAxis: { type: 'category', data: sorted.map(function (n) { return n.name; }).reverse(), ...AXIS_STYLE, splitLine: { show: false } },
+                    series: [{
+                        type: 'bar', barMaxWidth: 18,
+                        data: sorted.map(function (n) { return { value: metricsOf(n, r[0], r[1]).points, itemStyle: { color: pkColorOf(n), borderRadius: [0, 6, 6, 0] } }; }).reverse(),
+                        label: { show: true, position: 'right', color: '#cbd5e1', fontSize: 11, formatter: function (p) { return fmt(p.value); } }
+                    }]
+                }, true);
+                return;
+            }
+            const node = currentNode();
+            // v4.4：维度跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员）
+            const level = autoRankDim();
+            // v4.3：候选严格按当前范围收集，不再回退全树（避免范围外条目出现）
+            const cands = collectLevel(node, level, []);
+            // 全部维度人均口径：人均销量 / 人均积分 = 总量 ÷ 该节点子树在职人数（人员节点数）
+            const hcCache = new Map();
+            function headcountOf(n) {
+                if (!hcCache.has(n.id)) hcCache.set(n.id, collectLevel(n, '人员', []).length);
+                return hcCache.get(n.id);
+            }
+            const rankKey = state.pointsRank === 'points' ? 'points' : 'sales';
+            const rows = cands.map(function (n) {
+                const m = metricsOf(n, r[0], r[1]);
+                const hc = headcountOf(n);
+                const points = m.points || 0;
+                const delivered = m.delivered || 0;
+                const avgPoints = hc > 0 ? points / hc : 0;
+                const avgDelivered = hc > 0 ? delivered / hc : 0;
+                return {
+                    n: n,
+                    name: (n.storeName && level === '人员' ? n.storeName + ' · ' : '') + n.name,
+                    points: points, delivered: delivered, hc: hc,
+                    avgPoints: avgPoints, avgDelivered: avgDelivered
+                };
+            }).sort(function (a, b) {
+                return rankKey === 'sales' ? (b.avgDelivered - a.avgDelivered) : (b.avgPoints - a.avgPoints);
+            }).slice(0, 10);
+            sub.textContent = level + '维度 · 人均销量 + 人均积分 · ' + (rankKey === 'sales' ? '销量优先' : '积分优先') + ' · TOP ' + rows.length + ' · 范围：' + node.name;
+            c.setOption({
+                grid: { left: 10, right: 160, top: 12, bottom: 10, containLabel: true },
+                tooltip: {
+                    trigger: 'axis', axisPointer: { type: 'shadow' }, ...TOOLTIP_STYLE,
+                    formatter: function (p) {
+                        const it = rows[rows.length - 1 - p[0].dataIndex];
+                        if (!it) return '';
+                        return '<b>' + it.n.name + '</b><br/>' +
+                            '<span style="color:#ec4899">人均销量：' + it.avgDelivered.toFixed(1) + ' 辆</span>（总销量 ' + fmt(it.delivered) + ' ÷ ' + it.hc + ' 人）<br/>' +
+                            '<span style="color:#f59e0b">人均积分：' + it.avgPoints.toFixed(1) + ' 分</span>（总积分 ' + fmt(it.points) + ' ÷ ' + it.hc + ' 人）';
+                    }
+                },
+                xAxis: { type: 'value', ...AXIS_STYLE },
+                yAxis: {
+                    type: 'category',
+                    data: rows.map(function (it) { return it.name; }).reverse(),
+                    ...AXIS_STYLE, splitLine: { show: false },
+                    axisLabel: { color: '#94a3b8', fontSize: 11, width: 130, overflow: 'truncate' }
+                },
+                series: [{
+                    type: 'bar', barMaxWidth: 16,
+                    data: rows.map(function (it) {
+                        const val = rankKey === 'sales' ? it.avgDelivered : it.avgPoints;
+                        return {
+                            value: val,
+                            itemStyle: {
+                                borderRadius: [0, 6, 6, 0],
+                                color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                                    { offset: 0, color: rankKey === 'sales' ? '#3b82f6' : '#f59e0b' },
+                                    { offset: 1, color: rankKey === 'sales' ? '#ec4899' : '#a78bfa' }
+                                ])
+                            }
+                        };
+                    }).reverse(),
+                    label: {
+                        show: true, position: 'right', color: '#cbd5e1', fontSize: 11,
+                        formatter: function (p) {
+                            const it = rows[rows.length - 1 - p.dataIndex];
+                            if (!it) return '';
+                            return '销量 ' + it.avgDelivered.toFixed(1) + ' · 积分 ' + it.avgPoints.toFixed(1);
+                        }
+                    }
+                }]
+            }, true);
+        }
+
+        // v4.4：排行榜维度跟随当前组织筛选节点（全国/大区/小区→门店、门店→岗位、岗位→人员、否则→人员）
+        function autoRankDim() {
+            const t = (currentNode() || {}).type;
+            if (t === '门店') return '岗位';
+            if (t === '岗位') return '人员';
+            return '门店';
+        }
+
+        // ---------- 明细数据表 ----------
+        function renderDetail() {
+            const r = currentIdx(), pr = prevRange();
+            const thead = document.getElementById('detailThead');
+            const tbody = document.getElementById('detailTbody');
+            const sub = document.getElementById('tableSubtitle');
+
+            if (state.mode === 'pk') {
+                const nodes = pkNodes();
+                if (nodes.length < 2) {
+                    sub.textContent = 'PK 模式下请先勾选 2 ~ 6 个对象';
+                    thead.innerHTML = '';
+                    tbody.innerHTML = '';
+                    return;
+                }
+                const base = pkBaseNode();
+                sub.textContent = 'PK 模式 · ' + nodes.length + ' 个' + state.pkLevel + ' · 按积分降序 · 基准：' + (base ? base.name : '-');
+                const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', '积分', '对比基准'];
+                thead.innerHTML = '<tr>' + cols.map(function (c, i) {
+                    return '<th class="py-2 px-2 font-medium whitespace-nowrap ' + (i ? 'text-right' : 'text-left') + '">' + c + '</th>';
+                }).join('') + '</tr>';
+                const baseM = base ? metricsOf(base, r[0], r[1]) : null;
+                const rows = nodes.map(function (n) { return { n: n, m: metricsOf(n, r[0], r[1]) }; })
+                    .sort(function (a, b) { return b.m.points - a.m.points; });
+                tbody.innerHTML = rows.map(function (row, i) {
+                    const m = row.m;
+                    const l2a = m.leads ? (m.arrivals / m.leads) * 100 : 0;
+                    const conv = m.leads ? (m.delivered / m.leads) * 100 : 0;
+                    let cmp = '—';
+                    if (baseM && row.n.id !== base.id) {
+                        const d = m.points - baseM.points;
+                        const dp = baseM.points ? (d / baseM.points) * 100 : 0;
+                        cmp = '<span class="' + (d >= 0 ? 'text-emerald-400' : 'text-rose-400') + '">' + fmtSigned(d, 0) + ' / ' + fmtSigned(dp, 1) + '%</span>';
+                    } else if (baseM) {
+                        cmp = '<span class="text-blue-300">★ 基准</span>';
+                    }
+                    return '<tr class="border-t border-white/5 hover:bg-white/5 transition">' +
+                        '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' +
+                        '<span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + pkColorOf(row.n) + ';margin-right:6px"></span>' +
+                        '<span' + (row.n.status === 0 ? ' class="txt-inactive"' : '') + '>' + row.n.name + '</span></td>' +
+                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.leads) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.arrivals) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.locked) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.delivered) + '</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-400">' + l2a.toFixed(1) + '%</td>' +
+                        '<td class="py-2 px-2 text-right text-slate-400">' + conv.toFixed(1) + '%</td>' +
+                        '<td class="py-2 px-2 text-right font-semibold text-amber-400">' + fmt(m.points) + '</td>' +
+                        '<td class="py-2 px-2 text-right">' + cmp + '</td></tr>';
+                }).join('');
+                return;
+            }
+
+            const node = currentNode();
+            const level = state.tableDim;
+            // v5.11：门店 / 岗位维度改用「人均积分完成率」排名（消除人数规模差异），人员维度仍为个人总积分
+            const isRateDim = level !== '人员';
+            // 口径：行子树内每位在职人员的（区间积分 ÷ 个人满分梯度 × 100%）先各自算完成率，再等权平均
+            // 实现：一次遍历在职人员并沿 parent 向上回写，避免逐行重算子树（O(人数 × 树深)）
+            const rateMap = new Map();      // node.id → { sumRate, cnt, sumPoints, sumCap }
+            if (isRateDim) {
+                collectLevel(node, '人员', []).forEach(function (p) {
+                    if (p.status === 0) return;                  // 已停用人员不计入分母
+                    const cap = productExpertFullScore(p);       // 与「达成率 × 交付量」四象限同一满分口径
+                    if (!(cap > 0)) return;
+                    const pm = metricsOf(p, r[0], r[1]);
+                    const pts = (pm && typeof pm.points === 'number' && isFinite(pm.points)) ? pm.points : 0;
+                    const rate = pts / cap * 100;
+                    let cur = p;
+                    while (cur) {
+                        let rec = rateMap.get(cur.id);
+                        if (!rec) { rec = { sumRate: 0, cnt: 0, sumPoints: 0, sumCap: 0 }; rateMap.set(cur.id, rec); }
+                        rec.sumRate += rate; rec.cnt += 1; rec.sumPoints += pts; rec.sumCap += cap;
+                        cur = cur.parent;
+                    }
+                });
+            }
+            function rateRecOf(n) {
+                const rec = rateMap.get(n.id);
+                return (rec && rec.cnt > 0 && rec.sumCap > 0) ? rec : null;
+            }
+            function avgRateOf(n) {
+                const rec = rateRecOf(n);
+                return rec ? rec.sumRate / rec.cnt : null;
+            }
+            // v4.3：行严格按当前范围收集，不再回退全树（避免范围外条目出现）
+            let rows = collectLevel(node, level, []);
+            rows = rows.slice().sort(function (a, b) {
+                if (isRateDim) {
+                    const ra = avgRateOf(a), rb = avgRateOf(b);
+                    if (ra === null && rb === null) return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points;
+                    if (ra === null) return 1;                   // 无法计算的排末位
+                    if (rb === null) return -1;
+                    if (rb !== ra) return rb - ra;
+                }
+                return metricsOf(b, r[0], r[1]).points - metricsOf(a, r[0], r[1]).points;
+            });
+            sub.textContent = level + '维度 · 范围：' + node.name + ' · ' + (isRateDim ? '按人均积分完成率降序' : '按积分降序') + ' · 共 ' + rows.length + ' 条';
+            const lastCol = isRateDim ? '人均积分完成率' : '积分';
+            const cols = ['名称', '线索', '到店', '锁单', '交车', '到店率', '转化率', lastCol];
+            const rateTip = '人均积分完成率 = 该行子树在职人员「区间积分 ÷ 个人满分梯度」百分比的等权平均（先算个人完成率再平均，非 Σ积分 ÷ Σ满分）';
+            thead.innerHTML = '<tr>' + cols.map(function (c, i) {
+                const tip = (isRateDim && i === cols.length - 1) ? ' title="' + rateTip + '"' : '';
+                return '<th class="py-2 px-2 font-medium whitespace-nowrap ' + (i ? 'text-right' : 'text-left') + '"' + tip + '>' + c + '</th>';
+            }).join('') + '</tr>';
+            tbody.innerHTML = rows.map(function (n, i) {
+                const m = metricsOf(n, r[0], r[1]) || { leads: 0, arrivals: 0, locked: 0, delivered: 0, points: 0 };
+                const l2a = m.leads ? (m.arrivals / m.leads) * 100 : 0;
+                const conv = m.leads ? (m.delivered / m.leads) * 100 : 0;
+                const nm = level === '人员' && n.storeName ? n.storeName + ' · ' + n.name + '（' + (n.postName || '') + '）' : n.name;
+                const nmHTML = '<span' + (n.status === 0 ? ' class="txt-inactive"' : '') + '>' + nm + '</span>';
+                let lastCell;
+                if (isRateDim) {
+                    const rec = rateRecOf(n);
+                    const rate = avgRateOf(n);
+                    if (rate === null) {
+                        lastCell = '<span class="text-slate-500" title="该范围无在职人员或无有效满分梯度，无法计算人均积分完成率">—</span>';
+                    } else {
+                        const avgPts = rec.sumPoints / rec.cnt;
+                        const wholeRate = rec.sumCap ? rec.sumPoints / rec.sumCap * 100 : 0;
+                        const tip = '总积分 ' + fmt(rec.sumPoints) + ' ÷ ' + rec.cnt + ' 人 = 人均 ' + avgPts.toFixed(1) + ' 分' +
+                            ' · Σ满分 ' + fmt(rec.sumCap) + ' · 整体口径完成率 ' + wholeRate.toFixed(1) + '%';
+                        lastCell = '<span class="text-amber-400 font-semibold" title="' + tip + '">' + rate.toFixed(1) + '%</span>';
+                    }
+                } else {
+                    lastCell = '<span class="text-amber-400 font-semibold">' + fmt(m.points) + '</span>';
+                }
+                return '<tr class="border-t border-white/5 hover:bg-white/5 transition">' +
+                    '<td class="py-2 px-2 text-slate-300 whitespace-nowrap"><span class="text-slate-500 mr-1">' + (i + 1) + '</span>' + nmHTML + '</td>' +
+                    '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.leads) + '</td>' +
+                    '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.arrivals) + '</td>' +
+                    '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.locked) + '</td>' +
+                    '<td class="py-2 px-2 text-right text-slate-200">' + fmt(m.delivered) + '</td>' +
+                    '<td class="py-2 px-2 text-right text-slate-400">' + l2a.toFixed(1) + '%</td>' +
+                    '<td class="py-2 px-2 text-right text-slate-400">' + conv.toFixed(1) + '%</td>' +
+                    '<td class="py-2 px-2 text-right">' + lastCell + '</td></tr>';
+            }).join('');
+        }
+
+        // ==================== PART6：业务执行与闭环看板（v4.6 · 灯塔真实积分 + 规则驱动模拟）====================
+        const STORE_PALETTE = ['#3b82f6', '#06b6d4', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#22d3ee', '#fbbf24', '#a78bfa', '#f472b6', '#34d399', '#fb923c', '#60a5fa', '#c084fc', '#f87171'];
+        function closureStoreColor(idx) { return STORE_PALETTE[idx % STORE_PALETTE.length]; }
+        const CL_REGION_PALETTE = {
+            '华东一区': '#3b82f6', '华东二区': '#06b6d4', '华东三区': '#0ea5e9', '华中一区': '#f59e0b', '华中二区': '#fbbf24',
+            '华南区': '#10b981', '华北区': '#8b5cf6', '东北区': '#22d3ee', '西北区': '#ec4899', '西南区': '#fb923c',
+            '英菲尼迪区域': '#a78bfa', '其它': '#f472b6', '待确认': '#94a3b8', '其他': '#64748b'
+        };
+        const CL_STATUS = [
+            { min: 95, label: '标杆', cls: 'st-bench' },
+            { min: 85, label: '达标', cls: 'st-good' },
+            { min: 70, label: '达标边缘', cls: 'st-edge' },
+            { min: 50, label: '需辅导', cls: 'st-tutor' },
+            { min: -1, label: '重点辅导', cls: 'st-risk' }
+        ];
+        function clStatusOf(rate) {
+            for (let i = 0; i < CL_STATUS.length; i++) if (rate >= CL_STATUS[i].min) return CL_STATUS[i];
+            return CL_STATUS[CL_STATUS.length - 1];
+        }
+        function clHash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+        function clRng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+        // ---------- 灯塔真实积分数据（lighthouse_scoring_v4.6.js）----------
+        const LH = window.LH_SCORING || null;
+        const LH_OK = !!(LH && LH.details && LH.persons && LH.persons.length);
+        const CL_DATES = LH_OK ? (LH.meta.dates || []).slice() : [];
+        const CL_REAL_POSTS = LH_OK ? (LH.meta.realPosts || []) : [];
+        const CL_MOCK_ITEMS = ['接待规范', '线索跟进', '试驾执行', 'DMS录入'];
+        const CL_MOCK_CAP = 60;                   // 模拟岗位单次渲染门店上限（避免数百条模拟人员拖慢渲染）
+        const CL_MEMO = {};                       // 规则 / 组织 / 索引 / 当前范围的轻量缓存
+        let CL_DRAW_CTX = null;                   // 抽屉上下文 {pt, rule}
+
+        // 数值展示：整数不带小数，小数保留 1 位
+        function clNum(v) { return (v === null || v === undefined) ? '—' : (v % 1 === 0 ? String(v) : v.toFixed(1)); }
+        // v4.8：拿分项短别名（仅交付店长 / 交付专员；未命中走去括号兜底）
+        const CL_ITEM_ALIAS = {
+            '抽查锁单客户交付群分配、入群、自我介绍和问题响应': '交付群运维',
+            '核查首访时效、需求登记、查单教学和增值业务邀约': '首访核查',
+            '抽检至少1位未到店用户跟进履历及群聊': '未到店抽检',
+            '更新7日交付计划并核对预约、双次提醒及当日PDI完成车辆': '7日计划',
+            '检查次日车辆、交付区、物料和手续准备': '次日备车',
+            '走动式管理接待、激活讲解、仪式和转介绍宣讲': '走动管理',
+            '核对异常台账、现场介入、客户回访及处置凭证': '异常核对',
+            '首访（分派后2H完成首访登记）': '首访',
+            '配车/转采（锁单后72H完成）': '配车/转采',
+            '物流信息提醒': '物流提醒',
+            '交付预约排程': '交付排程',
+            '车辆讲解': '车辆讲解',
+            '交付仪式': '交付仪式',
+            '企微群客户自我介绍卡及问题回答': '企微介绍'
+        };
+        function clItemAlias(nm) { return CL_ITEM_ALIAS[String(nm || '').trim()] || ''; }
+        function clShortItem(nm) {
+            const al = clItemAlias(nm);
+            if (al) return al;
+            return String(nm || '').replace(/（[^）]*）/g, '').replace(/\([^)]*\)/g, '').replace(/\s+/g, '').trim();
+        }
+        function clEvPairs(evStr) {
+            if (!evStr) return [];
+            // 灯塔 mock 格式：k=v|k=v
+            if (evStr.indexOf('|') >= 0) {
+                return evStr.split('|').map(function (seg) {
+                    const i = seg.indexOf('=');
+                    return i < 0 ? { k: '说明', v: seg } : { k: seg.slice(0, i), v: seg.slice(i + 1) };
+                });
+            }
+            // v5.6：真实导入格式 —— 前缀（未满足【规则】/已满足【规则】/不满足：/证据：）+ 中文分句，句内 k=v 或 k：v
+            const out = [];
+            let s = String(evStr);
+            const mUn = s.match(/^(未满足|已满足)【([^】]*)】/);
+            if (mUn) {
+                out.push({ k: '结论', v: mUn[1] });
+                if (mUn[2]) out.push({ k: '规则', v: mUn[2] });
+                s = s.slice(mUn[0].length);
+            } else if (/^[不未]满足[：:]/.test(s)) {
+                out.push({ k: '结论', v: s.slice(0, 3) });
+                s = s.replace(/^[不未]满足[：:]/, '');
+            }
+            s.split(/[；;]/).forEach(function (part) {
+                part.split(/[，,]/).forEach(function (seg) {
+                    seg = seg.trim().replace(/^证据[：:]/, '').replace(/[）)]$/, '').trim();
+                    if (!seg) return;
+                    const kv = seg.match(/^([^=：:]{1,14})\s*[=：:]\s*(.+)$/);
+                    out.push(kv ? { k: kv[1].trim(), v: kv[2].trim() } : { k: '说明', v: seg });
+                });
+            });
+            return out.filter(function (x) { return x.v !== ''; });
+        }
+        // v5.9：0 分行未达成判定（扣分明细 + AI 证据链徽章共用口径）—— 结论前缀优先 + 描述式反向判定：
+        // ① 「不满足/未满足」开头 → 未达成；「已满足/全满足/满分」开头 → 达成（「不满足：…其余2项满足」尾部的
+        //    「满足」不得翻转结论）；② 无结论前缀的描述式证据（如「4必讲侧0项命中」「无收尾动作」「未就五个维度
+        //    主动探索需求」，全库 9/10 有 291 行，如张涛试乘试驾 2 行 0 分）按达成词白名单反向判定，防漏进扣分明细。
+        // 顺带修正旧口径两处误判：描述式失败证据漏判 291 行；交付店长「已满足【…未逾期】」被「逾期」关键词误计未达成 239 行
+        function clZeroRowBad(evidence) {
+            const ev = String(evidence || '').trim();
+            if (!ev) return true;
+            if (/^(不满足|未满足|未达成|不达标|未达标)/.test(ev)) return true;
+            if (/^(已满足|全满足|满足|已达标|满分)/.test(ev)) return false;
+            return !/全满足|(?<![不未])满足|不扣分|(?<!未)达标|(?<![未不])通过|满分|未逾期|未超时|不判/.test(ev);
+        }
+        // v5.9c：分数明细解析器 —— 动作文本按 1-1-x 编号拆条款清单（去重保序）
+        function clParseClauses(actionText) {
+            if (!actionText) return [];
+            const out = [];
+            const seen = new Set();
+            const codeRe = /(\d-\d-\d+)/g;
+            // split 捕获：parts[0]=前导, [1]=code1, [2]=desc1, [3]=code2, [4]=desc2, ...
+            const parts = String(actionText).split(codeRe);
+            for (let i = 1; i < parts.length; i += 2) {
+                const code = parts[i];
+                if (seen.has(code)) continue;
+                seen.add(code);
+                const desc = (parts[i + 1] || '').replace(/[\s…\.。,，;；]+/g, ' ').trim();
+                out.push({ code: code, desc: desc });
+            }
+            return out;
+        }
+        // v5.9c：分数明细解析器 —— AI 证据结构化（verdict/failCodes/basis/restOk）
+        // verdict 与 clZeroRowBad 口径对齐：前缀「不满足/未达成」=fail；「全满足/满足」=pass；描述式反向判定
+        function clParseAiReason(evidenceText) {
+            const ev = String(evidenceText || '').trim();
+            if (!ev) return { verdict: 'unknown', failCodes: [], basis: '', restOk: '' };
+            // ---- verdict 判定 ----
+            let verdict = 'unknown';
+            if (/^(不满足|未满足|未达成|不达标|未达标)/.test(ev)) verdict = 'fail';
+            else if (/^(已满足|全满足|满足|已达标|满分)/.test(ev)) verdict = 'pass';
+            if (verdict === 'unknown') {
+                // 描述式反向判定：含达成词→pass，否则按 fail（与 clZeroRowBad 一致）
+                if (/全满足|(?<![不未])满足|不扣分|(?<!未)达标|(?<![未不])通过|满分|未逾期|未超时/.test(ev)) verdict = 'pass';
+                else verdict = 'fail';
+            }
+            // ---- failCodes：从「不满足：1-1-x …」提取失败编号 ----
+            const failCodes = [];
+            const failMatch = ev.match(/不满足[：:]\s*([\s\S]*?)(?=[（(;；]|其余|全满足|$)/);
+            if (failMatch && failMatch[1]) {
+                const codes = failMatch[1].match(/\d-\d-\d+/g);
+                if (codes) failCodes.push(...codes);
+            }
+            // ---- basis：括号内判定依据 ----
+            let basis = '';
+            const basisMatch = ev.match(/[（(]([^）)]+)[）)]/);
+            if (basisMatch) basis = basisMatch[1].trim();
+            // ---- restOk：「其余 N 项满足」 ----
+            let restOk = '';
+            const restMatch = ev.match(/其余\s*(\d+)\s*项满足/);
+            if (restMatch) restOk = '其余' + restMatch[1] + '项满足';
+            return { verdict: verdict, failCodes: failCodes, basis: basis, restOk: restOk };
+        }
+        // v5.6：真实导入明细行 → 扣分明细（抽屉「扣分明细」表与 dedByItem/totalDed 数据源）
+        // 口径：score<0（交付岗位负分行）或 score=0 且证据判定未达成（v5.9 起反向判定，见 clZeroRowBad）
+        function clDedsFromDetails(details) {
+            const isBad = function (r) {
+                return r.score < 0 || (r.score === 0 && clZeroRowBad(r.evidence));
+            };
+            const map = new Map();
+            details.forEach(function (r) {
+                if (!isBad(r)) return;
+                const key = r.item + '||' + r.action;
+                let d = map.get(key);
+                if (!d) { d = { item: r.item, action: r.action, count: 0, per: null, total: 0, orders: [], evidence: [] }; map.set(key, d); }
+                d.count += 1;
+                if (r.score < 0) { d.total += -r.score; if (d.per === null) d.per = -r.score; }
+                if (r.orderNo && d.orders.indexOf(r.orderNo) < 0 && d.orders.length < 5) d.orders.push(String(r.orderNo));
+                if (r.evidence && d.evidence.length < 3) d.evidence.push(r.evidence);
+            });
+            return Array.from(map.values()).map(function (d) {
+                // 单次分值：负分行用 |score|；否则从动作文本尾部解析「；0.06分」
+                if (d.per === null) {
+                    const m = String(d.action || '').match(/[；;]\s*(\d+(?:\.\d+)?)\s*分\s*$/) || String(d.action || '').match(/(\d+(?:\.\d+)?)\s*分\s*$/);
+                    if (m) d.per = Number(m[1]);
+                }
+                if (d.per !== null && d.total === 0) d.total = Math.round(d.per * d.count * 100) / 100;
+                return d;
+            }).sort(function (a, b) { return b.total - a.total || b.count - a.count; });
+        }
+
+        // ---------- 岗位积分规则（灯塔规则表；无规则表的岗位用通用动作兜底）----------
+        function clRuleFor(postKey) {
+            if (CL_MEMO['rule|' + postKey]) return CL_MEMO['rule|' + postKey];
+            const meta = POSTS_BY_KEY[postKey] || { name: postKey, color: '#94a3b8' };
+            const raw = (LH_OK && LH.postRules) ? LH.postRules[postKey] : null;
+            let rule;
+            if (raw) {
+                const items = (raw.items || []).map(function (it) {
+                    return {
+                        name: it.name,
+                        cap: (typeof it.cap === 'number' && it.cap > 0) ? it.cap : 1,
+                        per: (typeof it.per === 'number') ? it.per : 0.5,
+                        perText: typeof it.per === 'string' ? it.per : '',
+                        capWeekend: it.capWeekend, mustDo: it.mustDo || '', judge: it.judge || '',
+                        noScore: it.noScore || '', where: it.where || '', evidence: it.evidence || '',
+                        collected: (raw.collected || []).indexOf(it.name) >= 0,
+                        deprecated: !!it.deprecated, extra: it.extra || []
+                    };
+                });
+                rule = {
+                    postKey: postKey, postName: raw.postName || meta.name, sheet: raw.sheet || '',
+                    cap: raw.cap, capAvailable: raw.capAvailable || raw.cap,
+                    capDeclared: raw.capDeclared, capSum: raw.capSum,
+                    requireText: raw.requireText || '', draft: !!raw.draft,
+                    basis: raw.basis || [], rawCols: raw.cols || [], items: items,
+                    real: CL_REAL_POSTS.indexOf(postKey) >= 0
+                };
+            } else {
+                rule = {
+                    postKey: postKey, postName: meta.name, sheet: '', cap: CL_MOCK_ITEMS.length,
+                    capAvailable: CL_MOCK_ITEMS.length, capDeclared: null, capSum: CL_MOCK_ITEMS.length,
+                    requireText: '', draft: true, basis: [], rawCols: [],
+                    items: CL_MOCK_ITEMS.map(function (n) {
+                        return { name: n, cap: 1, per: 0.5, perText: '', capWeekend: null, mustDo: '', judge: '', noScore: '', where: '', evidence: '', collected: false, deprecated: false, extra: [] };
+                    }),
+                    real: false
+                };
+            }
+            rule.scoreItems = rule.items.filter(function (it) { return rule.real ? it.collected : !it.deprecated; });
+            if (!rule.scoreItems.length) rule.scoreItems = rule.items.slice(0, 4);
+            rule.color = meta.color || '#94a3b8';
+            rule.sourceText = rule.real ? '灯塔真实评分数据' : (rule.draft ? '规则草案 · 模拟数据' : '规则驱动模拟数据');
+            CL_MEMO['rule|' + postKey] = rule;
+            return rule;
+        }
+
+        // ---------- 组织：真实专营店 → 大区 / 小区 ----------
+        function clOrgIndex() {
+            if (CL_MEMO.org) return CL_MEMO.org;
+            const stores = [], regionMap = new Map(), byCode = {};
+            if (LH_OK) {
+                LH.stores.forEach(function (s, i) {
+                    const st = { idx: i, id: s.code, code: s.code, name: s.name, city: s.city, province: s.province, region: s.region, area: s.area };
+                    stores.push(st); byCode[s.code] = st;
+                    if (!regionMap.has(s.region)) regionMap.set(s.region, new Map());
+                    const am = regionMap.get(s.region);
+                    if (!am.has(s.area)) am.set(s.area, []);
+                    am.get(s.area).push(i);
+                });
+            }
+            const order = ['华东一区', '华东二区', '华东三区', '华中一区', '华中二区', '华南区', '华北区', '东北区', '西北区', '西南区', '英菲尼迪区域', '其它', '待确认', '其他'];
+            const regions = Array.from(regionMap.keys()).sort(function (a, b) { return order.indexOf(a) - order.indexOf(b); }).map(function (rn) {
+                const am = regionMap.get(rn);
+                let cnt = 0; am.forEach(function (a) { cnt += a.length; });
+                return {
+                    name: rn, count: cnt,
+                    areas: Array.from(am.keys()).sort().map(function (an) { return { name: an, stores: am.get(an), count: am.get(an).length }; })
+                };
+            });
+            CL_MEMO.org = { stores: stores, regions: regions, byCode: byCode, allCodes: stores.map(function (s) { return s.code; }) };
+            return CL_MEMO.org;
+        }
+
+        // ---------- v4.8：闭环日报单日游标（与顶栏日期区间彻底解耦）----------
+        // 闭环日期由独立日报翻阅器（state.clDate）决定；游标非法时回落到数据文件最后一份
+        function clViewDate() {
+            if (!CL_DATES.length) return '';
+            return CL_DATES.indexOf(state.clDate) >= 0 ? state.clDate : CL_DATES[CL_DATES.length - 1];
+        }
+        // 闭环口径的生效日期 = 当前选定日报的单日（结果缓存 key 也随之单日化）
+        function clAllowedDates() { const d = clViewDate(); return d ? [d] : []; }
+        function clEffectiveDates() { return clAllowedDates(); }
+        // v4.14：按任意日期集合建明细索引（原 clDataIndex 逻辑参数化，闭环默认走单日游标不变）
+        function clDataIndexFor(dates) {
+            const key = dates.join(',') || '__none__';
+            if (CL_MEMO['idx|' + key]) return CL_MEMO['idx|' + key];
+            const dset = new Set(dates);
+            const idx = { dates: dates, byPost: {}, persons: [], rows: [], pid: {} };
+            CL_MEMO['idx|' + key] = idx;
+            if (!LH_OK) return idx;
+            LH.persons.forEach(function (p, i) {
+                idx.persons.push({
+                    code: p[0], name: p[1], post: p[2], storeIdx: p[3],
+                    items: {}, score: 0, delivered: (LH.sales && LH.sales[i]) || 0, deductions: [], dedRows: []
+                });
+                (idx.byPost[p[2]] = idx.byPost[p[2]] || []).push(i);
+                idx.rows.push([]);
+            });
+            const dc = LH.details.cols, dRows = LH.details.rows;
+            const cPerson = dc.indexOf('person'), cDate = dc.indexOf('date'), cItem = dc.indexOf('item'),
+                cAct = dc.indexOf('action'), cScore = dc.indexOf('score'), cEv = dc.indexOf('ev'), cOrder = dc.indexOf('order');
+            dRows.forEach(function (r, ri) {
+                if (!dset.has(LH.meta.dates[r[cDate]])) return;
+                idx.rows[r[cPerson]].push(ri);
+            });
+            const sc = LH.sums.cols, sRows = LH.sums.rows;
+            const sPerson = sc.indexOf('person'), sDate = sc.indexOf('date'), sItem = sc.indexOf('item'),
+                sCount = sc.indexOf('count'), sScore = sc.indexOf('score');
+            sRows.forEach(function (r) {
+                if (!dset.has(LH.meta.dates[r[sDate]])) return;
+                const p = idx.persons[r[sPerson]]; if (!p) return;
+                const nm = LH.dict.items[r[sItem]]; if (!nm) return;
+                const o = p.items[nm] || (p.items[nm] = { score: 0, count: 0, hasSum: false });
+                if (r[sScore] !== null) { o.score += r[sScore]; o.hasSum = true; }
+                if (r[sCount] !== null) o.count += r[sCount];
+            });
+            const dict = LH.dict;
+            idx.persons.forEach(function (p, pi) {
+                const dmap = new Map();
+                idx.rows[pi].forEach(function (ri) {
+                    const r = dRows[ri];
+                    const nm = dict.items[r[cItem]] || '';
+                    const o = p.items[nm];
+                    if (!o || !o.hasSum) {
+                        const oo = o || (p.items[nm] = { score: 0, count: 0, hasSum: false, noSum: true });
+                        oo.score += r[cScore];
+                    }
+                    const pk = pi + '|' + nm;
+                    (idx.pid[pk] = idx.pid[pk] || []).push(ri);
+                    if (r[cScore] >= 0) return;
+                    const act = dict.actions[r[cAct]] || '';
+                    const gk = nm + '||' + act;
+                    let d = dmap.get(gk);
+                    if (!d) { d = { item: nm, action: act, per: 0, count: 0, total: 0, evidence: [], orders: [] }; dmap.set(gk, d); }
+                    d.count += 1; d.total += -r[cScore]; d.per = Math.max(d.per, -r[cScore]);
+                    if (r[cEv]) d.evidence.push(r[cEv]);
+                    if (r[cOrder] >= 0) { const oc = dict.orders[r[cOrder]]; if (d.orders.indexOf(oc) < 0) d.orders.push(oc); }
+                    p.dedRows.push({ ri: ri, order: r[cOrder] >= 0 ? dict.orders[r[cOrder]] : '', ev: r[cEv], act: act, item: nm, score: r[cScore] });
+                });
+                p.score = 0;
+                for (const k in p.items) p.score += (p.items[k].score || 0);
+                p.deductions = Array.from(dmap.values()).sort(function (a, b) { return b.total - a.total; });
+            });
+            return idx;
+        }
+        // 闭环原入口：日期来源 = 日报游标单日（行为不变）
+        function clDataIndex() { return clDataIndexFor(clEffectiveDates()); }
+
+        // ---------- 筛选范围：大区 / 小区 / 门店多选 ----------
+        function closureScopeStores() {
+            const org = clOrgIndex();
+            const reg = state.closure.region, area = state.closure.area;
+            return org.stores.filter(function (s) {
+                if (reg && s.region !== reg) return false;
+                if (area && s.area !== area) return false;
+                return true;
+            });
+        }
+        // 门店多选（v4.7 层级筛选语义）：null = 未单独勾选（当前大区/小区范围内全部门店生效，胶囊不点亮），数组 = 显式勾选（[] = 显式清空）
+        function clScopeSelect() {
+            const scope = closureScopeStores();
+            const ok = new Set(scope.map(function (s) { return s.code; }));
+            if (state.closure.storeCodes !== null) {
+                state.closure.storeCodes = state.closure.storeCodes.filter(function (c) { return ok.has(c); });
+            }
+            const codes = state.closure.storeCodes;
+            return { scope: scope, scopeCodes: scope.map(function (s) { return s.code; }), sel: codes, selSet: codes ? new Set(codes) : null };
+        }
+        function clSelectedStoreIdx(sc) { return sc.sel === null ? sc.scope.map(function (s) { return s.idx; }) : sc.scope.filter(function (s) { return sc.selSet.has(s.code); }).map(function (s) { return s.idx; }); }
+
+        // ---------- 人员得分点（真实 / 模拟共用结构）----------
+        function clTagOf(deds) {
+            if (!deds.length) return { text: '动作全达标', warn: false };
+            const top = deds[0], nm = clShortItem(top.item);
+            return { text: (nm.length > 10 ? nm.slice(0, 10) + '…' : nm) + ' · 扣' + top.count + '单', warn: true };
+        }
+        function clMakePoint(rule, items, src) {
+            const dims = [], ratios = [], counts = [];
+            items.forEach(function (it) {
+                const sm = src.itemOf(it.name);
+                if (!sm) { dims.push(null); ratios.push(null); counts.push(null); return; }
+                const v = sm.score || 0;
+                dims.push(Math.round(v * 100) / 100);
+                ratios.push(it.cap ? Math.max(0, Math.min(100, v / it.cap * 100)) : 0);
+                counts.push(sm.count === undefined ? null : sm.count);
+            });
+            const points = dims.reduce(function (s, v) { return s + (v || 0); }, 0);
+            const capAvail = rule.capAvailable || rule.cap || 1;
+            // 评估覆盖：只统计该员工当日确有评估数据的拿分项（无数据项不计入分母，避免"没单=0分"的失真）
+            let capCover = 0, coverCnt = 0;
+            items.forEach(function (it, i) { if (dims[i] !== null) { capCover += it.cap; coverCnt++; } });
+            // rate = 已评估口径达成率（主口径，用于状态分级）；rateFull = 严格满分口径
+            const rate = capCover ? Math.max(0, Math.min(100, points / capCover * 100)) : 0;
+            const rateFull = capAvail ? Math.max(0, Math.min(100, points / capAvail * 100)) : 0;
+            const st = clStatusOf(rate);
+            let wi = -1, wv = 1000;
+            ratios.forEach(function (v, i) { if (v !== null && v < wv) { wv = v; wi = i; } });
+            const deds = src.deductions || [];
+            const dedCount = deds.reduce(function (s, d) { return s + d.count; }, 0);
+            const dedTotal = deds.reduce(function (s, d) { return s + d.total; }, 0);
+            return {
+                key: src.real ? 'p' + src.idx : 'm' + src.code,
+                idx: src.real ? src.idx : -1,
+                name: src.name, code: src.code, postKey: rule.postKey, postName: rule.postName,
+                storeIdx: src.store.idx, storeId: src.store.code, storeCode: src.store.code, storeName: src.store.name,
+                region: src.store.region, area: src.store.area, real: !!src.real,
+                dims: dims, ratios: ratios, counts: counts,
+                points: Math.round(points * 100) / 100, cap: rule.cap, capAvailable: capAvail,
+                capCover: Math.round(capCover * 100) / 100, coverCnt: coverCnt, coverTotal: items.length,
+                rate: Math.round(rate * 10) / 10, rateFull: Math.round(rateFull * 10) / 10,
+                status: st.label, statusCls: st.cls,
+                weakestIdx: wi < 0 ? 0 : wi, weakestName: wi < 0 ? '—' : items[wi].name,
+                weakestRate: wi < 0 ? 0 : Math.round(wv),
+                deductions: deds, dedCount: dedCount, dedTotal: Math.round(dedTotal * 100) / 100,
+                dedRows: src.dedRows || [], empCode: src.code || '',
+                delivered: src.delivered || 0, tag: clTagOf(deds),
+                noData: dims.every(function (v) { return v === null; })
+            };
+        }
+        function clRealPoints(rule, storeIdx, sc) {
+            const idx = clDataIndex();
+            const items = rule.scoreItems;
+            const out = [];
+            (idx.byPost[rule.postKey] || []).forEach(function (pi) {
+                const p = idx.persons[pi];
+                const store = LH.stores[p.storeIdx];
+                if (sc.selSet && !sc.selSet.has(store.code)) return;
+                out.push(clMakePoint(rule, items, {
+                    idx: pi, name: p.name, code: p.code, store: store, real: true,
+                    itemOf: function (nm) { return p.items[nm]; },
+                    deductions: p.deductions, dedRows: p.dedRows, delivered: p.delivered
+                }));
+            });
+            return out;
+        }
+        // 模拟岗位：按规则表的拿分项与封顶，为选中的每家专营店生成 1 名模拟人员（确定性随机）
+        function clMockPoints(rule, storeIdx, sc) {
+            const org = clOrgIndex();
+            const items = rule.scoreItems;
+            const span = clViewDate() || 'nodate';   // v4.8：模拟岗位数据按闭环日报日期生成（翻页即换一份日报数据）
+            const used = [];
+            const out = [];
+            storeIdx.forEach(function (si) {
+                const store = org.stores[si];
+                if (!store) return;
+                const rnd = clRng('mock|' + rule.postKey + '|' + store.code + '|' + span);
+                const name = personName(rnd, used);
+                const quality = 0.42 + rnd() * 0.58;
+                const itemOf = {}, deds = [];
+                items.forEach(function (it) {
+                    const cap = it.cap || 1;
+                    const step = cap <= 1 ? 0.5 : Math.round(cap / 4 * 100) / 100;
+                    let v = quality * cap * (0.62 + rnd() * 0.5);
+                    v = Math.round(Math.min(cap, Math.max(0, v)) / step) * step;
+                    v = Math.round(v * 100) / 100;
+                    itemOf[it.name] = { score: v, count: Math.max(1, Math.round((cap <= 1 ? (v > 0 ? 1 : 0) : v) + rnd() * 3)), hasSum: true };
+                    if (v < cap - 1e-6) {
+                        const cnt = 1 + Math.floor(rnd() * 2);
+                        const reason = String(it.noScore || it.judge || '未达到该项拿分条件').replace(/\s+/g, ' ').slice(0, 56);
+                        deds.push({
+                            item: it.name, action: it.name, per: it.per || 0.5, count: cnt,
+                            total: Math.round((it.per || 0.5) * cnt * 100) / 100, mock: true,
+                            evidence: ['判定=未满足|原因=' + reason + '|样本=' + cnt + '单'], orders: []
+                        });
+                    }
+                });
+                deds.sort(function (a, b) { return b.total - a.total; });
+                out.push(clMakePoint(rule, items, {
+                    idx: -1, name: name, code: 'M' + store.code, store: store, real: false,
+                    itemOf: function (nm) { return itemOf[nm]; },
+                    deductions: deds, dedRows: [], delivered: 1 + Math.floor(rnd() * 12)
+                }));
+            });
+            return out;
+        }
+        // 当前岗位 + 组织范围下的人员得分点（按当日积分降序）
+        function closureComputePoints() {
+            const rule = clRuleFor(state.closure.postKey);
+            const sc = clScopeSelect();
+            const storeIdx = clSelectedStoreIdx(sc);
+            const mockCapped = !rule.real && storeIdx.length > CL_MOCK_CAP;
+            const list = rule.real
+                ? clRealPoints(rule, storeIdx, sc)
+                : clMockPoints(rule, storeIdx.slice(0, CL_MOCK_CAP), sc);
+            list.sort(function (a, b) { return b.points - a.points || b.delivered - a.delivered; });
+            CL_MEMO.range = { rule: rule, scope: sc.scope, scopeCodes: sc.scopeCodes, sel: sc.sel, storeIdx: storeIdx, mockCapped: mockCapped };
+            return list;
+        }
+        // ---------- v4.5：闭环图表公共样式（深色主题） ----------
+        function clDisposeChart(key) {
+            if (extCharts[key]) { try { extCharts[key].dispose(); } catch (_) {} delete extCharts[key]; }
+        }
+        function clChartAxis() {
+            return {
+                axisLine: { lineStyle: { color: 'rgba(148,163,184,0.25)' } },
+                axisTick: { show: false },
+                axisLabel: { color: '#94a3b8', fontSize: 11 },
+                splitLine: { lineStyle: { color: 'rgba(148,163,184,0.08)' } }
+            };
+        }
+        function clChartTooltip() {
+            return {
+                backgroundColor: 'rgba(11,18,32,0.95)', borderColor: 'rgba(148,163,184,0.2)',
+                textStyle: { color: '#e2e8f0', fontSize: 12 },
+                extraCssText: 'box-shadow:0 8px 24px rgba(0,0,0,0.6);'
+            };
+        }
+        // v4.6：人员 × 拿分项 得分热力图（单元格值 = 该拿分项达成率 %，标签 = 实际得分）
+        function clRenderHeat(points, rule) {
+            const el = document.getElementById('clHeat'); if (!el) return;
+            clDisposeChart('clHeat');
+            const items = rule.scoreItems;
+            const rows = points.length;
+            el.style.height = Math.min(560, Math.max(260, rows * 32 + 100)) + 'px';
+            const heat = echarts.init(el); extCharts.clHeat = heat;
+            const data = [];
+            const colAvg = items.map(function (_, c) {
+                let s = 0, n = 0;
+                points.forEach(function (p) { const v = p.ratios[c]; if (v !== null && v !== undefined) { s += v; n++; } });
+                return n ? Math.round(s / n) : 0;
+            });
+            points.forEach(function (p, r) {
+                items.forEach(function (it, c) {
+                    const rt = p.ratios[c];
+                    if (rt === null || rt === undefined) return;
+                    data.push([c, r, rt, p.dims[c], p.counts[c], it.cap]);
+                });
+            });
+            heat.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        const p = points[it.value[1]];
+                        if (!p || it.value[2] === null) return '';
+                        const cap = it.value[5], cnt = it.value[4];
+                        return '<div style="font-weight:700">' + p.name + ' · ' + p.storeName + '</div>' +
+                            '<div style="margin-top:4px;max-width:300px;white-space:normal;color:#cbd5e1">' + items[it.value[0]].name + '</div>' +
+                            '<div style="margin-top:4px">当日得分 <b style="color:#60a5fa">' + clNum(it.value[3]) + '</b> / ' + clNum(cap) +
+                            ' <span style="opacity:.7">（达成 ' + Math.round(it.value[2]) + '%）</span></div>' +
+                            (cnt === null || cnt === undefined ? '' : '<div style="opacity:.75;font-size:11px">完成单数 ' + cnt + '</div>') +
+                            '<div style="opacity:.65;font-size:11px;margin-top:3px">当日积分 ' + clNum(p.points) + ' / ' + clNum(p.capAvailable) +
+                            ' · 该列均值 ' + colAvg[it.value[0]] + '%</div>';
+                    }
+                }),
+                grid: { left: 92, right: rows > 18 ? 40 : 14, top: 10, bottom: 48 },
+                xAxis: {
+                    type: 'category', data: items.map(function (it) { return clShortItem(it.name); }),
+                    axisLabel: { color: '#e2e8f0', fontSize: 13, fontWeight: 600, margin: 10, interval: 0, rotate: 0, formatter: function (v) { return v.length > 9 ? v.slice(0, 9) + '…' : v; } },
+                    axisLine: { show: false }, axisTick: { show: false }
+                },
+                yAxis: {
+                    type: 'category', data: points.map(function (p) { return p.name; }), inverse: true,
+                    axisLabel: { color: '#e2e8f0', fontSize: 13, fontWeight: 600, margin: 10, formatter: function (v) { return v.length > 6 ? v.slice(0, 6) + '…' : v; } },
+                    axisLine: { show: false }, axisTick: { show: false }
+                },
+                visualMap: {
+                    dimension: 2, // v4.7 修复：显式映射"达成率"维（默认取最后一维=该项满分，导致全图偏红）
+                    min: 0, max: 100, calculable: true, orient: 'horizontal', left: 'center', bottom: -2,
+                    itemWidth: 12, itemHeight: 120, text: ['达成 100%', '0%'], textStyle: { color: '#cbd5e1', fontSize: 12 },
+                    inRange: { color: ['#881337', '#b45309', '#f59e0b', '#65a30d', '#059669', '#2563eb'] }
+                },
+                dataZoom: rows > 18 ? [{ type: 'slider', yAxisIndex: 0, startValue: 0, endValue: 15, right: 2, width: 12, brushSelect: false, textStyle: { color: '#64748b', fontSize: 9 } }] : [],
+                series: [{
+                    type: 'heatmap',
+                    data: data,
+                    label: { show: true, fontSize: 12, color: '#fff', textBorderColor: 'rgba(0,0,0,0.45)', textBorderWidth: 2, formatter: function (it) { return clNum(it.value[3]); } },
+                    itemStyle: { borderColor: 'rgba(11,18,32,0.85)', borderWidth: 2, borderRadius: 3 },
+                    emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.4)' } }
+                }]
+            }, true);
+            heat.on('click', function (p) { if (p.value && points[p.value[1]]) clOpenDrawer(p.value[1]); });
+            try { heat.resize(); } catch (_) {}
+            requestAnimationFrame(function () { try { heat.resize(); } catch (_) {} });
+        }
+        // v4.6：当日积分 × 销量四象限（门店 ≤ 8 家按门店着色，否则单系列）
+        function clRenderQuad(points, rule) {
+            const el = document.getElementById('clQuad'); if (!el) return;
+            clDisposeChart('clQuad');
+            el.style.height = '380px';
+            const xs = points.map(function (p) { return p.points; });
+            const ys = points.map(function (p) { return p.delivered || 0; });
+            const avgX = xs.reduce(function (s, v) { return s + v; }, 0) / xs.length;
+            const avgY = ys.reduce(function (s, v) { return s + v; }, 0) / ys.length;
+            const xMax = Math.max(rule.capAvailable || rule.cap || 1, Math.max.apply(null, xs)) * 1.05;
+            const xMin = 0;
+            const yMaxV = Math.max.apply(null, ys);
+            const yMax = yMaxV > 0 ? yMaxV * 1.15 + 0.5 : 1;
+            const yMin = 0;
+            const storeMap = new Map();
+            points.forEach(function (p, i) {
+                if (!storeMap.has(p.storeCode)) storeMap.set(p.storeCode, { name: p.storeName, idxs: [] });
+                storeMap.get(p.storeCode).idxs.push(i);
+            });
+            const groups = Array.from(storeMap.values()).sort(function (a, b) { return b.idxs.length - a.idxs.length; });
+            function mkSeries(name, color, idxs) {
+                return {
+                    name: name, type: 'scatter', symbolSize: 15,
+                    itemStyle: { color: color, opacity: 0.85, borderColor: 'rgba(255,255,255,0.65)', borderWidth: 1.5, shadowBlur: 8, shadowColor: scaleColor(color, 0.4) },
+                    emphasis: { focus: 'self', scale: 1.35 },
+                    data: idxs.map(function (i) {
+                        return { name: points[i].name, value: [Math.round(xs[i] * 100) / 100, ys[i]], _idx: i };
+                    })
+                };
+            }
+            const quad = echarts.init(el); extCharts.clQuad = quad;
+            const byStore = groups.length > 1 && groups.length <= 8;
+            const series = byStore
+                ? groups.map(function (g, gi) { return mkSeries(g.name, closureStoreColor(gi), g.idxs); })
+                : [mkSeries('全部人员', rule.color || '#3b82f6', points.map(function (_, i) { return i; }))];
+            series[0].markLine = {
+                silent: true, symbol: 'none', animation: false,
+                data: [
+                    { xAxis: avgX, label: { formatter: '积分均值 ' + avgX.toFixed(1), color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } },
+                    { yAxis: avgY, label: { formatter: '销量均值 ' + avgY.toFixed(1), color: '#fbbf24', fontSize: 10, position: 'insideEndTop' }, lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.2 } }
+                ]
+            };
+            series[0].markArea = {
+                silent: true,
+                data: [
+                    [{ xAxis: avgX, yAxis: avgY, itemStyle: { color: 'rgba(16,185,129,0.1)' }, label: { show: true, position: 'insideTopRight', color: '#34d399', fontSize: 12, fontWeight: 700, formatter: '标杆 · 高积分高销量' } }, { xAxis: xMax, yAxis: yMax }],
+                    [{ xAxis: xMin, yAxis: yMin, itemStyle: { color: 'rgba(244,63,94,0.1)' }, label: { show: true, position: 'insideBottomLeft', color: '#fb7185', fontSize: 12, fontWeight: 700, formatter: '待辅导 · 低积分低销量' } }, { xAxis: avgX, yAxis: avgY }],
+                    [{ xAxis: xMin, yAxis: avgY, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideTopLeft', color: '#94a3b8', fontSize: 11, formatter: '高积分低销量 · 流程找卡点' } }, { xAxis: avgX, yAxis: yMax }],
+                    [{ xAxis: avgX, yAxis: yMin, itemStyle: { color: 'transparent' }, label: { show: true, position: 'insideBottomRight', color: '#94a3b8', fontSize: 11, formatter: '低积分高销量 · 动作待复制' } }, { xAxis: xMax, yAxis: avgY }]
+                ]
+            };
+            quad.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        const p = points[it.data._idx];
+                        if (!p) return '';
+                        const top = p.deductions[0];
+                        return '<div style="font-weight:700;margin-bottom:4px">' + p.name + '</div>' +
+                            '<div style="opacity:.7;font-size:11px">' + p.storeName + ' · ' + rule.postName + '</div>' +
+                            '<div style="margin-top:6px">当日积分：<b>' + clNum(p.points) + '</b> / ' + clNum(p.capAvailable) + ' 分</div>' +
+                            '<div>满分达成率：<b>' + p.rate + '%</b></div>' +
+                            '<div>销量：<b>' + fmt(it.value[1]) + '</b> 台</div>' +
+                            '<div style="opacity:.7;font-size:11px;margin-top:4px">扣分单数 ' + p.dedCount +
+                            (top ? ' · 主要 ' + clShortItem(top.item) : '') + '</div>' +
+                            '<div style="color:#60a5fa;font-size:11px;margin-top:2px">点击查看证据链 →</div>';
+                    }
+                }),
+                grid: { left: 48, right: 20, top: 30, bottom: 44 },
+                xAxis: Object.assign({ type: 'value', name: '当日积分', nameLocation: 'middle', nameGap: 26, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: xMin, max: xMax }, clChartAxis()),
+                yAxis: Object.assign({ type: 'value', name: '销量（台）', nameLocation: 'middle', nameGap: 36, nameTextStyle: { color: '#94a3b8', fontSize: 11 }, min: yMin, max: yMax }, clChartAxis()),
+                series: series
+            }, true);
+            quad.on('click', function (p) { if (p.data && p.data._idx !== undefined) clOpenDrawer(p.data._idx); });
+            try { quad.resize(); } catch (_) {}
+            requestAnimationFrame(function () { try { quad.resize(); } catch (_) {} });
+            return byStore ? groups.map(function (g, gi) { return { name: g.name, color: closureStoreColor(gi) }; }) : [];
+        }
+        // v4.6：人员动作积分诊断抽屉（拿分项构成 / 扣分明细 / AI 证据链时间线）
+        function clOpenDrawer(idx) {
+            const ctx = CL_DRAW_CTX; if (!ctx) return;
+            const d = document.getElementById('clDrawer'); if (!d) return;
+            const p = ctx.points[idx], rule = ctx.rule;
+            if (!p) return;
+            // v5.9 修复③：拿分项清单与逐日表口径对齐 —— 真实导入行优先用 drillRealPoint 合并后的清单
+            // （静态规则 + 导入自动补项，如产品专家导入的「到店接待」不在静态规则表内，旧代码致构成表漏行、
+            // 表内合计 ≠ 头部当日积分、已评估 N/M 项 的第 M 项无处可看）；无合并清单时回退静态规则表。
+            // dims/stds/ratios/counts 均按同一索引生成，故构成表、雷达图、扣分分布三者天然对齐
+            const items = (p.itemNames && p.itemNames.length) ? p.itemNames.map(function (nm, i) {
+                return { name: nm, cap: (p.itemCaps && p.itemCaps[i]) || 1 };
+            }) : rule.scoreItems;
+            // ---- 证据链条目：真实数据用明细行，模拟数据用扣分项证据 ----
+            const tl = [];
+            if (p.dedRows && p.dedRows.length) {
+                p.dedRows.forEach(function (r) {
+                    tl.push({ order: r.order || '', item: r.item, act: r.act, ev: r.ev || '', score: r.score });
+                });
+            } else {
+                (p.deductions || []).forEach(function (dd) {
+                    (dd.evidence || []).forEach(function (e) {
+                        tl.push({ order: (dd.orders || [])[0] || '', item: dd.item, act: dd.action, ev: e, score: -dd.per });
+                    });
+                });
+            }
+            // v5.7：AI 证据链按「拿分项+动作」分组折叠 —— 导入明细是「一订单一条判定记录」（如非首访 23 个订单=23 条），
+            // 平铺几十条过长且易误读为重复导入；组头显示判定数与达成/未达成计数，组内明细默认收起、点击展开
+            const evSrcText = (p.dedRows && p.dedRows.length) ? '评分导入文件（AI 分析原因）' : '灯塔系统判定日志';
+            const evIsBad = function (e) {
+                if (Number(e.score) > 0) return false;   // v5.7：得分行（如 0.1 分）直接判达成，不看证据关键词
+                // v5.9：0 分行改反向判定（与扣分明细 clDedsFromDetails 共用 clZeroRowBad）——描述式失败证据（0项命中/无收尾动作等）不再漏判
+                return clZeroRowBad(e.ev);
+            };
+            const tlGroups = [];
+            const tlGroupMap = new Map();
+            tl.forEach(function (e) {
+                const gk = e.item + '|' + e.act;
+                let g = tlGroupMap.get(gk);
+                if (!g) { g = { item: e.item, act: e.act, list: [] }; tlGroupMap.set(gk, g); tlGroups.push(g); }
+                g.list.push(e);
+            });
+            // ---- 各拿分项扣分单数 ----
+            const dedByItem = {};
+            (p.deductions || []).forEach(function (dd) { dedByItem[dd.item] = (dedByItem[dd.item] || 0) + dd.count; });
+            const totalDed = (p.deductions || []).reduce(function (s, x) { return s + x.total; }, 0);
+            // v5.7：累计扣分为 0 时显示「累计 0 分」，不再出现「累计 -0 分」
+            const dedTotalTxt = (totalDed > 0) ? ('-' + clNum(totalDed)) : '0';
+            const srcCls = p.real ? 'real' : 'mock';
+            // v5.7：真实导入行（sourceKind=import）来源徽章改「动作评分导入数据」，不再误标灯塔日报
+            const srcText = (p.sourceKind === 'import') ? '动作评分导入数据' : (p.real ? '灯塔真实评分数据' : (rule.real ? '模拟数据' : '规则驱动模拟数据'));
+            const itemRows = items.map(function (it, i) {
+                const sc = p.dims[i], rt = p.ratios[i], cnt = p.counts[i], dn = dedByItem[it.name] || 0;
+                const barC = rt === null ? '#475569' : (rt >= 95 ? '#10b981' : rt >= 85 ? '#3b82f6' : rt >= 70 ? '#fbbf24' : rt >= 50 ? '#fb923c' : '#fb7185');
+                return '<tr class="border-b border-slate-700/30">' +
+                    '<td class="py-2 px-2" style="color:#e2e8f0;font-weight:600">' + it.name + '</td>' +
+                    '<td class="py-2 px-2 text-right font-semibold" style="color:' + barC + '">' + (sc === null ? '—' : clNum(sc)) + '</td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#94a3b8">' + clNum((p.stds && p.stds[i] != null) ? p.stds[i] : it.cap) + '</td>' +
+                    '<td class="py-2 px-2" style="min-width:110px"><div class="flex items-center gap-2"><div class="cl-bar" style="flex:1"><i style="width:' + (rt === null ? 0 : Math.min(100, Math.max(2, Math.round(rt)))) + '%;background:' + barC + '"></i></div><span style="font-size:11px;color:#94a3b8">' + (rt === null ? '—' : Math.round(rt) + '%') + '</span></div></td>' +
+                    '<td class="py-2 px-2 text-right" style="color:#cbd5e1">' + (cnt === null || cnt === undefined ? '—' : cnt) + '</td>' +
+                    '<td class="py-2 px-2 text-right" style="color:' + (dn ? '#fb923c' : '#64748b') + '">' + dn + '</td>' +
+                    '</tr>';
+            }).join('');
+            // v5.9c：分数明细（按「拿分项+动作」分卡片）—— 默认仅展示未达成；达成组折叠可查
+            const sdGroups = tlGroups.map(function (g) {
+                let badCnt = 0;
+                g.list.forEach(function (e) { if (evIsBad(e)) badCnt++; });
+                const okCnt = g.list.length - badCnt;
+                const ded = (p.deductions || []).find(function (d) { return d.item === g.item && d.action === g.act; });
+                const sampleBad = g.list.find(function (e) { return evIsBad(e); });
+                const sampleEv = sampleBad ? sampleBad.ev : (g.list[0] ? g.list[0].ev : '');
+                return {
+                    group: g, failCount: badCnt, okCount: okCnt,
+                    clauses: clParseClauses(g.act), ai: clParseAiReason(sampleEv),
+                    deduction: ded, sampleEv: sampleEv, isBad: badCnt > 0
+                };
+            });
+            const sdBad = sdGroups.filter(function (r) { return r.isBad; });
+            const sdGood = sdGroups.filter(function (r) { return !r.isBad; });
+            const sdGoodTotal = sdGood.reduce(function (s, r) { return s + r.group.list.length; }, 0);
+            // ---- 单张分数明细卡片（共用渲染：isBad 控制配色） ----
+            const renderScoreCard = function (rec) {
+                const g = rec.group, ded = rec.deduction, ai = rec.ai, isBad = rec.isBad;
+                const borderColor = isBad ? 'rgba(251,113,133,0.45)' : 'rgba(52,211,153,0.35)';
+                const headerBg = isBad ? 'rgba(251,113,133,0.08)' : 'rgba(52,211,153,0.06)';
+                // 条款清单 OR 整段回退（至少 2 条编号才展开清单，避免单条噪音）
+                let bodyHtml;
+                if (rec.clauses.length >= 2) {
+                    const rows = rec.clauses.map(function (c) {
+                        const mark = (ai.failCodes.length > 0) ? (ai.failCodes.indexOf(c.code) >= 0) : (ai.verdict === 'fail');
+                        return '<tr><td style="padding:3px 6px;color:' + (mark ? '#fb7185' : '#34d399') + ';font-weight:700;width:22px">' + (mark ? '✗' : '✓') + '</td>' +
+                            '<td style="padding:3px 6px;color:#e2e8f0;font-weight:600;width:62px">' + c.code + '</td>' +
+                            '<td style="padding:3px 6px;color:#cbd5e1">' + (c.desc || '—') + '</td></tr>';
+                    }).join('');
+                    bodyHtml = '<div style="padding:10px 12px">' +
+                        '<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">动作要求</div>' +
+                        '<table class="w-full text-xs">' + rows + '</table></div>';
+                } else {
+                    bodyHtml = '<div style="padding:10px 12px">' +
+                        '<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">动作要求</div>' +
+                        '<div style="background:rgba(71,85,105,0.18);padding:8px 10px;border-radius:6px;color:#cbd5e1;font-size:12px;line-height:1.6">' + clShortItem(g.act) + '</div></div>';
+                }
+                // AI 判定行（结构化：结论/失败条款/依据/其余满足）
+                const verdictTag = ai.verdict === 'fail' ? '<span class="cl-tag" style="background:rgba(251,113,133,0.18);color:#fb7185;font-weight:600">未满足</span>' :
+                    ai.verdict === 'pass' ? '<span class="cl-tag" style="background:rgba(52,211,153,0.18);color:#34d399;font-weight:600">满足</span>' :
+                    '<span class="cl-tag" style="color:#94a3b8">未判定</span>';
+                const aiHtml = '<div style="padding:8px 12px;border-top:1px dashed rgba(71,85,105,0.4);font-size:12px">' +
+                    '<span style="color:#94a3b8;margin-right:6px;font-size:11px">AI 判定：</span>' + verdictTag +
+                    (ai.failCodes.length ? '<span style="margin-left:6px;color:#fb7185">失败条款 ' + ai.failCodes.join(' / ') + '</span>' : '') +
+                    (ai.basis ? '<span style="margin-left:6px;color:#94a3b8">依据「' + ai.basis + '」</span>' : '') +
+                    (ai.restOk ? '<span style="margin-left:6px;color:#34d399">' + ai.restOk + '</span>' : '') +
+                    '</div>';
+                // 头部徽章条
+                const headHtml = '<div class="flex items-center gap-2 flex-wrap" style="padding:8px 12px;background:' + headerBg + ';border-bottom:1px solid ' + borderColor + '">' +
+                    '<span class="cl-tag" style="background:rgba(' + (isBad ? '251,113,133' : '52,211,153') + ',0.18);color:' + (isBad ? '#fb7185' : '#34d399') + ';font-weight:600">' + g.item + '</span>' +
+                    '<span style="color:#e2e8f0;font-size:13px;font-weight:600" title="' + String(g.act || '').replace(/"/g, '&quot;') + '">' + clShortItem(g.act) + '</span>' +
+                    '<span style="flex:1"></span>' +
+                    '<span style="font-size:11px;color:#94a3b8">' + g.list.length + ' 条判定</span>' +
+                    (rec.failCount ? '<span style="font-size:11px;color:#fb7185;font-weight:600">未达成 ' + rec.failCount + '</span>' : '') +
+                    (rec.okCount ? '<span style="font-size:11px;color:#34d399;font-weight:600">达成 ' + rec.okCount + '</span>' : '') +
+                    (ded && Math.abs(ded.total) > 0 ? '<span style="font-size:11px;font-weight:700;color:#fb923c;background:rgba(245,158,11,0.15);padding:2px 6px;border-radius:4px">扣 ' + clNum(Math.abs(ded.total)) + ' 分</span>' : '') +
+                    '</div>';
+                // 底部：汇总 + 折叠每订单判定
+                const evList = g.list.slice(0, 40).map(function (e, i) {
+                    const pairs = clEvPairs(e.ev);
+                    const bad = evIsBad(e);
+                    return '<div style="padding:3px 0;border-bottom:1px dashed rgba(71,85,105,0.25)">' +
+                        '<div class="flex items-center gap-2 flex-wrap"><span style="font-size:11px;font-weight:600;color:#e2e8f0">' + (e.order ? '订单 ' + e.order : '记录 ' + (i + 1)) + '</span>' +
+                        (e.score < 0 ? '<span style="font-size:10px;color:#fb923c;font-weight:600">扣 ' + clNum(-e.score) + ' 分</span>' : (e.score > 0 ? '<span style="font-size:10px;color:#34d399;font-weight:600">得 ' + clNum(e.score) + ' 分</span>' : '')) + '</div>' +
+                        (pairs.length ? '<div style="margin-top:1px">' + pairs.map(function (kv) {
+                            return '<span class="cl-ev-kv"><b>' + kv.k + '</b>' + kv.v + '</span>';
+                        }).join('') + '</div>' : '') +
+                        '</div>';
+                }).join('') + (g.list.length > 40 ? '<div style="color:#64748b;font-size:10px;padding-top:4px">… 其余 ' + (g.list.length - 40) + ' 条略</div>' : '');
+                const footerHtml = '<div style="padding:8px 12px;background:rgba(15,23,42,0.4);font-size:11px;color:#94a3b8;display:flex;gap:12px;flex-wrap:wrap;align-items:center;border-top:1px solid rgba(71,85,105,0.3)">' +
+                    (ded ? '<span>单数 <b style="color:#e2e8f0">' + ded.count + '</b></span>' +
+                        '<span>单次 <b style="color:#e2e8f0">' + (ded.per === null || ded.per === undefined ? '—' : clNum(ded.per)) + '</b></span>' +
+                        '<span>累计 <b style="color:#fb923c">' + clNum(ded.total) + '</b></span>' +
+                        '<span>关联 <b style="color:#e2e8f0">' + ded.orders.length + '</b> 单</span>' :
+                        '<span>关联 <b style="color:#e2e8f0">' + g.list.length + '</b> 条判定</span>') +
+                    '<span style="flex:1"></span>' +
+                    '<details><summary style="cursor:pointer;color:#2563eb;font-size:11px;list-style:none">▸ 展开 ' + g.list.length + ' 条判定</summary>' +
+                    '<div style="margin-top:6px;padding:6px;background:rgba(15,23,42,0.6);border-radius:4px">' + evList + '</div>' +
+                    '</details></div>';
+                return '<div style="border:1px solid ' + borderColor + ';border-radius:8px;margin-bottom:8px;overflow:hidden">' +
+                    headHtml + bodyHtml + aiHtml + footerHtml + '</div>';
+            };
+            // ---- 装配分数明细 HTML ----
+            const sdTitle = '<div class="cl-chart-title mb-2">分数明细 <span style="font-weight:400;color:#94a3b8">（共 ' + tlGroups.length + ' 组 · ' + sdBad.length + ' 组未达成 · 累计 ' + dedTotalTxt + ' 分；默认仅展示未达成，点击「展开达成判定」可查全达标）</span></div>';
+            const sdBadHtml = sdBad.map(renderScoreCard).join('');
+            let sdTailHtml;
+            if (sdBad.length === 0 && sdGood.length > 0) {
+                // 全达标场景：空态 + 折叠展开
+                sdTailHtml = '<div style="padding:14px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.3);border-radius:8px;text-align:center">' +
+                    '<div style="font-size:14px;color:#34d399;font-weight:600;margin-bottom:6px">✓ 当日无扣分记录 · 动作全达标</div>' +
+                    '<details><summary style="cursor:pointer;font-size:12px;color:#2563eb;list-style:none">▸ 展开 ' + sdGoodTotal + ' 条达成判定</summary>' +
+                    '<div style="margin-top:8px;text-align:left">' + sdGood.map(renderScoreCard).join('') + '</div>' +
+                    '</details></div>';
+            } else if (sdGood.length > 0) {
+                // 部分达成：折叠达成组
+                sdTailHtml = '<details style="margin-top:4px"><summary style="cursor:pointer;font-size:12px;color:#2563eb;list-style:none;padding:8px;background:rgba(37,99,235,0.08);border-radius:6px">▸ 展开 ' + sdGoodTotal + ' 条达成判定</summary>' +
+                    '<div style="margin-top:8px">' + sdGood.map(renderScoreCard).join('') + '</div>' +
+                    '</details>';
+            } else {
+                sdTailHtml = '';
+            }
+            const scoreDetailHtml = tlGroups.length ? (sdTitle + sdBadHtml + sdTailHtml) : '<div class="text-xs py-4" style="color:#64748b">当日无判定记录</div>';
+            document.getElementById('clDrawerBody').innerHTML =
+                '<div class="p-6 space-y-5">' +
+                    '<div class="flex items-start justify-between gap-3 flex-wrap">' +
+                        '<div class="flex items-center gap-3 flex-wrap">' +
+                            '<div style="font-size:20px;font-weight:800;color:#f8fafc">' + p.name + ' <span style="font-size:12px;font-weight:500;color:#94a3b8">· ' + rule.postName + ' · 动作积分诊断</span></div>' +
+                            '<span class="cl-status ' + p.statusCls + '">' + p.status + '</span>' +
+                            '<span class="cl-tag' + (p.dedCount ? ' warn' : '') + '">' + p.tag.text + '</span>' +
+                            '<span class="cl-src ' + srcCls + '">' + srcText + '</span>' +
+                        '</div>' +
+                        '<button data-cl-close class="w-8 h-8 rounded-full hover:bg-white/10 flex items-center justify-center" style="color:#94a3b8;font-size:14px">✕</button>' +
+                    '</div>' +
+                    '<div class="flex gap-4 flex-wrap">' +
+                        '<div class="cl-kpi" style="--kpi-c:' + rule.color + ';flex:1;min-width:150px"><div class="k-label">当日积分</div><div class="k-value">' + clNum(p.points) + ' <small>/ ' + clNum(p.capAvailable) + '</small></div><div class="k-sub">' + (rule.capAvailable !== rule.cap ? '规则满分 ' + clNum(rule.cap) + ' · 当日可得分项已接入' : '岗位规则满分') + '</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#10b981;flex:1;min-width:150px"><div class="k-label">满分达成率</div><div class="k-value">' + p.rate + ' <small>%</small></div><div class="k-sub">最弱拿分项 ' + clShortItem(p.weakestName) + '（' + p.weakestRate + '%）</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#f59e0b;flex:1;min-width:150px"><div class="k-label">扣分单数 / 累计扣分</div><div class="k-value">' + p.dedCount + ' <small>单</small></div><div class="k-sub">累计 ' + dedTotalTxt + ' 分</div></div>' +
+                        '<div class="cl-kpi" style="--kpi-c:#2563eb;flex:1;min-width:150px"><div class="k-label">销量 / 交付</div><div class="k-value">' + fmt(p.delivered || 0) + ' <small>台</small></div><div class="k-sub">' + p.storeName + (p.empCode ? ' · 工号 ' + p.empCode : '') + '</div></div>' +
+                    '</div>' +
+                    '<div class="grid grid-cols-1 md:grid-cols-2 gap-5">' +
+                        '<div><div class="cl-chart-title">拿分项得分 <span style="font-weight:400;color:#94a3b8">（虚线为团队均值，每个轴按该拿分项封顶）</span></div><div id="clRadar" style="height:280px"></div></div>' +
+                        '<div><div class="cl-chart-title">扣分单数分布 <span style="font-weight:400;color:#94a3b8">（按拿分项）</span></div><div id="clWeek" style="height:280px"></div></div>' +
+                    '</div>' +
+                    '<div>' +
+                        '<div class="cl-chart-title mb-2">拿分项得分构成 <span style="font-weight:400;color:#94a3b8">（当日积分 ' + clNum(p.points) + ' / ' + clNum(p.capAvailable) + ' 分 · 已评估 ' + p.coverCnt + '/' + p.coverTotal + ' 项 · 动作达成 ' + p.rate + '% · 严格口径 ' + p.rateFull + '%）</span></div>' +
+                        '<table class="cl-table w-full text-sm"><thead class="text-xs"><tr>' +
+                        '<th class="py-2 px-2 text-left font-medium">拿分项</th><th class="py-2 px-2 text-right font-medium">当日得分</th><th class="py-2 px-2 text-right font-medium">标准分</th><th class="py-2 px-2 text-left font-medium">达成率</th><th class="py-2 px-2 text-right font-medium">完成单数</th><th class="py-2 px-2 text-right font-medium">扣分单数</th>' +
+                        '</tr></thead><tbody>' + itemRows + '</tbody></table>' +
+                    '</div>' +
+                    '<div>' + scoreDetailHtml + '</div>' +
+                '</div>';
+            d.classList.remove('hidden');
+            // ---- 拿分项雷达（个人 vs 团队均值，各轴上限 = 拿分项标准分，缺省回退封顶） ----
+            clDisposeChart('clRadar');
+            const rd = echarts.init(document.getElementById('clRadar'));
+            extCharts.clRadar = rd;
+            const axisMaxOf = function (i) { return (p.stds && p.stds[i] != null && p.stds[i] > 0) ? p.stds[i] : (items[i] ? items[i].cap : 1); };
+            rd.setOption({
+                animation: false,
+                legend: { bottom: 0, itemWidth: 14, textStyle: { color: '#94a3b8', fontSize: 11 } },
+                tooltip: Object.assign(clChartTooltip(), {
+                    formatter: function (it) {
+                        if (!it.name && !it.seriesName) return '';
+                        return '<div style="font-weight:700">' + it.seriesName + '</div>' +
+                            it.name + '：<b>' + clNum(it.value) + '</b> / ' + clNum(axisMaxOf(it.dataIndex));
+                    }
+                }),
+                radar: {
+                    indicator: items.map(function (it, i) { return { name: clShortItem(it.name), max: axisMaxOf(i) }; }),
+                    radius: '58%', center: ['50%', '46%'],
+                    axisName: { color: '#94a3b8', fontSize: 10 },
+                    splitArea: { areaStyle: { color: ['rgba(148,163,184,0.07)', 'rgba(148,163,184,0.02)'] } },
+                    splitLine: { lineStyle: { color: 'rgba(148,163,184,0.18)' } },
+                    axisLine: { lineStyle: { color: 'rgba(148,163,184,0.2)' } }
+                },
+                series: [{
+                    type: 'radar',
+                    data: [
+                        { name: '个人得分', value: p.dims.map(function (v) { return v === null ? null : v; }), itemStyle: { color: '#2563eb' }, lineStyle: { color: '#2563eb', width: 2 }, areaStyle: { color: 'rgba(37,99,235,0.18)' } },
+                        { name: '团队均值', value: ctx.teamScores, itemStyle: { color: '#f59e0b' }, lineStyle: { color: '#f59e0b', width: 1.5, type: 'dashed' }, areaStyle: { color: 'rgba(245,158,11,0.06)' } }
+                    ]
+                }]
+            }, true);
+            // ---- 扣分单数分布（按拿分项） ----
+            clDisposeChart('clWeek');
+            const wk = echarts.init(document.getElementById('clWeek'));
+            extCharts.clWeek = wk;
+            wk.setOption({
+                animation: false,
+                tooltip: Object.assign(clChartTooltip(), { formatter: function (it) { return it.name + '：<b>' + Number(it.value) + '</b> 单扣分'; } }),
+                grid: { left: 46, right: 16, top: 24, bottom: 58 },
+                xAxis: Object.assign({
+                    type: 'category', data: items.map(function (it) { return clShortItem(it.name); }),
+                    axisLabel: { color: '#94a3b8', fontSize: 10, interval: 0, rotate: 26, formatter: function (v) { return v.length > 8 ? v.slice(0, 8) + '…' : v; } }
+                }, clChartAxis()),
+                yAxis: Object.assign({ type: 'value', minInterval: 1 }, clChartAxis()),
+                series: [{
+                    type: 'bar', barWidth: 22,
+                    data: items.map(function (it) { return dedByItem[it.name] || 0; }),
+                    itemStyle: { color: '#f59e0b', borderRadius: [4, 4, 0, 0] },
+                    label: { show: true, position: 'top', color: '#94a3b8', fontSize: 10 }
+                }]
+            }, true);
+        }
+        function clCloseDrawer() {
+            const d = document.getElementById('clDrawer');
+            if (d) d.classList.add('hidden');
+            clDisposeChart('clRadar'); clDisposeChart('clWeek');
+        }
+
+        function renderClosure() {
+            if (DATA_MODE === 'api') {
+                apiLoading(true);
+                preloadForRender().then(function (ok) { apiLoading(false); if (ok) renderClosureSync(); });
+                return;
+            }
+            renderClosureSync();
+        }
+        function renderClosureSync() {
+            const $bc = document.getElementById('boardClosure');
+            if (!$bc) return;
+            const postKey = state.closure.postKey;
+            const rule = clRuleFor(postKey);
+            const post = POSTS_BY_KEY[postKey] || { name: rule.postName, color: rule.color };
+            const sc = clScopeSelect();
+            const points = closureComputePoints();
+            const personCount = points.length;
+            const items = rule.scoreItems;
+            const allItems = rule.items;
+            // v4.8：闭环一律按日报游标取单日，不再受顶栏日期区间影响
+            const viewDates = clAllowedDates();
+            const topHits = viewDates;
+            const storeCount = new Set(points.map(function (p) { return p.storeCode; })).size;
+
+            // ---- 摘要 KPI（当日积分口径）----
+            const sumPts = points.reduce(function (s, x) { return s + x.points; }, 0);
+            const avgPts = personCount ? sumPts / personCount : 0;
+            const avgRate = personCount ? points.reduce(function (s, x) { return s + x.rate; }, 0) / personCount : 0;
+            const avgRateFull = personCount ? points.reduce(function (s, x) { return s + x.rateFull; }, 0) / personCount : 0;
+            const avgCover = personCount ? points.reduce(function (s, x) { return s + x.coverCnt; }, 0) / personCount : 0;
+            const zeroDed = points.filter(function (p) { return p.dedCount === 0; }).length;
+            const dedOrders = points.reduce(function (s, p) { return s + p.dedCount; }, 0);
+            const benchCnt = points.filter(function (p) { return p.rate >= 95; }).length;
+            const riskCnt = points.filter(function (p) { return p.rate < 70; }).length;
+            // 各拿分项团队达成率（列均值），用于定位最弱拿分项
+            const itemAvg = items.map(function (it, i) {
+                let s = 0, n = 0;
+                points.forEach(function (p) { const v = p.ratios[i]; if (v !== null && v !== undefined) { s += v; n++; } });
+                return n ? Math.round(s / n * 10) / 10 : 0;
+            });
+            let weakI = -1, weakV = 1e9;
+            itemAvg.forEach(function (v, i) { if (v < weakV) { weakV = v; weakI = i; } });
+            const kpis = [
+                { label: '在岗人数', value: fmt(personCount) + ' <span class="text-slate-400 text-sm">人</span>', sub: '覆盖 ' + storeCount + ' 家专营店', color: post.color },
+                { label: '人均当日积分', value: clNum(Math.round(avgPts * 10) / 10) + ' <span class="text-slate-400 text-sm">分</span>', sub: '满分 ' + clNum(rule.capAvailable) + ' 分/人' + (rule.capAvailable !== rule.cap ? '（规则 ' + clNum(rule.cap) + '）' : ''), color: '#a78bfa' },
+                { label: '满分达成率', value: avgRate.toFixed(1) + '%', sub: '标杆（≥95%）' + benchCnt + ' 人', color: '#3b82f6' },
+                { label: '零扣分占比', value: (personCount ? (zeroDed / personCount * 100) : 0).toFixed(1) + '%', sub: zeroDed + ' / ' + personCount + ' 人动作全达标', color: '#10b981' },
+                { label: '扣分单数', value: fmt(dedOrders) + ' <span class="text-slate-400 text-sm">单</span>', sub: '人均 ' + (personCount ? (dedOrders / personCount).toFixed(1) : '0.0') + ' 单', color: '#f59e0b' },
+                { label: '最弱拿分项', value: '<span style="font-size:16px">' + (weakI < 0 ? '—' : clShortItem(items[weakI].name)) + '</span>', sub: weakI < 0 ? '—' : '团队达成率 ' + weakV.toFixed(1) + '%', color: '#fb7185' }
+            ];
+            const kpiHtml = '<div class="closure-grid-6">' + kpis.map(function (k) {
+                return '<div class="closure-cell" style="--cell-color:' + k.color + '">' +
+                    '<div class="cc-label">' + k.label + '</div>' +
+                    '<div class="cc-value">' + k.value + '</div>' +
+                    '<div class="cc-delta" style="color:#94a3b8">' + k.sub + '</div>' +
+                    '</div>';
+            }).join('') + '</div>';
+
+            // ---- 动作分 4 卡（规则满分 / 达成分布 / 采集接入度）----
+            const collectedCnt = allItems.filter(function (it) { return it.collected; }).length;
+            const scoreKpis = [
+                { label: '团队动作达成率', val: avgRate.toFixed(1), unit: '%', sub: '已评估拿分项口径 · 严格满分口径 ' + avgRateFull.toFixed(1) + '%', c: '#2563eb' },
+                { label: '标杆人数（≥95%）', val: String(benchCnt), unit: '人', sub: personCount ? '占比 ' + Math.round(benchCnt / personCount * 100) + '%' : '—', c: '#10b981' },
+                { label: '待辅导人数（<70%）', val: String(riskCnt), unit: '人', sub: personCount ? '占比 ' + Math.round(riskCnt / personCount * 100) + '%' : '—', c: '#f43f5e' },
+                { label: '已接入拿分项', val: collectedCnt + ' / ' + allItems.length, unit: '项', sub: rule.real ? '当日可得分上限 ' + clNum(rule.capAvailable) + ' 分' : '规则驱动模拟数据', c: '#06b6d4' }
+            ];
+            const actKpiHtml = '<div class="cl-grid-4">' + scoreKpis.map(function (k) {
+                return '<div class="cl-kpi" style="--kpi-c:' + k.c + '">' +
+                    '<div class="k-label">' + k.label + '</div>' +
+                    '<div class="k-value">' + k.val + ' <small>' + k.unit + '</small></div>' +
+                    '<div class="k-sub">' + k.sub + '</div>' +
+                    '</div>';
+            }).join('') + '</div>';
+
+            // ---- 岗位 chip（含数据来源与规则项数标识）----
+            const postChipsHtml = '<div class="flex flex-wrap gap-2">' + POSTS.map(function (p) {
+                const on = p.key === state.closure.postKey;
+                const isReal = CL_REAL_POSTS.indexOf(p.key) >= 0;
+                const rawRule = (LH_OK && LH.postRules) ? LH.postRules[p.key] : null;
+                const itemCnt = rawRule ? (rawRule.items || []).length : CL_MOCK_ITEMS.length;
+                return '<span class="post-chip' + (on ? ' on' : '') + '" data-post="' + p.key + '" ' +
+                    'style="--chip-color:' + p.color + ';--chip-color-12:' + scaleColor(p.color, 0.16) + ';--chip-color-30:' + scaleColor(p.color, 0.3) + ';--chip-color-50:' + scaleColor(p.color, 0.5) + '">' +
+                    '<span class="pc-dot"></span>' + p.name +
+                    '<span class="cl-src ' + (isReal ? 'real' : 'mock') + '" style="margin-left:6px">' + (isReal ? '真实' : '模拟') + '</span>' +
+                    '<span style="font-size:10px;opacity:.6;margin-left:4px">' + itemCnt + '项</span>' +
+                    '</span>';
+            }).join('') + '</div>';
+
+            // ---- 组织筛选：大区 → 小区 → 门店（真实专营店 · 搜索式多选）----
+            const org = clOrgIndex();
+            const regions = org.regions;
+            const curRegion = state.closure.region ? regions.filter(function (r) { return r.name === state.closure.region; })[0] : null;
+            const areas = curRegion ? curRegion.areas : [];
+            const scopeStores = sc.scope;
+
+            const regionChipHtml = '<div class="flex flex-wrap gap-2">' +
+                '<button class="cl-chip-pick' + (!state.closure.region ? ' on' : '') + '" data-closure-region="">全国<span class="cl-chip-cnt">' + org.stores.length + '</span></button>' +
+                regions.map(function (rg) {
+                    return '<button class="cl-chip-pick' + (state.closure.region === rg.name ? ' on' : '') + '" data-closure-region="' + rg.name + '">' + rg.name + '<span class="cl-chip-cnt">' + rg.count + '</span></button>';
+                }).join('') + '</div>';
+
+            const areaChipHtml = !curRegion ? '' :
+                '<div class="mt-2"><div class="text-[11px] text-slate-500 mb-1.5">小区（选填，可进一步收窄）</div>' +
+                '<div class="flex flex-wrap gap-2">' +
+                '<button class="cl-chip-pick' + (!state.closure.area ? ' on' : '') + '" data-closure-area="">全部小区<span class="cl-chip-cnt">' + curRegion.count + '</span></button>' +
+                areas.map(function (ar) {
+                    return '<button class="cl-chip-pick' + (state.closure.area === ar.name ? ' on' : '') + '" data-closure-area="' + ar.name + '">' + ar.name + '<span class="cl-chip-cnt">' + ar.count + '</span></button>';
+                }).join('') + '</div></div>';
+
+            // 门店：搜索过滤 + 多选；范围过大时仅渲染前 N 家，避免一次生成数百 DOM
+            const STORE_SHOW_LIMIT = 60;
+            const q = (state.closure.storeSearch || '').trim();
+            const matched = q ? scopeStores.filter(function (s) { return s.name.indexOf(q) >= 0 || String(s.code).indexOf(q) >= 0; }) : scopeStores;
+            const shown = matched.slice(0, q ? 120 : STORE_SHOW_LIMIT);
+            const explicit = sc.sel !== null; // 是否存在显式门店勾选（false = 范围内全部生效）
+            const selStores = explicit ? scopeStores.filter(function (s) { return sc.selSet.has(s.code); }) : [];
+            const storeChipHtml = '<div class="store-chip-row">' + shown.map(function (s, idx) {
+                const on = explicit && sc.selSet.has(s.code);
+                const c = on ? closureStoreColor(idx % 8) : '#475569';
+                return '<span class="pk-opt' + (on ? ' on' : '') + '" data-store="' + s.code + '" title="' + s.name + ' · ' + s.region + ' / ' + s.area + '">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + c + ';margin-right:6px"></span>' + s.name + '</span>';
+            }).join('') + (!scopeStores.length ? '<span class="text-xs text-slate-500">该范围下暂无专营店</span>'
+                : (q && !matched.length ? '<span class="text-xs" style="color:#fbbf24">未找到匹配「' + q + '」的门店，试试其他关键词或更换大区 / 小区</span>' : '')) + '</div>';
+            const storeMoreHint = (matched.length > shown.length)
+                ? '<div class="text-[11px] mb-1.5" style="color:#fbbf24">匹配 ' + matched.length + ' 家，仅展示前 ' + shown.length + ' 家 · 请用搜索或收窄大区 / 小区</div>'
+                : '';
+            const storeActionHtml =
+                '<button class="quick-btn' + (state.closure.storeMulti ? ' active' : '') + '" data-store-action="multi">' + (state.closure.storeMulti ? '☑ 多选（已开启）' : '☐ 多选') + '</button>' +
+                '<button class="quick-btn" data-store-action="all">全部生效</button>' +
+                '<button class="quick-btn" data-store-action="clear">清空</button>';
+            const storeHint = explicit
+                ? '已选 <strong class="text-slate-200">' + selStores.length + '</strong> / ' + scopeStores.length + ' 家 · 点击门店勾选 / 取消'
+                : '未单独勾选门店 · 当前范围 <strong class="text-slate-200">' + scopeStores.length + '</strong> 家全部生效 · 点击门店可单独勾选';
+
+            const storeScopeHtml =
+                '<div><div class="text-xs text-slate-400 mb-2">大区（按专营店主数据表「销售大区」归属，v4.17）</div>' + regionChipHtml + '</div>' +
+                areaChipHtml +
+                '<div class="mt-2">' +
+                    '<div class="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] items-center gap-2 mb-2">' +
+                        '<div class="flex items-center gap-2 text-xs text-slate-400 whitespace-nowrap">门店<span class="text-[11px] text-slate-500">当前范围 ' + scopeStores.length + ' 家</span>' +
+                            '<input id="clStoreSearch" class="cl-search" type="text" placeholder="搜索门店名 / 编码（按回车或点搜索）" value="' + (q || '') + '" autocomplete="off">' +
+                            '<button class="quick-btn" data-store-action="search-apply">搜索</button>' +
+                            '<button class="quick-btn" data-store-action="search-clear">清除</button>' +
+                            '</div>' +
+                        '<div class="flex items-center gap-2 flex-wrap justify-self-center">' + storeActionHtml + '</div>' +
+                        '<span class="text-xs text-slate-400 justify-self-end text-right">' + storeHint + '</span>' +
+                    '</div>' +
+                    storeMoreHint + storeChipHtml +
+                '</div>';
+
+            // v4.8：日期相关提示已移除（闭环日期由日报翻阅器决定，不再出现「不重叠 / 单日降级」说明，也不展示环比口径）
+            const dateHint =
+                (!CL_DATES.length
+                    ? '<div class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24">未加载到灯塔评分数据文件（lighthouse_scoring_v4.6.js），当前展示的是规则驱动模拟数据。</div>'
+                    : '')
+                + ((CL_MEMO.range && CL_MEMO.range.mockCapped)
+                    ? '<div class="mt-3 text-xs px-3 py-2 rounded-lg" style="background:rgba(148,163,184,0.1);border:1px solid rgba(148,163,184,0.25);color:#94a3b8">模拟岗位渲染上限：当前范围 ' + CL_MEMO.range.storeIdx.length + ' 家专营店，仅展示前 ' + CL_MOCK_CAP + ' 家（模拟数据）。收窄大区 / 小区或切换「真实」岗位可查看全量。</div>'
+                    : '');
+            const ctxHtml = '<span class="closure-context">日报日期 <strong>' + (clViewDate() || '无') + '</strong> · 岗位 <strong>' + rule.postName + '</strong>' +
+                ' · 门店 <strong>' + (explicit ? selStores.length : scopeStores.length) + '</strong> 家 · 在岗 <strong>' + personCount + '</strong> 人</span>';
+
+            // ---- v4.8：独立日报翻阅器（◀ 日期 ▾ ▶）----
+            const pagerIdx = Math.max(0, CL_DATES.indexOf(clViewDate()));
+            const pagerHtml = CL_DATES.length ? (
+                '<div class="cl-daily-pager">' +
+                    '<span class="cl-dp-title">积分日报</span>' +
+                    '<button class="quick-btn cl-dp-nav" data-cl-pager="prev"' + (pagerIdx <= 0 ? ' disabled' : '') + ' title="上一份日报">◀ 上一份</button>' +
+                    '<select id="clDateSelect" title="选择日报日期">' +
+                        CL_DATES.map(function (d) { return '<option value="' + d + '"' + (d === clViewDate() ? ' selected' : '') + '>' + d + '</option>'; }).join('') +
+                    '</select>' +
+                    '<button class="quick-btn cl-dp-nav" data-cl-pager="next"' + (pagerIdx >= CL_DATES.length - 1 ? ' disabled' : '') + ' title="下一份日报">下一份 ▶</button>' +
+                    '<span class="cl-dp-meta">第 ' + (pagerIdx + 1) + ' / ' + CL_DATES.length + ' 份 · 数据源：' + (LH_OK ? '灯塔评分明细' : '规则驱动模拟') + '</span>' +
+                    '<span class="cl-dp-meta" style="margin-left:auto">闭环按此处选定的单日日报取数，与顶栏区间无关</span>' +
+                '</div>'
+            ) : '';
+
+            $bc.innerHTML = '<section class="space-y-6">' +
+                // 筛选（层级范围）
+                '<div class="panel p-5 space-y-4">' +
+                    '<div class="flex items-center justify-between gap-3 flex-wrap">' +
+                        '<div>' +
+                            '<div class="panel-title"><span class="dot"></span>岗位 × 门店 筛选</div>' +
+                            '<div class="panel-subtitle">单岗位 × 多门店 · 先选范围，再在下方固定栏选择岗位</div>' +
+                        '</div>' + ctxHtml +
+                    '</div>' +
+                    '<div>' + storeScopeHtml + '</div>' +
+                '</div>' +
+                // 岗位固定栏（滚动吸顶）
+                '<div class="cl-post-sticky">' +
+                    '<div class="flex items-center gap-3 flex-wrap">' +
+                        '<span class="text-xs font-bold whitespace-nowrap" style="color:#94a3b8">岗位（单选）</span>' +
+                        postChipsHtml +
+                        '<span class="text-[11px] ml-auto whitespace-nowrap" style="color:#94a3b8">↓ 滚动时本栏固定 · 「真实」= 灯塔评分明细 · 「模拟」= 规则驱动演示数据</span>' +
+                    '</div>' +
+                '</div>' +
+                // 业务 KPI
+                '<div>' + kpiHtml + '</div>' +
+                dateHint +
+                // 动作积分：4 卡 + 热力图 + 四象限
+                '<div class="panel p-6">' +
+                    '<div class="flex items-start justify-between mb-3 flex-wrap gap-3">' +
+                        '<div>' +
+                            '<div class="panel-title"><span class="dot"></span>' + rule.postName + ' · 动作积分与规则达成</div>' +
+                            '<div class="panel-subtitle">满分 ' + clNum(rule.capAvailable) + ' 分 · 按 ' + items.length + ' 个已接入拿分项计分（' + rule.sourceText + '）· 点击热力图 / 散点 / 明细行可查看个人证据链</div>' +
+                        '</div>' +
+                        '<div class="text-xs text-slate-400">共 ' + personCount + ' 人 · 数据日期 ' + (viewDates.join('、') || '无') + '</div>' +
+                    '</div>' +
+                    // v4.8：积分日报翻阅器 —— 与「动作积分与规则达成」绑定展示（切日报即换本节数据）
+                    pagerHtml +
+                    actKpiHtml +
+                    (personCount ?
+                        '<div class="grid grid-cols-1 gap-6 mt-5">' +
+                            '<div>' +
+                                '<div class="cl-chart-title">人员 × 拿分项 得分热力图</div>' +
+                                '<div class="cl-chart-sub">颜色 = 达成率（越低越红）· 标签 = 当日得分 · 某行整体偏红 = 个体问题 · 某列整体偏红 = 流程 / 培训问题</div>' +
+                                '<div id="clHeat" class="mt-2"></div>' +
+                            '</div>' +
+                            '<div>' +
+                                '<div class="cl-chart-title">当日积分 × 销量四象限</div>' +
+                                '<div class="cl-chart-sub">横坐标 = 当日积分 · 纵坐标 = 销量（配套数据）· 虚线 = 各自平均值 · 右上标杆 / 左下待辅导</div>' +
+                                '<div id="clQuad" class="mt-2"></div>' +
+                                '<div class="scatter-legend" id="closureLegend"></div>' +
+                            '</div>' +
+                        '</div>'
+                        : '<div class="closure-empty"><div class="ce-icon">○</div><div>' + (viewDates.length ? '所选岗位在这些门店暂无在岗人员' : '当前日报日期无可用评分数据') + '</div><div class="text-xs text-slate-500">' + (viewDates.length ? '试试切换其他岗位，或调整门店范围' : '请确认已加载 lighthouse_scoring_v4.6.js 数据文件') + '</div></div>'
+                    ) +
+                '</div>' +
+                // 人员积分排名与证据链
+                '<div class="panel p-6">' +
+                    '<div class="flex items-center justify-between mb-1 flex-wrap gap-3">' +
+                        '<div>' +
+                            '<div class="panel-title"><span class="dot"></span>人员积分排名与证据链</div>' +
+                            '<div class="panel-subtitle">按当日积分降序 · 积分 = 各拿分项得分之和（满分 ' + clNum(rule.capAvailable) + ' 分）· 点击任意行查看扣分明细与 AI 证据链</div>' +
+                        '</div>' +
+                        '<div class="text-xs text-slate-400">共 ' + personCount + ' 人</div>' +
+                    '</div>' +
+                    '<div class="mt-4 max-h-[520px] overflow-auto">' +
+                    (personCount ?
+                        '<table class="cl-table w-full text-sm"><thead class="text-xs sticky top-0">' +
+                        '<tr>' +
+                        '<th class="py-2 px-2 text-left font-medium">名次</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">姓名 / 专营店 · 岗位</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">当日积分</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">满分</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">达成率</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">扣分单数</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">最弱拿分项</th>' +
+                        '<th class="py-2 px-2 text-left font-medium">主要扣分项</th>' +
+                        '<th class="py-2 px-2 text-center font-medium">状态</th>' +
+                        '<th class="py-2 px-2 text-right font-medium">明细</th>' +
+                        '</tr></thead>' +
+                        '<tbody id="closureTbody"></tbody></table>'
+                        : '<div class="text-center text-slate-500 py-8">所选条件下无人员</div>'
+                    ) + '</div>' +
+                '</div>' +
+                // 岗位动作规则视图（灯塔规则主数据）
+                renderRuleView(rule, items) +
+            '</section>';
+
+            // 抽屉上下文（团队均值与拿分项一一对应）
+            CL_DRAW_CTX = {
+                points: points, rule: rule, dates: viewDates,
+                teamScores: items.map(function (it, i) {
+                    return itemAvg[i] ? Math.round(itemAvg[i] / 100 * it.cap * 100) / 100 : 0;
+                })
+            };
+            // 岗位吸顶栏偏移 = 顶栏实际高度（避免硬编码错位）
+            (function () {
+                const bar = $bc.querySelector('.cl-post-sticky');
+                const tb = document.querySelector('.topbar');
+                if (bar && tb) bar.style.top = tb.offsetHeight + 'px';
+            })();
+
+            // ---- 表格行（按当日积分降序）----
+            const $tb = document.getElementById('closureTbody');
+            if ($tb && points.length) {
+                $tb.innerHTML = points.map(function (x, pi) {
+                    let badgeCls = 'normal', badgeText = String(pi + 1);
+                    if (pi === 0) { badgeCls = 'gold'; }
+                    else if (pi === 1) { badgeCls = 'silver'; }
+                    else if (pi === 2) { badgeCls = 'bronze'; }
+                    const mainItem = x.deductions.length
+                        ? clShortItem(x.deductions[0].item) + (x.deductions.length > 1 ? ' <span style="color:#94a3b8">+' + (x.deductions.length - 1) + '</span>' : '')
+                        : '<span style="color:#94a3b8">—</span>';
+                    const scoreC = x.rate >= 95 ? '#34d399' : (x.rate >= 85 ? '#60a5fa' : (x.rate >= 70 ? '#fbbf24' : '#fb7185'));
+                    return '<tr data-person-detail="' + pi + '">' +
+                        '<td class="py-2 px-2"><span class="closure-rank-badge ' + badgeCls + '">' + badgeText + '</span></td>' +
+                        '<td class="py-2 px-2">' +
+                            '<div class="font-medium text-slate-100">' + x.name + '</div>' +
+                            '<div class="text-xs" style="color:#94a3b8">' + x.storeName + ' · ' + rule.postName + (x.empCode ? ' · 工号 ' + x.empCode : '') + '</div>' +
+                        '</td>' +
+                        '<td class="py-2 px-2 text-right font-bold" style="color:' + scoreC + '">' + clNum(x.points) + '</td>' +
+                        '<td class="py-2 px-2 text-right" style="color:#94a3b8">' + clNum(x.capAvailable) + '</td>' +
+                        '<td class="py-2 px-2" style="min-width:132px"><div class="flex items-center gap-2"><div class="cl-bar" style="flex:1"><i style="width:' + Math.max(2, Math.round(x.rate)) + '%;background:' + scoreC + '"></i></div><span style="font-size:11px;color:' + scoreC + '">' + x.rate + '%</span></div>' +
+                        '<div class="text-[10px] mt-0.5" style="color:#64748b">已评估 ' + x.coverCnt + '/' + x.coverTotal + ' 项 · 严格口径 ' + x.rateFull + '%</div></td>' +
+                        '<td class="py-2 px-2 text-right" style="color:' + (x.dedCount ? '#fb923c' : '#64748b') + '">' + x.dedCount + '</td>' +
+                        '<td class="py-2 px-2 text-xs" style="color:#cbd5e1">' + clShortItem(x.weakestName) + ' <span style="color:#fb923c;font-size:11px">(' + x.weakestRate + '%)</span></td>' +
+                        '<td class="py-2 px-2 text-xs" style="color:#cbd5e1">' + mainItem + '</td>' +
+                        '<td class="py-2 px-2 text-center"><span class="cl-status ' + x.statusCls + '">' + x.status + '</span></td>' +
+                        '<td class="py-2 px-2 text-right text-xs font-semibold" style="color:#60a5fa">明细 →</td>' +
+                        '</tr>';
+                }).join('');
+            }
+
+            // ---- 热力图 + 四象限（容器随 innerHTML 重建，图表必须重新 init）----
+            if (personCount) {
+                clRenderHeat(points, rule);
+                const legend = clRenderQuad(points, rule) || [];
+                const $leg = document.getElementById('closureLegend');
+                if ($leg) {
+                    $leg.innerHTML = legend.length
+                        ? legend.map(function (g) { return '<span class="sl-item"><span class="sl-dot" style="background:' + g.color + '"></span>' + g.name + '</span>'; }).join('')
+                        : '<span class="sl-item"><span class="sl-dot" style="background:' + (rule.color || '#3b82f6') + '"></span>' + rule.postName + ' · 全部人员</span>';
+                }
+            }
+        }
+
+        // v4.6：岗位动作规则视图（拿分项 / 封顶 / 判断逻辑 / 凭证来源 / 采集接入状态）
+        function renderRuleView(rule, items) {
+            const rows = rule.items.map(function (it) {
+                const st = it.deprecated ? '<span class="cl-tag">已取消</span>'
+                    : (it.collected ? '<span class="cl-src real">已接入</span>' : '<span class="cl-src mock">待接入</span>');
+                return '<tr class="' + (it.deprecated ? 'dep' : '') + '">' +
+                    '<td style="color:#e2e8f0;font-weight:600;white-space:nowrap">' + (clItemAlias(it.name) || '<span style="color:#64748b">—</span>') + '</td>' +
+                    '<td style="color:#cbd5e1;font-size:11px;max-width:130px">' + it.name + '</td>' +
+                    '<td>' + (it.perText || (it.per ? clNum(it.per) : '—')) + '</td>' +
+                    '<td>' + clNum(it.cap) + (it.capWeekend !== null && it.capWeekend !== undefined ? ' / 周末 ' + clNum(it.capWeekend) : '') + '</td>' +
+                    '<td>' + (it.mustDo || '—') + '</td>' +
+                    '<td>' + (it.judge || '—') + '</td>' +
+                    '<td>' + (it.noScore || '—') + '</td>' +
+                    '<td>' + (it.where || '—') + '</td>' +
+                    '<td>' + st + '</td>' +
+                    '</tr>';
+            }).join('');
+            const monthly = (LH_OK && LH.monthlyRules ? LH.monthlyRules : []).filter(function (m) { return m.post === rule.postName; });
+            const monthlyHtml = monthly.length ? (state.closure.showMonthly ?
+                '<div class="overflow-auto mt-3"><table class="cl-rule-table"><thead><tr><th>类型</th><th>积分类型</th><th>考核指标项</th><th>规则</th><th>数据可得性</th><th>数据来源</th></tr></thead><tbody>' +
+                monthly.map(function (m) {
+                    return '<tr><td>' + m.kind + '</td><td>' + m.cls + '</td><td style="color:#e2e8f0">' + m.item + '</td><td>' + m.rule + '</td><td>' + m.category + '</td><td style="color:#94a3b8">' + m.dataSource + '</td></tr>';
+                }).join('') + '</tbody></table></div>'
+                : '<div class="text-xs mt-2" style="color:#64748b">另有 ' + monthly.length + ' 条月度 / 扣分考核项，点击右上「展开月度考核项」查看。</div>') : '';
+            return '<div class="panel p-6">' +
+                '<div class="flex items-start justify-between mb-3 flex-wrap gap-3">' +
+                    '<div>' +
+                        '<div class="panel-title"><span class="dot"></span>' + rule.postName + ' · 岗位日积分规则（灯塔规则主数据）</div>' +
+                        '<div class="panel-subtitle">来源 sheet：' + (rule.sheet || '—') + ' · 规则满分 ' + clNum(rule.cap) + ' 分 · 已接入 ' + items.length + ' 项 / 规则共 ' + rule.items.length + ' 项' +
+                        (rule.requireText ? ' · 规则声明：' + rule.requireText : '') + (rule.draft ? ' · <span style="color:#fbbf24">规则草案（公式未定稿）</span>' : '') + '</div>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-2">' +
+                        (monthly.length ? '<button class="quick-btn" data-cl-rule="monthly">' + (state.closure.showMonthly ? '收起月度考核项' : '展开月度考核项') + '</button>' : '') +
+                        '<button class="quick-btn' + (state.closure.showRules ? ' active' : '') + '" data-cl-rule="toggle">' + (state.closure.showRules ? '收起规则表' : '展开规则表') + '</button>' +
+                    '</div>' +
+                '</div>' +
+                (state.closure.showRules ?
+                    '<div class="overflow-auto"><table class="cl-rule-table"><thead><tr>' +
+                    '<th>映射</th><th>拿分项</th><th>单次分值</th><th>封顶（日常 / 周末）</th><th>拿分必须做到</th><th>判断逻辑</th><th>不计分情况</th><th>看哪里（凭证）</th><th>采集状态</th>' +
+                    '</tr></thead><tbody>' + rows + '</tbody></table></div>' + monthlyHtml
+                    : '<div class="text-xs" style="color:#64748b">规则表已收起，点击右上「展开规则表」查看 ' + rule.items.length + ' 个拿分项的分值与判定口径。</div>') +
+                '</div>';
+        }
+
+        // ---------- 统一渲染 ----------
+        function toggleMode() {
+            const single = state.mode === 'single';
+            document.getElementById('singleView').classList.toggle('hidden', !single);
+            document.getElementById('pkView').classList.toggle('hidden', single);
+            $pkBar.classList.toggle('hidden', single);
+            $pkBar.classList.toggle('flex', !single);
+            $pkOptionsWrap.classList.toggle('hidden', single);
+            if (!single) {
+                // 进入 PK 模式时释放单选视图的展开态图表
+                Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) { panelCharts[k].dispose(); } delete panelCharts[k]; });
+            }
+        }
+        async function preloadForRender() {
+            try {
+                const r = currentIdx(), pr = prevRange();
+                const from = idxToDate(r[0]), to = idxToDate(r[1]);
+                const pfrom = idxToDate(pr.i0), pto = idxToDate(pr.i1);
+                // 收集本视图可能访问的节点：
+                // ① sumNodes —— 只需区间合计（下钻子级、PK 候选、榜单/明细维度）
+                // ② dailyNodes —— 需要逐日序列（当前节点、PK 已选、下钻链，用于趋势/面板折线）
+                const sumNodes = [], dailyNodes = [], seen = {};
+                function addSum(n) { if (n && n.level !== '人员' && !seen[n.id]) { seen[n.id] = 1; sumNodes.push(n); } }
+                function addDaily(n) { if (n && !seen[n.id]) { seen[n.id] = 1; dailyNodes.push(n); if (n.level !== '人员') sumNodes.push(n); } }
+                const cur = currentNode();
+                addDaily(cur);
+                collectLevel(cur, NEXT_LEVEL[cur.level], []).forEach(addSum);
+                collectLevel(tree, state.pkLevel, []).forEach(addSum);
+                // v4.4：排行榜维度由 autoRankDim 跟随当前组织筛选节点，无法静态预知，预热门店/岗位/人员三层
+                ['门店', '岗位', '人员'].forEach(function (lv) { collectLevel(tree, lv, []).forEach(addSum); });
+                collectLevel(tree, state.tableDim, []).forEach(addSum);
+                state.drillIds.forEach(function (id) {
+                    const n = nodeById(id);
+                    addDaily(n);
+                    if (n) collectLevel(n, NEXT_LEVEL[n.level], []).forEach(addSum);
+                });
+                pkNodes().forEach(addDaily);
+                // 并行预载：人员合计（当前+对比周期）× 节点批量合计 × 逐日序列
+                await Promise.all([
+                    ensurePersons(tree, from, to),
+                    ensurePersons(tree, pfrom, pto),
+                    ensureNodeSums(sumNodes, from, to),
+                    ensureNodeSums(sumNodes, pfrom, pto),
+                    ensureSeries(dailyNodes)
+                ]);
+                return true;
+            } catch (e) { apiError(e); return false; }
+        }
+
+        function renderAll() {
+            if (DATA_MODE === 'api') {
+                apiLoading(true);
+                preloadForRender().then(function (ok) { apiLoading(false); if (ok) renderAllSync(); });
+                return;
+            }
+            renderAllSync();
+        }
+        function renderAllSync() {
+            // 看板切换：先显隐，再调对应渲染
+            const isOverview = state.board === 'overview';
+            const $bo = document.getElementById('boardOverview');
+            const $bc = document.getElementById('boardClosure');
+            const $oc = document.getElementById('overviewControls');
+            if ($bo) $bo.classList.toggle('hidden', !isOverview);
+            if ($bc) $bc.classList.toggle('hidden', isOverview);
+            if ($oc) $oc.classList.toggle('hidden', !isOverview);
+            document.querySelectorAll('#boardSeg button').forEach(function (b) {
+                b.classList.toggle('active', b.dataset.board === state.board);
+            });
+            if (isOverview) {
+                renderOrgSelectors();
+                toggleMode();
+                if (state.mode === 'single') renderSingleView();
+                renderPkPostTabs();
+                renderPkOptions();
+                renderPkView();
+                renderFunnel();
+                renderDrill();
+                renderTrend();
+                renderPoints();
+                renderDetail();
+            } else {
+                renderClosure();
+            }
+            renderDutyTable();
+            $rangeText.textContent = state.start + ' 至 ' + state.end;
+        }
+
+        // ---------- 交互 ----------
+        function setRange(days) {
+            const end = TODAY;
+            const start = addDays(end, -(days - 1));
+            $start.value = dateStr(start);
+            $end.value = dateStr(end);
+            state.start = $start.value;
+            state.end = $end.value;
+            state.drillIds = [];
+            state.drillSelectedId = null;   // v4.9：日期范围变化时清掉下钻区旧选中
+            clearMetricCache();
+            renderAll();
+        }
+        document.querySelectorAll('[data-range]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                document.querySelectorAll('[data-range]').forEach(function (x) { x.classList.toggle('active', x === b); });
+                setRange(parseInt(b.dataset.range, 10));
+            });
+        });
+        // 看板切换器
+        document.querySelectorAll('#boardSeg button').forEach(function (b) {
+            b.addEventListener('click', function () {
+                const next = b.dataset.board;
+                if (next === state.board) return;
+                // 切换前释放当前看板的图表实例（重要：display:none 容器里的图表不应持有）
+                if (state.board === 'overview') {
+                    Object.keys(panelCharts).forEach(function (k) { if (panelCharts[k]) panelCharts[k].dispose(); delete panelCharts[k]; });
+                    Object.keys(extCharts).forEach(function (k) { if (extCharts[k]) { extCharts[k].dispose(); delete extCharts[k]; } });
+                } else {
+                    ['closureScatter', 'clHeat', 'clQuad'].forEach(function (k) {
+                        if (extCharts[k]) { try { extCharts[k].dispose(); } catch (_) {} delete extCharts[k]; }
+                    });
+                }
+                state.board = next;
+                renderAll();
+                // 给浏览器一个 layout 周期再 resize 新看板的图
+                requestAnimationFrame(function () {
+                    if (state.board === 'closure') {
+                        ['clHeat', 'clQuad'].forEach(function (k) { const c = extCharts[k]; if (c) { try { c.resize(); } catch (_) {} } });
+                    } else {
+                        Object.values(extCharts).forEach(function (c) { c.resize(); });
+                    }
+                });
+            });
+        });
+        // 闭环看板交互（事件委托，#boardClosure 内 innerHTML 每次 renderClosure 都替换）
+        document.getElementById('boardClosure').addEventListener('click', function (e) {
+            const postEl = e.target.closest('[data-post]');
+            if (postEl) {
+                state.closure.postKey = postEl.dataset.post;
+                // v4.7：切换岗位保留当前门店勾选（此前重置为 null = 全选，造成"点岗位全部门店被勾选"的错觉）
+                renderClosure(); return;
+            }
+            const ruleBtn = e.target.closest('[data-cl-rule]');
+            if (ruleBtn) {
+                if (ruleBtn.dataset.clRule === 'monthly') state.closure.showMonthly = !state.closure.showMonthly;
+                else state.closure.showRules = !state.closure.showRules;
+                renderClosure(); return;
+            }
+            // 门店：多选模式勾选/取消；单选模式点击即切换为该门店（null=未勾选时点击即从单家开始）
+            const storeEl = e.target.closest('[data-store]');
+            if (storeEl) {
+                const code = storeEl.dataset.store;
+                const sel = (state.closure.storeCodes || []).slice();
+                const i = sel.indexOf(code);
+                if (state.closure.storeMulti) {
+                    if (i >= 0) sel.splice(i, 1); else sel.push(code);
+                } else if (i < 0) {
+                    sel.length = 0;
+                    sel.push(code);
+                }
+                state.closure.storeCodes = sel;
+                renderClosure(); return;
+            }
+            const cr = e.target.closest('[data-closure-region]');
+            if (cr) {
+                const rg = cr.dataset.closureRegion || null;
+                if (rg !== state.closure.region) {
+                    state.closure.region = rg;
+                    state.closure.area = null;
+                    state.closure.storeCodes = null;
+                }
+                renderClosure(); return;
+            }
+            const ca = e.target.closest('[data-closure-area]');
+            if (ca) {
+                const ar = ca.dataset.closureArea || null;
+                if (ar !== state.closure.area) {
+                    state.closure.area = ar;
+                    state.closure.storeCodes = null;
+                }
+                renderClosure(); return;
+            }
+            const sa = e.target.closest('[data-store-action]');
+            if (sa) {
+                const act = sa.dataset.storeAction;
+                if (act === 'multi') {
+                    // 切换多选；关闭时若已显式勾选多家则保留第一家，回到单选语义
+                    state.closure.storeMulti = !state.closure.storeMulti;
+                    const cur = state.closure.storeCodes;
+                    if (!state.closure.storeMulti && cur && cur.length > 1) state.closure.storeCodes = [cur[0]];
+                }
+                else if (act === 'all') state.closure.storeCodes = null; // v4.7：全部生效 = 清除显式勾选（胶囊熄灭，范围内全部门店参与统计）
+                else if (act === 'clear') state.closure.storeCodes = [];
+                else if (act === 'search-apply' || act === 'search-clear') {
+                    const inp = document.getElementById('clStoreSearch');
+                    if (!inp) return;
+                    state.closure.storeSearch = act === 'search-clear' ? '' : inp.value;
+                    renderClosure();
+                    const nx = document.getElementById('clStoreSearch');
+                    if (nx && act === 'search-apply') { nx.focus(); }
+                    return;
+                }
+                renderClosure();
+                return;
+            }
+            const pdEl = e.target.closest('[data-person-detail]');
+            if (pdEl) { clOpenDrawer(+pdEl.dataset.personDetail); return; }
+        });
+        // 门店搜索 v4.7：输入与过滤解耦——输入时不再打断重渲染，按回车 / 「搜索」按钮才过滤
+        (function () {
+            const bc = document.getElementById('boardClosure');
+            if (!bc) return;
+            bc.addEventListener('keydown', function (e) {
+                const t = e.target;
+                if (!t || t.id !== 'clStoreSearch') return;
+                if (e.key === 'Enter') { e.preventDefault(); state.closure.storeSearch = t.value; renderClosure(); }
+            });
+            bc.addEventListener('input', function (e) {
+                const t = e.target;
+                if (t && t.id === 'clStoreSearch') state.closure.storeSearch = t.value;
+            });
+        })();
+        // v4.8：日报翻阅器交互（◀ / ▶ / 日期下拉）——仅改闭环游标，经营总览取数不受影响
+        function clShiftDaily(step) {
+            const i = CL_DATES.indexOf(clViewDate());
+            if (i < 0) return;
+            const j = i + step;
+            if (j < 0 || j >= CL_DATES.length) return;
+            state.clDate = CL_DATES[j];
+            renderAll();
+        }
+        (function () {
+            const bc = document.getElementById('boardClosure');
+            if (!bc) return;
+            bc.addEventListener('click', function (e) {
+                const b = e.target.closest('[data-cl-pager]');
+                if (!b || b.disabled) return;
+                clShiftDaily(b.dataset.clPager === 'next' ? 1 : -1);
+            });
+            bc.addEventListener('change', function (e) {
+                const t = e.target;
+                if (t && t.id === 'clDateSelect') { state.clDate = t.value; renderAll(); }
+            });
+        })();
+        // v4.5：诊断抽屉关闭（遮罩 / ✕ / Esc）
+        (function () {
+            const d = document.getElementById('clDrawer');
+            if (!d) return;
+            d.addEventListener('click', function (e) { if (e.target.closest('[data-cl-close]')) clCloseDrawer(); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') clCloseDrawer(); });
+        })();
+        // v4.15：晨会 / 夕会报表抽屉关闭（遮罩 / ✕ / Esc；无图表，无需 dispose）
+        (function () {
+            const d = document.getElementById('meetDrawer');
+            if (!d) return;
+            d.addEventListener('click', function (e) { if (e.target.closest('[data-meet-close]')) d.classList.add('hidden'); });
+            document.addEventListener('keydown', function (e) { if (e.key === 'Escape') d.classList.add('hidden'); });
+        })();
+        document.getElementById('applyBtn').addEventListener('click', function () {
+            if (!$start.value || !$end.value || $start.value > $end.value) return;
+            state.start = $start.value;
+            state.end = $end.value;
+            state.drillIds = [];
+            clearMetricCache();
+            renderAll();
+        });
+        // ---------- 岗位职责说明表（v4.11：页面最下方，默认收起，可展开/收起） ----------
+        function renderDutyTable() {
+            const box = document.getElementById('dutyBody');
+            if (!box) return;
+            let total = 0;
+            box.innerHTML = POSTS.map(function (p) {
+                const duties = POST_DUTIES[p.key] || [];
+                total += duties.length;
+                const rows = duties.length ? duties.map(function (d) {
+                    return '<tr><td style="white-space:nowrap;color:' + p.color + '">' + d.action + '</td><td>' + d.detail + '</td></tr>';
+                }).join('') : '<tr><td colspan="2" class="text-slate-500">暂无职责条目</td></tr>';
+                return '<div>' +
+                    '<div class="flex items-center gap-2 mb-1">' +
+                    '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:' + p.color + '"></span>' +
+                    '<span class="text-sm text-slate-100 font-medium">' + p.name + '</span>' +
+                    '<span class="text-[11px] text-slate-500">' + p.note + ' · ' + duties.length + ' 项关键动作</span>' +
+                    '</div>' +
+                    '<table class="cl-rule-table"><thead><tr><th style="width:180px">关键动作</th><th>具体内容（示意文案，待业务确认）</th></tr></thead><tbody>' + rows + '</tbody></table>' +
+                    '</div>';
+            }).join('');
+            const sub = document.getElementById('dutySubtitle');
+            if (sub) sub.textContent = POSTS.length + ' 岗位 · ' + total + ' 项关键动作 · 示意文案，待业务确认';
+        }
+        (function () {
+            const btn = document.getElementById('dutyToggle');
+            const body = document.getElementById('dutyBody');
+            if (!btn || !body) return;
+            let open = false;
+            function apply() {
+                body.classList.toggle('hidden', !open);
+                btn.textContent = open ? '收起岗位职责 ▴' : '展开岗位职责 ▾';
+                btn.classList.toggle('active', open);
+            }
+            renderDutyTable();
+            btn.addEventListener('click', function () { open = !open; apply(); });
+            apply();
+        })();
+        $selRegion.addEventListener('change', function () {
+            state.sel.region = $selRegion.value; state.sel.area = '__all__'; state.sel.store = '__all__';
+            state.sel.post = '__all__'; state.sel.person = '__all__';
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;   // v4.3：范围变化清空 PK 已选，避免跨范围残留
+            renderAll();
+        });
+        $selArea.addEventListener('change', function () {
+            state.sel.area = $selArea.value; state.sel.store = '__all__';
+            state.sel.post = '__all__'; state.sel.person = '__all__';
+            if (state.sel.area !== '__all__') backfillAncestors(nodeById(state.sel.area));   // 自动勾上所属大区
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;
+            renderAll();
+        });
+        $selStore.addEventListener('change', function () {
+            state.sel.store = $selStore.value;
+            state.sel.post = '__all__'; state.sel.person = '__all__';
+            if (state.sel.store !== '__all__') backfillAncestors(nodeById(state.sel.store)); // 自动勾上所属小区/大区
+            state.drillIds = [];
+            state.pkIds = []; state.pkBase = null;
+            // 空岗容错：门店切换后若原岗位在目标门店不存在，给出提示
+            renderAll();
+        });
+        $selPost.addEventListener('change', function () {
+            if ($selPost.value.indexOf('__none__') === 0) { $selPost.value = '__all__'; }
+            state.sel.post = $selPost.value;
+            state.sel.person = '__all__';
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;
+            renderAll();
+        });
+        $selPerson.addEventListener('change', function () {
+            state.sel.person = $selPerson.value;
+            state.drillIds = []; state.pkIds = []; state.pkBase = null;
+            renderAll();
+        });
+        document.getElementById('orgReset').addEventListener('click', function () {
+            state.sel = { region: '__all__', area: '__all__', store: '__all__', post: '__all__', person: '__all__' };
+            state.drillIds = [];
+            state.pkIds = []; state.pkBase = null;
+            renderAll();
+        });
+        // v4：「显示已停用」开关（仅 API 模式）—— 重新拉取组织树后刷新下拉/榜单，保持已选日期区间
+        const $showInactiveWrap = document.getElementById('showInactiveWrap');
+        const $showInactive = document.getElementById('showInactive');
+        // 树结构变化后清理指向已隐藏节点的选中项，避免选中项静默失效
+        function sanitizeSelection() {
+            Object.keys(state.sel).forEach(function (k) {
+                const id = state.sel[k];
+                if (id !== '__all__' && !NODE_BY_ID.has(id)) state.sel[k] = '__all__';
+            });
+            state.pkIds = state.pkIds.filter(function (id) { return NODE_BY_ID.has(id); });
+            if (state.pkBase && !NODE_BY_ID.has(state.pkBase)) state.pkBase = state.pkIds[0] || null;
+            state.drillIds = state.drillIds.filter(function (id) { return NODE_BY_ID.has(id); });
+            const sn = state.sel.store !== '__all__' ? NODE_BY_ID.get(state.sel.store) : null;
+            const pn = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
+            if (pn && (!sn || pn.parent !== sn)) state.sel.post = '__all__';
+            const pn2 = state.sel.post !== '__all__' ? NODE_BY_ID.get(state.sel.post) : null;
+            if (pn2 && state.sel.person !== '__all__') {
+                const pr = NODE_BY_ID.get(state.sel.person);
+                if (!pr || pr.parent !== pn2) state.sel.person = '__all__';
+            }
+        }
+        if ($showInactive) {
+            $showInactive.addEventListener('change', function () {
+                showInactive = !!$showInactive.checked;
+                if ($showInactiveWrap) $showInactiveWrap.classList.toggle('on', showInactive);
+                if (DATA_MODE !== 'api') { renderAll(); return; }   // mock 演示模式无停用节点
+                apiLoading(true, showInactive ? '正在加载已停用节点…' : '正在隐藏已停用节点…');
+                clearApiCaches();
+                loadOrgTree().then(function () {
+                    reindexTree();
+                    sanitizeSelection();
+                    apiLoading(false);
+                    renderAll();
+                }).catch(apiError);
+            });
+        }
+        // 单选视图：板块展开 / 收起、指标勾选（至少保留 1 项）
+        document.getElementById('singleView').addEventListener('click', function (e) {
+            const eb = e.target.closest('[data-expand]');
+            if (eb) {
+                const gi = parseInt(eb.dataset.expand, 10);
+                state.expanded[gi] = !state.expanded[gi];
+                renderSingleView();
+                return;
+            }
+            const ab = e.target.closest('[data-all]');
+            if (ab) {
+                const gi = parseInt(ab.dataset.all, 10);
+                state.panelSel[gi] = MODULE_GROUPS[gi].keys.slice();
+                renderSingleView();
+                return;
+            }
+            const chip = e.target.closest('[data-chip]');
+            if (chip) {
+                const gi = parseInt(chip.dataset.g, 10);
+                const k = chip.dataset.chip;
+                const cur = (state.panelSel[gi] || MODULE_GROUPS[gi].keys.slice()).slice();
+                const idx = cur.indexOf(k);
+                if (idx >= 0) {
+                    if (cur.length <= 1) return;
+                    cur.splice(idx, 1);
+                } else {
+                    cur.push(k);
+                }
+                state.panelSel[gi] = cur;
+                renderSingleView();
+            }
+        });
+        document.querySelectorAll('#modeSeg button').forEach(function (b) {
+            b.addEventListener('click', function () {
+                document.querySelectorAll('#modeSeg button').forEach(function (x) { x.classList.toggle('active', x === b); });
+                state.mode = b.dataset.mode;
+                if (state.mode === 'single') {
+                    state.drillIds = [];
+                } else if (!state.pkIds.length) {
+                    // 进入 PK 模式时，默认预选当前范围内该层级的前 2 个候选（岗位层级=当前对比岗位在各门店）
+                    const list = pkCandidates();
+                    state.pkIds = list.slice(0, 2).map(function (n) { return n.id; });
+                    state.pkBase = state.pkIds[0] || null;
+                }
+                renderAll();
+            });
+        });
+        document.getElementById('pkLevel').addEventListener('change', function (e) {
+            state.pkLevel = e.target.value;
+            state.pkIds = [];
+            state.pkBase = null;
+            renderAll();
+        });
+        // v4.3：岗位 PK 的二级岗位选项卡（跨店同岗对比）
+        document.getElementById('pkPostTabs').addEventListener('click', function (e) {
+            const b = e.target.closest('[data-pk-post]');
+            if (!b || b.dataset.pkPost === state.pkPost) return;
+            state.pkPost = b.dataset.pkPost;
+            state.pkIds = [];
+            state.pkBase = null;
+            renderAll();
+        });
+        document.getElementById('pkClear').addEventListener('click', function () {
+            state.pkIds = [];
+            state.pkBase = null;
+            renderAll();
+        });
+        document.getElementById('drillBack').addEventListener('click', function () {
+            if (state.mode === 'pk') return;
+            // v4.16：回退后同步放宽顶栏组织范围（下钻到哪层筛选跟到哪层，双向一致）
+            if (state.drillIds.length) {
+                state.drillSelectedId = null; state.drillPersonId = null;
+                state.drillIds.pop();
+                if (state.drillIds.length) {
+                    const t = nodeById(state.drillIds[state.drillIds.length - 1]);
+                    if (t) syncSelToDrill(t);   // 栈内还有层级：筛选放宽到新的下钻层级
+                } else {
+                    // 栈已空：基点回到顶栏筛选最深层（上次下钻已同步进 sel），再回退一层筛选
+                    const i0 = drillDeepestSelIdx();
+                    if (i0 >= 0) {
+                        const s0 = Object.assign({}, state.sel);
+                        for (let i = i0; i < SEL_ORDER.length; i++) s0[SEL_ORDER[i]] = '__all__';
+                        state.sel = s0;
+                    }
+                }
+                renderAll(); return;
+            }
+            // 下钻栈为空：当前视图基点 = 顶栏筛选的最深节点，回退一层筛选（人员→岗位→门店→小区→大区→全国）
+            const idx = drillDeepestSelIdx();
+            if (idx < 0) return;   // 已在全国视图，无上级可返回
+            const sel2 = Object.assign({}, state.sel);
+            for (let i = idx; i < SEL_ORDER.length; i++) sel2[SEL_ORDER[i]] = '__all__';
+            state.sel = sel2;
+            state.drillIds = [];
+            state.drillSelectedId = null;
+            state.drillPersonId = null;
+            state.pkIds = []; state.pkBase = null;   // 范围变化清空 PK 已选，与筛选下拉行为一致
+            renderAll();
+        });
+        document.querySelectorAll('[data-trend]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                state.trendMode = b.dataset.trend;
+                document.querySelectorAll('[data-trend]').forEach(function (x) { x.classList.toggle('active', x === b); });
+                renderTrend();
+            });
+        });
+        // 经营结果趋势分析指标多选胶囊（最多 4 项，至少 1 项）
+        document.getElementById('trendChips').addEventListener('click', function (e) {
+            const metricChip = e.target.closest('[data-trend-metric]');
+            const normChip = e.target.closest('[data-trend-norm]');
+            if (normChip) {
+                state.trendNorm = !state._trendNormEff;
+                renderTrend();
+                return;
+            }
+            if (!metricChip) return;
+            const k = metricChip.dataset.trendMetric;
+            const cur = state.trendMetrics.slice();
+            const idx = cur.indexOf(k);
+            if (idx >= 0) {
+                if (cur.length <= 1) return;
+                cur.splice(idx, 1);
+            } else {
+                if (cur.length >= 4) cur.shift();
+                cur.push(k);
+            }
+            state.trendMetrics = cur;
+            renderTrend();
+        });
+        document.querySelectorAll('[data-rank]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                state.pointsRank = b.dataset.rank;
+                document.querySelectorAll('[data-rank]').forEach(function (x) { x.classList.toggle('active', x === b); });
+                renderPoints();
+            });
+        });
+
+        // v4.4：顶栏筛选区可一键收起/展开（折叠状态持久化）
+        (function initFilterToggle() {
+            const $body = document.getElementById('filterBody');
+            const $btn = document.getElementById('filterToggle');
+            const $txt = document.getElementById('filterToggleText');
+            if (!$body || !$btn || !$txt) return;
+            const KEY = 'dash_filter_collapsed';
+            let collapsed = false;
+            try { collapsed = localStorage.getItem(KEY) === '1'; } catch (e) { /* 隐私模式忽略 */ }
+            function apply() {
+                $body.classList.toggle('hidden', collapsed);
+                $txt.textContent = collapsed ? '展开筛选 ▾' : '收起筛选 ▴';
+            }
+            $btn.addEventListener('click', function () {
+                collapsed = !collapsed;
+                try { localStorage.setItem(KEY, collapsed ? '1' : '0'); } catch (e) { /* ignore */ }
+                apply();
+            });
+            apply();
+        })();
+        document.querySelectorAll('[data-table]').forEach(function (b) {
+            b.addEventListener('click', function () {
+                state.tableDim = b.dataset.table;
+                document.querySelectorAll('[data-table]').forEach(function (x) { x.classList.toggle('active', x === b); });
+                renderDetail();
+            });
+        });
+        document.getElementById('funnelBody').addEventListener('click', function (e) {
+            const row = e.target.closest('.funnel-row');
+            if (!row) return;
+            const key = row.dataset.key;
+            document.getElementById('drillPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+            renderDrill();
+        });
+        document.getElementById('funnelDrillLink').addEventListener('click', function () {
+            document.getElementById('drillPanel').scrollIntoView({ behavior: 'smooth', block: 'center' });
+        });
+        function updateTime() {
+            const el = document.getElementById('current-time');
+            if (el) el.textContent = new Date().toLocaleTimeString('zh-CN');
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+        window.addEventListener('resize', function () {
+            // 跳过不可见容器里的图表（display:none 时 offsetParent 为 null）
+            Object.values(extCharts).forEach(function (c) { if (c && c.getDom && c.getDom() && c.getDom().offsetParent !== null) c.resize(); });
+            Object.values(panelCharts).forEach(function (c) { if (c && c.getDom && c.getDom() && c.getDom().offsetParent !== null) c.resize(); });
+        });
+
+        // 初始
+        initOrgSelDefaults();   // v5.2：按登录者层级预勾组织筛选（员工→本人 / 店长→门店 / 主管→小区 / 总监→大区）
+        setRange(7);
+        } // ---- end startApp ----
