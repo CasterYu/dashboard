@@ -8,7 +8,6 @@ rem  评分文件：server\scripts\_sample_xinshibu.xlsx（可用 SCORE_FILE 环
 rem  映射表  ：C:\Users\Administrator\Downloads\专营店20260918175014.xls（可用 MAP_FILE 覆盖）
 rem ============================================================
 set "NODE_OPTIONS="
-set "PATH=C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-2;%PATH%"
 cd /d "%~dp0server"
 
 :menu

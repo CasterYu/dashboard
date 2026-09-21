@@ -7,7 +7,6 @@ rem  双击本文件即可进入中文交互菜单，无需任何命令行知识
 rem  前提：数据库 D:\projects\dashboard\server\data\dashboard.db 存在
 rem ============================================================
 set "NODE_OPTIONS="
-set "PATH=C:\Users\Administrator\.workbuddy\binaries\node\versions\22.22.2-2;%PATH%"
 cd /d "%~dp0server"
 node scripts\manage-scope_v5.2.js
 echo.

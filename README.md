@@ -220,29 +220,44 @@ Get-ChildItem legacy\index_v*.html | Sort-Object LastWriteTime |
 ```
 dashboard/
 ├── README.md                    ← 本文件
-├── index.html                   ← v4.7 当前最新版（前端，双模式：演示/真实数据，含登录浮层）
-├── lighthouse_scoring_v4.6.js   ← v4.6 灯塔评分数据文件（规则 / 门店 / 人员 / 明细 / 汇总 / 销量）
+├── index.html                   ← 前端入口（HTML + 启动代码）
+├── styles_v5.12.css             ← 全局样式
+├── data_v5.12.js                ← 数据/规则常量（指标/漏斗/岗位/层级）
+├── utils_v5.12.js               ← 通用工具函数
+├── mock_v5.12.js                ← 演示数据（mock 模式）
+├── api_auth_v5.12.js            ← 数据源 + 鉴权（API/登录）
+├── app_state_v5.12.js           ← 全局状态 + 组织筛选
+├── app_overview_v5.12.js        ← 经营总览渲染
+├── app_closure_v5.12.js         ← 闭环看板渲染
+├── app_boot_v5.12.js            ← 统一渲染 + 启动
+├── lighthouse_scoring_v4.6.js   ← 灯塔评分数据文件（规则/门店/人员/明细）
 ├── .gitignore
 ├── .gitattributes
-├── push-to-github.ps1
-├── tools/
-│   └── parse_lighthouse_v4.6.py ← v4.6 解析脚本（Excel → 数据文件 + 后端导入文件 + 校验报告）
-├── server/                      ← 后端（Node.js + Express + SQLite，含 5 角色鉴权，详见下方章节）
-│   ├── services/auth.js         ←   密码哈希/JWT/scope 推导
-│   ├── services/actionScoring_v4.6.js ← v4.6 评分解析 + 规则导入 + 门店/人员落库
-│   ├── routes/scoring_v4.6.js   ←   v4.6 /api/scoring/* 查询接口
-│   ├── middleware/              ←   authRequired + scope（CTE 子树过滤）
-│   ├── routes/auth.js           ←   /login /me /change-password /logout
-│   ├── scripts/create-user.js   ←   CLI 账号管理（add/reset/list/import/disable/enable）
+├── 启动看板.bat                  ← 一键启动（后端 3777 + 前端 8000）
+├── 停止看板.bat                  ← 一键停止
+├── 数据导入_新媒体.bat           ← 数据导入菜单
+├── 积分补录_v5.8.bat             ← 积分补录
+├── 权限管理_v5.2.bat             ← 权限管理
+├── data/                        ← 数据文件/导入产物
+│   ├── 门店大区小区对照表_v4.17.xlsx
+│   ├── 未匹配门店清单.xlsx
+│   └── 未匹配门店清单_多岗位_v5.4.xlsx
+├── tools/                       ← 工具脚本
+│   ├── push-to-github.ps1
+│   ├── parse_lighthouse_v4.6.py
 │   └── ...
-├── docs/
-│   └── 项目进度报告.html
-└── legacy/
-    ├── index_v4.5.html          ← 上一版快照（本地回滚用，不入 Git）
-    ├── index_v4.4.html
+├── server/                      ← 后端（Node.js + Express + SQLite，含 5 角色鉴权）
+│   ├── services/                ← 业务服务（auth / actionScoring 等）
+│   ├── routes/                  ← API 路由（auth / scoring / import 等）
+│   ├── middleware/              ← authRequired + scope（CTE 子树过滤）
+│   ├── scripts/                 ← CLI（建号 / 导入 / 补录等）
+│   └── ...
+├── docs/                        ← 文档（数据字典 / 接口清单 / 导入规则等）
+├── dist/                        ← 内网部署
+└── legacy/                      ← 历史版本快照（不入 Git）
+    ├── index_v5.7~v5.11.html
+    ├── _archive/
     └── v1/
-        ├── README.md
-        └── index.html
 ```
 
 ---

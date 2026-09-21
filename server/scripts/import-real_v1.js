@@ -20,7 +20,7 @@ const { importScoring, parseScoring, clean } = require('../services/actionScorin
 const ROOT = path.resolve(__dirname, '..', '..');
 const MAP_FILE = process.env.MAP_FILE || 'C:\\Users\\Administrator\\Downloads\\专营店20260918175014.xls';
 const SCORE_FILE = process.env.SCORE_FILE || path.join(__dirname, '_sample_xinshibu.xlsx');
-const OUT_XLSX = path.join(ROOT, '未匹配门店清单.xlsx');
+const OUT_XLSX = path.join(ROOT, 'data', '未匹配门店清单.xlsx');
 const POST_KEY = 'newMedia';
 const LOG_TYPE = 'scoring';
 

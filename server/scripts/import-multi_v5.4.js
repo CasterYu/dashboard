@@ -21,7 +21,7 @@ const { importScoring, parseScoring, clean } = require('../services/actionScorin
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const MAP_FILE = process.env.MAP_FILE || 'C:\\Users\\Administrator\\Downloads\\专营店20260918175014.xls';
-const OUT_XLSX = path.join(ROOT, '未匹配门店清单_多岗位_v5.4.xlsx');
+const OUT_XLSX = path.join(ROOT, 'data', '未匹配门店清单_多岗位_v5.4.xlsx');
 const LOG_TYPE = 'scoring';
 const DROP = 'C:\\Users\\ADMINI~1\\AppData\\Local\\Temp\\codebuddy-dropped-files';
 
